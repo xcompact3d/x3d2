@@ -41,6 +41,9 @@ module m_tdsops
     !! marginally diagonally dominant as alpha approaches 0.5. Thomas is
     !! serial along the line, so this is only valid when the direction is not
     !! decomposed.
+    logical :: second_order_tds = .false. !! .true. The tridiagonal system that is solved at the boundaries is different
+    !! for the second-order scheme compared to the default sixth-order scheme. In this case, these lines of the TDS need
+    !! to be updated accordingly.
     logical :: prefer_thomas = .false.
     integer :: n_tds !! Tridiagonal system size
     integer :: n_rhs !! Right-hand-side builder size
@@ -267,8 +270,9 @@ contains
       bfi = 101._dp/600._dp/delta ! b/(4h): b=101/150
       cfi = 1._dp/600._dp/delta   ! c/(6h): c=1/100
     case ('compact2')
+      self%second_order_tds = .true.
       alpha = 0._dp
-      afi = 1._dp/(2._dp * delta)
+      afi = 0.5_dp / delta
       bfi = 0._dp
       cfi = 0._dp
     case default
@@ -660,6 +664,7 @@ contains
         call abort_run('compact6-hyperviscous requires c_nu and nu0_nu')
       end if
     case ('compact2')
+      self%second_order_tds = .true.
       alpha = 0._dp
       asi = 1._dp / d2
       bsi = 0._dp
@@ -862,6 +867,7 @@ contains
       cici = (3._dp - 10._dp*alpha)/256._dp
       dici = 0._dp
     case ('classic2')
+      self%second_order_tds = .true.
       alpha = 0._dp
       aici = 0.5_dp
       bici = 0._dp
@@ -1005,6 +1011,7 @@ contains
       aci = 63._dp/62._dp/delta
       bci = 17._dp/62._dp/3._dp/delta
     case ('compact2')
+      self%second_order_tds = .true.
       alpha = 0._dp
       aci = 1._dp / delta
       bci = 0._dp

@@ -18,11 +18,12 @@ program x3d2_poisson_solver
   !! The test `test_poisson_bc` checks the solve for all four boundary
   !! condition configurations.
   !!
-  !! Usage: x3d2_poisson_solver nx ny nz [bc_x bc_y bc_z] [--repeat N]
+  !! Usage: x3d2_poisson_solver nx ny nz [bc_x bc_y bc_z] [--repeat N] [--scheme <order>]
   !!   bc_x, bc_y, bc_z: 'periodic' (default) or 'dirichlet'.
   !!                     The value applies to both ends of the direction.
   !!                     A Dirichlet direction needs an odd grid size.
   !!   --repeat N:       number of times to solve (default 1).
+  !!   --scheme <order>: The order of the scheme being used for the Poisson solver (default 6)
 
   use iso_fortran_env, only: real64
 
@@ -59,10 +60,12 @@ program x3d2_poisson_solver
   real(dp) :: L_global(3)
   character(len=9) :: bc_x_name, bc_y_name, bc_z_name
   character(len=9) :: BC_x(2), BC_y(2), BC_z(2)
+  character(len=8) :: deriv1_scheme, deriv2_scheme, interpl_scheme, stagder_scheme
   integer :: repeat_count, irep
   ! `t0` and `t1` hold raw `MPI_Wtime` readings in double precision.
   ! The code subtracts them in double precision.
   ! It then converts the difference to `dp`.
+  integer :: scheme = 6
   double precision :: t0, t1
   real(dp) :: elapsed, min_time, sum_time
   real(dp) :: n_pi
@@ -84,6 +87,23 @@ program x3d2_poisson_solver
   mesh = mesh_t(dims_global, nproc_dir, L_global, BC_x, BC_y, BC_z, &
                 use_2decomp=(backend_name == 'OMP'))
 
+  ! ---- Poisson solver scheme order selection ----
+  
+  select case (scheme)
+    case (2)
+      deriv1_scheme = "compact2"
+      deriv2_scheme = "compact2"
+      interpl_scheme = "classic2"
+      stagder_scheme = "compact2"
+    case (6)
+      deriv1_scheme = "compact6"
+      deriv2_scheme = "compact6"
+      interpl_scheme = "classic"
+      stagder_scheme = "compact6"
+    case default
+      error stop "Only second- and sixth-order Poisson solver schemes are available."
+  end select
+
   call setup%init(mesh)
   backend => setup%backend
   allocator => setup%allocator
@@ -97,12 +117,12 @@ program x3d2_poisson_solver
   xdirps%dir = DIR_X
   ydirps%dir = DIR_Y
   zdirps%dir = DIR_Z
-  call allocate_tdsops(xdirps, backend, mesh, 'compact6', 'compact6', &
-                       'classic', 'compact6')
-  call allocate_tdsops(ydirps, backend, mesh, 'compact6', 'compact6', &
-                       'classic', 'compact6')
-  call allocate_tdsops(zdirps, backend, mesh, 'compact6', 'compact6', &
-                       'classic', 'compact6')
+  call allocate_tdsops(xdirps, backend, mesh, deriv1_scheme, deriv2_scheme, &
+                       interpl_scheme, stagder_scheme)
+  call allocate_tdsops(ydirps, backend, mesh, deriv1_scheme, deriv2_scheme, &
+                       interpl_scheme, stagder_scheme)
+  call allocate_tdsops(zdirps, backend, mesh, deriv1_scheme, deriv2_scheme, &
+                       interpl_scheme, stagder_scheme)
 
   call backend%init_poisson_fft(mesh, xdirps, ydirps, zdirps)
 
@@ -167,6 +187,7 @@ contains
     !! Any other input prints one usage line and stops.
     integer :: nargs, iarg, ios
     character(len=32) :: arg
+    character(len=1) :: scheme_char
 
     nargs = command_argument_count()
 
@@ -186,6 +207,12 @@ contains
       call get_command_argument(iarg, arg)
       if (trim(arg) /= '--repeat') then
         if (nargs < iarg + 2) call usage_error()
+        if (trim(arg) /= '--scheme') then
+          if (nargs < iarg + 4) call usage_error()
+          call get_command_argument(iarg + 1, scheme_char)
+          read (scheme_char, *) scheme
+          iarg = iarg + 2
+        end if
         call get_command_argument(iarg, bc_x_name)
         call get_command_argument(iarg + 1, bc_y_name)
         call get_command_argument(iarg + 2, bc_z_name)
@@ -228,7 +255,7 @@ contains
     ! Every rank parses the same arguments, so all of them reach this call.
     call abort_run( &
       'Usage: x3d2_poisson_solver nx ny nz [bc_x bc_y bc_z] &
-      &[--repeat N]  (bc in {periodic,dirichlet}, dirichlet dims odd)', &
+      &[--repeat N] [--scheme <order>]  (bc in {periodic,dirichlet}, dirichlet dims odd)', &
       collective=.true.)
   end subroutine usage_error
 
