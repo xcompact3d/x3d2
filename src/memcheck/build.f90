@@ -305,7 +305,7 @@ contains
 
     ! Another process changes its card memory or NVML cannot identify it.
     ! Keep the estimate when the measurement is not reliable
-    if (card_shared_skip(ctx)) return
+    if (card_shared_skip()) return
 
     workspace_gib_measured = &
       to_gib(fields_plus_halo_bytes_n(ctx, 1, measured_peak_fields))

@@ -31,10 +31,9 @@ module m_memcheck_report
 
 contains
 
-  function card_shared_skip(ctx) result(skipped)
+  function card_shared_skip() result(skipped)
     !! True when another process changes its card memory by more than 128 MiB
     !! or an NVML sample fails. The first such call logs the skip line
-    type(memcheck_ctx_t), intent(in) :: ctx
     logical :: skipped
     character(len=16) :: delta_buf
     character(len=256) :: line_buf
@@ -299,7 +298,7 @@ contains
       to_gib(ctx%device%heap_bytes()), ' GiB', &
       merge(' (predicted).', '.            ', ctx%device%heap_predicted)
     ! A change of the other processes since the start shifts these readings.
-    if (.not. card_shared_skip(ctx)) call log_info(trim(line_buf))
+    if (.not. card_shared_skip()) call log_info(trim(line_buf))
     write (line_buf, '(a,i0)') &
       'peak_fields (static estimate): ', ctx%peak_fields
     call log_info(trim(line_buf))
