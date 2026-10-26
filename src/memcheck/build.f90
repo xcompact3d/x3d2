@@ -303,6 +303,10 @@ contains
 
     call check_peak_fields_table(ctx, measured_peak_fields)
 
+    ! Another process changes its card memory or NVML cannot identify it.
+    ! Keep the estimate when the measurement is not reliable
+    if (card_shared_skip(ctx)) return
+
     workspace_gib_measured = &
       to_gib(fields_plus_halo_bytes_n(ctx, 1, measured_peak_fields))
 
@@ -311,10 +315,6 @@ contains
     ! An unsupported nproc_dir stays UNSUPPORTED.
     if (len_trim(requested_unsupported_reason(ctx)) == 0) &
       ctx%final_verdict = measured_verdict
-
-    ! Another process changed its card memory since the start, so the
-    ! measurement is not this build's alone: print no CHECK line.
-    if (card_shared_skip(ctx)) return
 
     ! The CHECK line compares the num_gpus=1 estimate without the IO staging
     ! term, which the real build never measures, with the measured memory.

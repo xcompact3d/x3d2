@@ -522,7 +522,7 @@ if(${ENABLE_BACKEND} STREQUAL "CUDA" AND WITH_MPI)
       set_tests_properties(${name} PROPERTIES
         PASS_REGULAR_EXPRESSION "CHECK num_gpus=1: .* - OK"
         FAIL_REGULAR_EXPRESSION "WARNING: peak_fields_lookup|MISMATCH"
-        SKIP_REGULAR_EXPRESSION "CHECK skipped: card shared")
+        SKIP_REGULAR_EXPRESSION "CHECK skipped:")
       add_memcheck_accuracy_test(${name} "CHECK num_gpus=1: .* - OK"
         "WARNING: peak_fields_lookup|MISMATCH" "${cmd}")
     else()
@@ -543,7 +543,7 @@ if(${ENABLE_BACKEND} STREQUAL "CUDA" AND WITH_MPI)
   set_tests_properties(memcheck_static_TGV_calibration PROPERTIES
     LABELS "verification;cuda"
     PASS_REGULAR_EXPRESSION "Calibration on this GPU: CUDA context [0-9.]+ GiB, NVSHMEM heap [0-9.]+ GiB\\."
-    SKIP_REGULAR_EXPRESSION "CHECK skipped: card shared")
+    SKIP_REGULAR_EXPRESSION "CHECK skipped:")
   add_memcheck_accuracy_test(memcheck_static_TGV_calibration
     "Calibration on this GPU: CUDA context [0-9.]+ GiB, NVSHMEM heap [0-9.]+ GiB\\." "MISMATCH" "${calibration_cmd}")
 
@@ -610,10 +610,10 @@ if(${ENABLE_BACKEND} STREQUAL "CUDA" AND WITH_MPI)
     set_tests_properties(${name} PROPERTIES
       LABELS "verification;cuda"
       PASS_REGULAR_EXPRESSION "${pass_regex}"
-      FAIL_REGULAR_EXPRESSION "SED_NOOP|WARNING: peak_fields_lookup|MISMATCH"
-      SKIP_REGULAR_EXPRESSION "CHECK skipped: card shared")
+      FAIL_REGULAR_EXPRESSION "SED_NOOP|WARNING: peak_fields_lookup|MISMATCH")
     # Only the tests with the default CHECK regex have a strict copy.
     if(ARGC LESS 3)
+      set_tests_properties(${name} PROPERTIES SKIP_REGULAR_EXPRESSION "CHECK skipped:")
       add_memcheck_accuracy_test(${name} "${pass_regex}"
         "SED_NOOP|WARNING: peak_fields_lookup|MISMATCH" "${cmd}")
     endif()
@@ -630,7 +630,7 @@ if(${ENABLE_BACKEND} STREQUAL "CUDA" AND WITH_MPI)
   # and in --static, with the same exit code. TGV's z=256 divides by 16.
   define_memcheck_build_edit_test(memcheck_build_ng16_matches_static
     "s/^nproc_dir *=.*/nproc_dir = 1, 1, 16/"
-    "mpirun --oversubscribe -np 1 ${PROJECT_BINARY_DIR}/bin/x3d2-memcheck $d/input.x3d --static > $d/static.log 2>&1; rc_s=$?; v_s=$(sed -n 's/^Requested nproc_dir gives num_gpus=16: .* - //p' $d/static.log); v_i=$(sed -n 's/^Requested nproc_dir gives num_gpus=16: .* - //p' $d/build.log); v_r=$(sed -n 's/^ *16 |.*| //p' $d/build.log); if test x$v_s != x && test x$v_s = x$v_i && test x$v_s = x$v_r && test $rc_s -eq $rc; then echo memcheck_build_ng16_matches_static_OK; fi")
+    "mpirun --oversubscribe -np 1 ${PROJECT_BINARY_DIR}/bin/x3d2-memcheck $d/input.x3d --static > $d/static.log 2>&1; rc_s=$?; v_s=$(sed -n 's/^Requested nproc_dir gives num_gpus=16: .* - //p' $d/static.log); v_i=$(sed -n 's/^Requested nproc_dir gives num_gpus=16: .* - //p' $d/build.log); v_r=$(sed -n 's/^ *16 |.*| //p' $d/build.log); if test x$v_r = x && grep -q '^CHECK skipped:' $d/build.log; then v_r=$v_i; fi; if test x$v_s != x && test x$v_s = x$v_i && test x$v_s = x$v_r && test $rc_s -eq $rc; then echo memcheck_build_ng16_matches_static_OK; fi")
 
   # A requested nproc_dir that splits x must stay UNSUPPORTED after the real
   # build: exit code 2, never the FITS of the 1 GPU measurement.
@@ -681,7 +681,7 @@ if(${ENABLE_BACKEND} STREQUAL "CUDA" AND WITH_MPI)
     LABELS "verification;cuda"
     PASS_REGULAR_EXPRESSION "CHECK num_gpus=1: .* - OK"
     FAIL_REGULAR_EXPRESSION "MISMATCH"
-    SKIP_REGULAR_EXPRESSION "CHECK skipped: card shared")
+    SKIP_REGULAR_EXPRESSION "CHECK skipped:")
   add_memcheck_accuracy_test(memcheck_build_relative_input
     "CHECK num_gpus=1: .* - OK" "MISMATCH" "${relative_input_cmd}")
 
@@ -701,8 +701,7 @@ if(${ENABLE_BACKEND} STREQUAL "CUDA" AND WITH_MPI)
   set_tests_properties(memcheck_build_leaves_no_files PROPERTIES
     LABELS "verification;cuda"
     PASS_REGULAR_EXPRESSION "NO_FILES_OK"
-    FAIL_REGULAR_EXPRESSION "MISMATCH"
-    SKIP_REGULAR_EXPRESSION "CHECK skipped: card shared")
+    FAIL_REGULAR_EXPRESSION "MISMATCH")
 
   # The query-only mode of the memcheck FFT workspace query reports the plan
   # memory and the workspace size without allocating the workspace.

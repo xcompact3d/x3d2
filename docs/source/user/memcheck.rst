@@ -88,19 +88,29 @@ The tool skips the real build, and prints no ``CHECK`` line, in these cases:
   that the flow case has no dispatch.
 * The input sets ``ibm_on=T`` and the ``ibm_<BC-suffix>.bp`` mask file is
   not in the working directory.
-* Another process on the same card changed its GPU memory by more than 128 MiB
-  between the start and any later memory reading, in the calibration probe or
-  in the real build. The measurement then includes that memory, so the tool
-  logs ``CHECK skipped: card shared`` with the change and the process counts.
-  ``ctest`` reports the ``memcheck_build_*`` tests as skipped in this case.
 
 The estimate then stands.
 
+The tool completes the real build but keeps the estimate in these cases:
+
+* Another process on the same card changes its GPU memory by more than 128 MiB
+  between the start and a later sample. The tool logs
+  ``CHECK skipped: card shared`` with the change and the process counts.
+* NVML cannot attribute GPU memory to the processes at the start or a later
+  sample. The tool logs ``CHECK skipped: GPU process attribution unavailable``.
+  This includes containers where NVML reports host PIDs that differ from the
+  PID of the tool.
+
+The tool prints no measured table or accuracy ``CHECK`` line in these cases.
+The tests that require accurate memory measurements report a skip.
+Tests of the decomposition, report format and case output remain active.
+The tool samples memory at discrete points. It cannot detect memory changes
+that occur and reverse between samples.
+
 The report shows ``Other GPU processes at start``: the number of other
-processes on the card and the memory they hold, read through NVML. The line
-reads ``not checked (NVML gave no usable process list)`` when an NVML call
-fails or the list does not hold the PID of the tool. The tool then does not
-skip the ``CHECK`` line.
+processes on the card and the memory they hold, from NVML. The line reads
+``not checked (NVML gave no usable process list)`` when an NVML call fails
+or the list does not hold the PID of the tool.
 
 The ``ctest`` label ``memcheck-accuracy`` selects strict copies of these
 tests, named ``<test>_accuracy``. They fail on a skipped ``CHECK`` line. Run

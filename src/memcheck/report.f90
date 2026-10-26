@@ -3,7 +3,7 @@ module m_memcheck_report
   use m_common, only: dp, i8, is_sp
   use m_cuda_memcheck_device, only: foreign_start_ok, foreign_start_nproc, &
                                     foreign_start_bytes, foreign_worst, &
-                                    foreign_nproc_last
+                                    foreign_nproc_last, foreign_valid
   use m_logger, only: log_info
   use m_memcheck_context, only: memcheck_ctx_t
   use m_memory_estimate, only: gpu_io_staging_bytes, gpu_io_staging_parts
@@ -32,17 +32,20 @@ module m_memcheck_report
 contains
 
   function card_shared_skip(ctx) result(skipped)
-    !! True when another process changed its card memory by more than 128 MiB
-    !! at any reading since the start. The first call that finds it logs the
-    !! skip line, and a later call logs nothing.
+    !! True when another process changes its card memory by more than 128 MiB
+    !! or an NVML sample fails. The first such call logs the skip line
     type(memcheck_ctx_t), intent(in) :: ctx
     logical :: skipped
     character(len=16) :: delta_buf
     character(len=256) :: line_buf
 
-    skipped = abs(foreign_worst) > FOREIGN_SKIP_BYTES
+    skipped = .not. foreign_valid .or. abs(foreign_worst) > FOREIGN_SKIP_BYTES
     if (.not. skipped .or. skip_printed) return
     skip_printed = .true.
+    if (.not. foreign_valid) then
+      call log_info('CHECK skipped: GPU process attribution unavailable')
+      return
+    end if
     write (delta_buf, '(sp,f8.2)') to_gib(foreign_worst)
     write (line_buf, '(a,a,a,i0,a,i0,a)') &
       'CHECK skipped: card shared, other GPU processes changed by ', &

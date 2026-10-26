@@ -21,7 +21,7 @@ module m_cuda_memcheck_device
   private
   public :: cuda_memcheck_device_t, fft_workspace_bytes_query, &
             foreign_start_ok, foreign_start_nproc, foreign_start_bytes, &
-            foreign_worst, foreign_nproc_last
+            foreign_worst, foreign_nproc_last, foreign_valid
 
   !> The v3 layout of nvmlProcessInfo_t.
   type, bind(C) :: nvml_proc_t
@@ -41,7 +41,7 @@ module m_cuda_memcheck_device
   integer(i8), save, protected :: foreign_start_bytes = 0_i8, &
                                   foreign_worst = 0_i8
   !> False after a failed sample, which stops the sampling.
-  logical, save :: foreign_valid = .false.
+  logical, save, protected :: foreign_valid = .false.
 
   interface
     integer(c_int) function nvmlInit_v2() bind(C, name='nvmlInit_v2')
