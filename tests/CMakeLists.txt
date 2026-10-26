@@ -600,7 +600,7 @@ if(${ENABLE_BACKEND} STREQUAL "CUDA" AND WITH_MPI)
     endif()
     set(cmd "d=$(mktemp -d); \
        sed '${sed_expr}' ${base} > $d/input.x3d; \
-       if cmp -s ${base} $d/input.x3d; then echo SED_NOOP; fi; \
+       if cmp -s ${base} $d/input.x3d; then echo SED_NOOP; rm -rf $d; exit 1; fi; \
        mpirun --oversubscribe -np 1 ${PROJECT_BINARY_DIR}/bin/x3d2-memcheck \
          $d/input.x3d ${mode_flag} > $d/build.log 2>&1; \
        rc=$?; cat $d/build.log; \

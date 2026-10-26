@@ -31,15 +31,16 @@ module m_memcheck_report
 
 contains
 
-  function card_shared_skip() result(skipped)
+  function card_shared_skip(emit_line) result(skipped)
     !! True when another process changes its card memory by more than 128 MiB
-    !! or an NVML sample fails. The first such call logs the skip line
+    !! or an NVML sample fails. Log the skip line once when emit_line is true
+    logical, intent(in) :: emit_line
     logical :: skipped
     character(len=16) :: delta_buf
     character(len=256) :: line_buf
 
     skipped = .not. foreign_valid .or. abs(foreign_worst) > FOREIGN_SKIP_BYTES
-    if (.not. skipped .or. skip_printed) return
+    if (.not. skipped .or. .not. emit_line .or. skip_printed) return
     skip_printed = .true.
     if (.not. foreign_valid) then
       call log_info('CHECK skipped: GPU process attribution unavailable')
@@ -298,7 +299,8 @@ contains
       to_gib(ctx%device%heap_bytes()), ' GiB', &
       merge(' (predicted).', '.            ', ctx%device%heap_predicted)
     ! A change of the other processes since the start shifts these readings.
-    if (.not. card_shared_skip()) call log_info(trim(line_buf))
+    if (.not. card_shared_skip(emit_line=ctx%run_mode /= 'BUILD')) &
+      call log_info(trim(line_buf))
     write (line_buf, '(a,i0)') &
       'peak_fields (static estimate): ', ctx%peak_fields
     call log_info(trim(line_buf))
