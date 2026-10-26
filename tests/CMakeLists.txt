@@ -504,7 +504,9 @@ if(${ENABLE_BACKEND} STREQUAL "CUDA" AND WITH_MPI)
   # exclusive GPU. It has the label memcheck-accuracy only, so CI's
   # -L "unit|verification" does not select it, and no SKIP_REGULAR_EXPRESSION:
   # a skipped CHECK on a shared card fails it.
-  function(add_memcheck_accuracy_test name pass_regex fail_regex cmd)
+  function(add_memcheck_accuracy_test name cmd)
+    get_test_property(${name} PASS_REGULAR_EXPRESSION pass_regex)
+    get_test_property(${name} FAIL_REGULAR_EXPRESSION fail_regex)
     add_test(NAME ${name}_accuracy COMMAND sh -c "${cmd}")
     set_tests_properties(${name}_accuracy PROPERTIES
       LABELS "memcheck-accuracy"
@@ -523,8 +525,7 @@ if(${ENABLE_BACKEND} STREQUAL "CUDA" AND WITH_MPI)
         PASS_REGULAR_EXPRESSION "CHECK num_gpus=1: .* - OK"
         FAIL_REGULAR_EXPRESSION "WARNING: peak_fields_lookup|MISMATCH"
         SKIP_REGULAR_EXPRESSION "CHECK skipped:")
-      add_memcheck_accuracy_test(${name} "CHECK num_gpus=1: .* - OK"
-        "WARNING: peak_fields_lookup|MISMATCH" "${cmd}")
+      add_memcheck_accuracy_test(${name} "${cmd}")
     else()
       set_tests_properties(${name} PROPERTIES
         PASS_REGULAR_EXPRESSION "Requested nproc_dir gives num_gpus=")
@@ -543,9 +544,9 @@ if(${ENABLE_BACKEND} STREQUAL "CUDA" AND WITH_MPI)
   set_tests_properties(memcheck_static_TGV_calibration PROPERTIES
     LABELS "verification;cuda"
     PASS_REGULAR_EXPRESSION "Calibration on this GPU: CUDA context [0-9.]+ GiB, NVSHMEM heap [0-9.]+ GiB\\."
+    FAIL_REGULAR_EXPRESSION "MISMATCH"
     SKIP_REGULAR_EXPRESSION "CHECK skipped:")
-  add_memcheck_accuracy_test(memcheck_static_TGV_calibration
-    "Calibration on this GPU: CUDA context [0-9.]+ GiB, NVSHMEM heap [0-9.]+ GiB\\." "MISMATCH" "${calibration_cmd}")
+  add_memcheck_accuracy_test(memcheck_static_TGV_calibration "${calibration_cmd}")
 
   # Hiding every GPU from the process (CUDA_VISIBLE_DEVICES=) must be caught
   # cleanly by the device checks in memcheck.f90's main program, not crash.
@@ -614,8 +615,7 @@ if(${ENABLE_BACKEND} STREQUAL "CUDA" AND WITH_MPI)
     # Only the tests with the default CHECK regex have a strict copy.
     if(ARGC LESS 3)
       set_tests_properties(${name} PROPERTIES SKIP_REGULAR_EXPRESSION "CHECK skipped:")
-      add_memcheck_accuracy_test(${name} "${pass_regex}"
-        "SED_NOOP|WARNING: peak_fields_lookup|MISMATCH" "${cmd}")
+      add_memcheck_accuracy_test(${name} "${cmd}")
     endif()
   endfunction()
   define_memcheck_build_edit_test(memcheck_build_TGV_rk4
@@ -682,8 +682,7 @@ if(${ENABLE_BACKEND} STREQUAL "CUDA" AND WITH_MPI)
     PASS_REGULAR_EXPRESSION "CHECK num_gpus=1: .* - OK"
     FAIL_REGULAR_EXPRESSION "MISMATCH"
     SKIP_REGULAR_EXPRESSION "CHECK skipped:")
-  add_memcheck_accuracy_test(memcheck_build_relative_input
-    "CHECK num_gpus=1: .* - OK" "MISMATCH" "${relative_input_cmd}")
+  add_memcheck_accuracy_test(memcheck_build_relative_input "${relative_input_cmd}")
 
   # A real --build run writes no file in the working directory: the case
   # build writes no monitoring.csv. The directory holds only the input and
