@@ -108,6 +108,9 @@ module m_config
     logical :: coriolis = .false.
     logical :: mass_conserve = .false.
     logical :: damping = .false.
+    !> Blend the outlet towards a spanwise-shifted copy of the flow
+    !> (Incompact3d ishiftedper); periodic x only
+    logical :: shifted_periodic = .false.
   contains
     procedure :: read => read_abl_nml
   end type abl_config_t
@@ -507,11 +510,12 @@ contains
     integer :: profile_start_iter, seed
     character(len=256) :: profile_file
     logical :: pressure_gradient, coriolis, mass_conserve, damping
+    logical :: shifted_periodic
 
     namelist /abl_nml/ z0, u_star, delta, kappa, dsampling, &
       u_geo, coriolis_freq, &
       init_noise, seed, u_bulk, profile_start_iter, profile_file, &
-      pressure_gradient, coriolis, mass_conserve, damping
+      pressure_gradient, coriolis, mass_conserve, damping, shifted_periodic
 
     ! Defaults
     z0 = 0.1_dp
@@ -530,6 +534,7 @@ contains
     coriolis = .false.
     mass_conserve = .false.
     damping = .false.
+    shifted_periodic = .false.
 
     if (present(nml_file) .and. present(nml_string)) then
       call abort_run('Reading ABL config failed! Provide only a file name or &
@@ -561,6 +566,7 @@ contains
     self%coriolis = coriolis
     self%mass_conserve = mass_conserve
     self%damping = damping
+    self%shifted_periodic = shifted_periodic
 
     call validate_abl_config(self)
 

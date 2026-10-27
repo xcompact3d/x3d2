@@ -87,7 +87,13 @@ contains
       call abort_run('ABL config error: enable pressure_gradient, coriolis, &
                      &or mass_conserve, or read inflow planes.', &
                      collective=.true.)
+    if (flow_case%abl_cfg%shifted_periodic .and. &
+        flow_case%inflow_cfg%read_planes) &
+      call abort_run('ABL shifted_periodic needs a periodic x direction; it &
+                     &cannot be used with read_planes.', collective=.true.)
     flow_case%abl = abl_t(backend, mesh, host_allocator, flow_case%abl_cfg)
+    if (flow_case%abl_cfg%shifted_periodic) &
+      call flow_case%abl%configure_shifted_periodic()
 
     call flow_case%case_init(backend, mesh, host_allocator)
     flow_case%solver%keep_wall_correction = .true.
@@ -197,6 +203,12 @@ contains
       can = target_mean - ub
       call self%solver%backend%field_shift(self%solver%u, can)
     end if
+
+    ! After the flow-rate correction, as in Incompact3d
+    ! boundary_conditions_abl
+    if (self%abl_cfg%shifted_periodic) &
+      call self%abl%apply_shifted_periodic(self%solver%u, self%solver%v, &
+                                           self%solver%w)
 
     ! The flow-rate correction is left to apply_BC, which sees the field
     ! the stamp is applied to

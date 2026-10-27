@@ -524,6 +524,46 @@ contains
     end if
   end subroutine field_set_abl_wall_stress
 
+  attributes(global) subroutine field_get_x_band(band, f, i_start, nz)
+  !! band(i, j, k) = f(i_start + i - 1, j, k) for a DIR_X vertex field;
+  !! one thread per i, one block per (j, k)
+    implicit none
+    real(dp), device, intent(out), dimension(:, :, :) :: band
+    real(dp), device, intent(in), dimension(:, :, :) :: f
+    integer, value, intent(in) :: i_start, nz
+    integer :: i, j, k
+
+    i = threadIdx%x + (blockIdx%x - 1)*blockDim%x
+    j = blockIdx%y
+    k = blockIdx%z
+    if (i > size(band, 1)) return
+    band(i, j, k) = f(mod(j - 1, SZ) + 1, i_start + i - 1, &
+                      ((j - 1)/SZ)*nz + k)
+  end subroutine field_get_x_band
+
+  attributes(global) subroutine field_blend_x_band(f, band, lambda, &
+                                                   i_start, nz)
+  !! f(i_start + i - 1, j, k) = lambda(i)*band(i, j, k)
+  !!                            + (1 - lambda(i))*f(i_start + i - 1, j, k)
+  !! for a DIR_X vertex field; one thread per i, one block per (j, k)
+    implicit none
+    real(dp), device, intent(inout), dimension(:, :, :) :: f
+    real(dp), device, intent(in), dimension(:, :, :) :: band
+    real(dp), device, intent(in), dimension(:) :: lambda
+    integer, value, intent(in) :: i_start, nz
+    integer :: i, j, k, jj, g
+
+    i = threadIdx%x + (blockIdx%x - 1)*blockDim%x
+    j = blockIdx%y
+    k = blockIdx%z
+    if (i > size(band, 1)) return
+    jj = mod(j - 1, SZ) + 1
+    g = ((j - 1)/SZ)*nz + k
+    f(jj, i_start + i - 1, g) = lambda(i)*band(i, j, k) &
+                                + (1._dp - lambda(i)) &
+                                *f(jj, i_start + i - 1, g)
+  end subroutine field_blend_x_band
+
   attributes(global) subroutine field_set_y_face_from_field( &
     f, f_start, nx, ny, nz)
 !! Set domain Y_FACE boundary values from another field.

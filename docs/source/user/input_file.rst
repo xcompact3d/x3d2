@@ -141,6 +141,7 @@ are set in the ``abl_nml`` namelist block.
      mass_conserve = .false.
      u_bulk = 0.0
      damping = .false.
+     shifted_periodic = .false.
      profile_start_iter = -1
      profile_file = 'abl_profile.csv'
    /
@@ -197,6 +198,20 @@ the run is a successor driven by precursor inflow planes (see below).
   :math:`15\,u_*/\delta`, ramping in smoothly between :math:`y = 0.95\,\delta`
   and :math:`1.05\,\delta` and applied fully above. It relaxes ``u`` towards
   :math:`(u_*/\kappa)\ln(\delta/z_0)`, and ``v`` and ``w`` towards ``u_geo``.
+
+  **Default:** ``.false.``
+
+``shifted_periodic``
+  Incompact3d's ``ishiftedper``, for a periodic-x precursor. At the start of
+  every substep the velocity over the last third of the domain is blended
+  towards the flow a third of the domain upstream, shifted spanwise by
+  :math:`L_z/8`, so streaks do not lock onto the periodic box. The blending
+  weight rises as :math:`\tfrac12\left(1-\cos\left(\tfrac{4\pi}{3}
+  (x - x_s)/d\right)\right)` from :math:`x_s = 5L_x/9` and is one over the
+  last quarter of :math:`d = L_x/9`, measured on the upstream copy.
+  Requires periodic x, an undecomposed x direction and at least 8 z points.
+  The source band is shifted on the host, so each substep copies ``u``,
+  ``v`` and ``w`` to the host and back.
 
   **Default:** ``.false.``
 

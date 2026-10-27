@@ -16,7 +16,8 @@ module m_abl
   use m_field, only: field_t
   use m_logger, only: log_info, abort_run, str
   use m_mesh, only: mesh_t
-  use m_mpi, only: MPI_COMM_WORLD, MPI_INTEGER, MPI_Bcast
+  use m_mpi, only: MPI_COMM_WORLD, MPI_INTEGER, MPI_IN_PLACE, MPI_SUM, &
+                   MPI_Allreduce, MPI_Bcast
   use m_les, only: les_t, abl_wall_sample_location
 
   implicit none
@@ -31,9 +32,20 @@ module m_abl
     type(abl_config_t) :: cfg
     ! Cached Rayleigh damping coefficient field (coeff*lambda(y)), built once.
     class(field_t), pointer :: damp_coeff => null()
+    ! Shifted periodic fringe, set up by configure_shifted_periodic: the
+    ! source band starts at x vertex fringe_start, the blended band
+    ! fringe_offset vertices further on, with weights fringe_lambda.
+    integer :: fringe_start = 0
+    integer :: fringe_offset = 0
+    integer :: fringe_nshift = 0
+    real(dp), allocatable :: fringe_lambda(:)
+    !> Rank holding each global z plane
+    integer, allocatable :: z_plane_rank(:)
   contains
     procedure :: initialise
     procedure :: apply_forcing
+    procedure :: configure_shifted_periodic
+    procedure :: apply_shifted_periodic
     procedure :: configure_wall_boundary_correction
     procedure :: apply_damping
     procedure :: build_damping
@@ -323,5 +335,98 @@ contains
       self%cfg%kappa, self%cfg%z0, sampling_height, sample_plane, &
       sample_weight)
   end subroutine configure_wall_boundary_correction
+
+  subroutine configure_shifted_periodic(self)
+    !! Set up the Incompact3d shifted periodic fringe (fringe_region with
+    !! ishiftedper = 1, iconcprec = 0). Over the last third of a periodic-x
+    !! domain the flow is blended towards the flow a third of the domain
+    !! upstream, shifted spanwise by Lz/8, so streaks cannot lock onto the
+    !! periodic box. The ramp and band sizes follow the legacy code exactly.
+    implicit none
+
+    class(abl_t), intent(inout) :: self
+
+    real(dp), allocatable :: lambda(:)
+    real(dp) :: lx, dx, x, fre, frs, frd
+    integer :: global_dims(3), dims(3), nx, nz, nfe, i, i_first, z_offset
+    integer :: ierr
+
+    if (self%mesh%par%nproc_dir(1) /= 1) &
+      call abort_run('ABL shifted_periodic requires an undecomposed x &
+                     &direction.')
+
+    global_dims = self%mesh%get_global_dims(VERT)
+    nx = global_dims(1)
+    nz = global_dims(3)
+    lx = self%mesh%geo%L(1)
+    dx = self%mesh%geo%d(1)
+
+    self%fringe_nshift = int(self%mesh%geo%L(3)/8._dp/self%mesh%geo%d(3))
+    if (self%fringe_nshift < 1) &
+      call abort_run('ABL shifted_periodic needs at least 8 z points.')
+
+    ! Legacy edl = 2/3 and frl = 1/6
+    fre = lx*2._dp/3._dp
+    frs = fre - fre/6._dp
+    frd = fre - frs
+    nfe = int(nx*fre/lx)
+    allocate (lambda(nfe))
+    do i = 1, nfe
+      x = real(i - 1, dp)*dx
+      if (x < frs) then
+        lambda(i) = 0._dp
+      else if (x < fre - frd/4._dp) then
+        lambda(i) = 0.5_dp*(1._dp - cos(4._dp*pi/3._dp*(x - frs)/frd))
+      else if (x < fre) then
+        lambda(i) = 1._dp
+      else
+        lambda(i) = 0._dp
+      end if
+    end do
+    ! A loop rather than findloc, which nvfortran lacks for logical arrays
+    i_first = 0
+    do i = nfe, 1, -1
+      if (lambda(i) > 0._dp) i_first = i
+    end do
+    if (i_first == 0) &
+      call abort_run('ABL shifted_periodic fringe is narrower than one &
+                     &grid spacing.')
+    self%fringe_start = i_first
+    self%fringe_offset = nx - nfe
+    self%fringe_lambda = lambda(i_first:nfe)
+
+    ! x and y are whole on every rank, so each rank holds one z block
+    dims = self%mesh%get_dims(VERT)
+    allocate (self%z_plane_rank(nz))
+    self%z_plane_rank = 0
+    z_offset = self%mesh%par%n_offset(3)
+    self%z_plane_rank(z_offset + 1:z_offset + dims(3)) = self%mesh%par%nrank
+    call MPI_Allreduce(MPI_IN_PLACE, self%z_plane_rank, nz, MPI_INTEGER, &
+                       MPI_SUM, MPI_COMM_WORLD, ierr)
+
+    call log_info('ABL shifted periodic: spanwise shift of ' &
+                  //str(self%fringe_nshift)//' planes, x vertices ' &
+                  //str(i_first)//'-'//str(nfe)//' blended into ' &
+                  //str(i_first + self%fringe_offset)//'-'//str(nx))
+  end subroutine configure_shifted_periodic
+
+  subroutine apply_shifted_periodic(self, u, v, w)
+    !! Apply the shifted periodic fringe to the velocity, at the start of
+    !! each stage as Incompact3d does from boundary_conditions_abl.
+    implicit none
+
+    class(abl_t) :: self
+    class(field_t), intent(inout) :: u, v, w
+
+    call self%backend%field_shift_blend_x_band( &
+      u, self%fringe_lambda, self%fringe_start, self%fringe_offset, &
+      self%fringe_nshift, self%z_plane_rank)
+    call self%backend%field_shift_blend_x_band( &
+      v, self%fringe_lambda, self%fringe_start, self%fringe_offset, &
+      self%fringe_nshift, self%z_plane_rank)
+    call self%backend%field_shift_blend_x_band( &
+      w, self%fringe_lambda, self%fringe_start, self%fringe_offset, &
+      self%fringe_nshift, self%z_plane_rank)
+  end subroutine apply_shifted_periodic
 
 end module m_abl

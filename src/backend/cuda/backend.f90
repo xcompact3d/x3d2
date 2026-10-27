@@ -2,10 +2,12 @@ module m_cuda_backend
   use iso_c_binding, only: c_ptr
   use cudafor
   use m_mpi, only: MPI_COMM_WORLD, MPI_IN_PLACE, MPI_MAX, MPI_SUM, &
-                   MPI_Allreduce
+                   MPI_STATUSES_IGNORE, MPI_Allreduce, MPI_Irecv, MPI_Isend, &
+                   MPI_Waitall
 
   use m_allocator, only: allocator_t
-  use m_base_backend, only: base_backend_t, abl_wall_upper_plane
+  use m_base_backend, only: base_backend_t, abl_wall_upper_plane, &
+                            shifted_z_source
   use m_common, only: dp, sp, MPI_X3D2_DP, move_data_loc, get_rdr_from_dirs, &
                       RDR_X2Y, RDR_X2Z, RDR_Y2X, RDR_Y2Z, RDR_Z2X, RDR_Z2Y, &
                       RDR_C2X, RDR_C2Y, RDR_C2Z, RDR_X2C, RDR_Y2C, RDR_Z2C, &
@@ -30,6 +32,7 @@ module m_cuda_backend
                                      field_max_sum, field_set_y_face, &
                                      field_set_x_face, field_set_y_plane, &
                                      field_set_abl_wall_stress, &
+                                     field_get_x_band, field_blend_x_band, &
                                      field_set_x_face_from_field, &
                                      field_set_y_face_from_field, &
                                      add_scalar_x_face, set_x_inlet_plane, &
@@ -92,6 +95,7 @@ module m_cuda_backend
     procedure :: field_set_y_plane => field_set_y_plane_cuda
     procedure :: field_plane_sums => field_plane_sums_cuda
     procedure :: field_set_abl_wall_stress => field_set_abl_wall_stress_cuda
+    procedure :: field_shift_blend_x_band => field_shift_blend_x_band_cuda
     procedure :: field_set_face_from_field => field_set_face_from_field_cuda
     procedure :: field_add_const_x_face => field_add_const_x_face_cuda
     procedure :: field_set_x_inlet_plane => field_set_x_inlet_plane_cuda
@@ -1715,6 +1719,92 @@ contains
       stress_i, sample_offset, upper_offset, stress_offset, dims(1), &
       component)
   end subroutine field_set_abl_wall_stress_cuda
+
+  subroutine field_shift_blend_x_band_cuda(self, f, lambda, i_start, &
+                                           i_offset, nshift, z_plane_rank)
+    !! [[m_base_backend(module):field_shift_blend_x_band(subroutine)]]
+    !!
+    !! The band stays on the device: it is gathered into a buffer, shifted
+    !! in z with device-to-device copies and GPU-aware MPI for the planes
+    !! held by other ranks, and blended back.
+    implicit none
+    class(cuda_backend_t) :: self
+    class(field_t), intent(inout) :: f
+    real(dp), intent(in) :: lambda(:)
+    integer, intent(in) :: i_start, i_offset, nshift
+    integer, intent(in) :: z_plane_rank(:)
+    real(dp), device, pointer, dimension(:, :, :) :: f_d
+    real(dp), device, allocatable :: band_d(:, :, :), shifted_d(:, :, :)
+    real(dp), device, allocatable :: lambda_d(:)
+    integer, allocatable :: requests(:)
+    type(dim3) :: blocks, threads
+    integer :: dims(3), nband, nz, z_offset, rank, k, kg, k_src, k_dst
+    integer :: n_plane, n_req, ierr
+
+    if (f%dir /= DIR_X .or. f%data_loc /= VERT) &
+      call abort_run('Shifted x band blend requires a DIR_X vertex field.')
+    dims = self%mesh%get_dims(VERT)
+    nband = size(lambda)
+    nz = size(z_plane_rank)
+    z_offset = self%mesh%par%n_offset(3)
+    rank = self%mesh%par%nrank
+    n_plane = nband*dims(2)
+
+    call resolve_field_t(f_d, f)
+    allocate (band_d(nband, dims(2), dims(3)))
+    allocate (shifted_d(nband, dims(2), dims(3)))
+    allocate (lambda_d(nband))
+    lambda_d = lambda
+
+    threads = dim3(32, 1, 1)
+    blocks = dim3((nband - 1)/32 + 1, dims(2), dims(3))
+    call field_get_x_band<<<blocks, threads>>>( &      !&
+      band_d, f_d, i_start, dims(3))
+
+    do k = 1, dims(3)
+      k_src = shifted_z_source(z_offset + k, nshift, nz)
+      if (z_plane_rank(k_src) == rank) &
+        shifted_d(:, :, k) = band_d(:, :, k_src - z_offset)
+    end do
+
+    allocate (requests(2*dims(3)))
+    n_req = 0
+#ifdef MPI
+    ! The band must be complete before MPI reads device memory
+    ierr = cudaDeviceSynchronize()
+    call check_cuda(ierr, 'cudaDeviceSynchronize in field_shift_blend_x_band')
+    do k = 1, dims(3)
+      kg = z_offset + k
+      k_src = shifted_z_source(kg, nshift, nz)
+      if (z_plane_rank(k_src) /= rank) then
+        n_req = n_req + 1
+        call MPI_Irecv(shifted_d(:, :, k), n_plane, MPI_X3D2_DP, &
+                       z_plane_rank(k_src), kg, MPI_COMM_WORLD, &
+                       requests(n_req), ierr)
+      end if
+      k_dst = shifted_z_source(kg, -nshift, nz)
+      if (z_plane_rank(k_dst) /= rank) then
+        n_req = n_req + 1
+        call MPI_Isend(band_d(:, :, k), n_plane, MPI_X3D2_DP, &
+                       z_plane_rank(k_dst), k_dst, MPI_COMM_WORLD, &
+                       requests(n_req), ierr)
+      end if
+    end do
+    if (n_req > 0) &
+      call MPI_Waitall(n_req, requests, MPI_STATUSES_IGNORE, ierr)
+#else
+    if (any(z_plane_rank /= rank)) &
+      call abort_run('Shifted x band blend needs MPI for a decomposed z.')
+#endif
+
+    call field_blend_x_band<<<blocks, threads>>>( &      !&
+      f_d, shifted_d, lambda_d, i_start + i_offset, dims(3))
+
+    ! Keep the buffers alive until the blend has read them
+    ierr = cudaDeviceSynchronize()
+    call check_cuda(ierr, 'cudaDeviceSynchronize in field_shift_blend_x_band')
+    deallocate (band_d, shifted_d, lambda_d)
+  end subroutine field_shift_blend_x_band_cuda
 
   subroutine field_set_face_from_field_cuda(self, f, f_start, c_end, face, &
                                             bc_start, bc_end, flow_rate_diff)
