@@ -7,7 +7,8 @@ module m_snapshot_manager
 !! Unlike checkpoints, which are always full-resolution for exact restarts,
 !! snapshots can be strided to reduce file size.
   use m_mpi, only: MPI_COMM_WORLD, MPI_Comm_rank, MPI_Allreduce, &
-                   MPI_IN_PLACE, MPI_MIN, MPI_SUCCESS, MPI_Bcast, MPI_LOGICAL
+                   MPI_IN_PLACE, MPI_MIN, MPI_SUCCESS, MPI_Bcast, &
+                   MPI_LOGICAL, MPI_Barrier
   use m_common, only: dp, i8, MPI_X3D2_DP, DIR_C, VERT, get_argument
   use m_field, only: field_t
   use m_solver, only: solver_t
@@ -38,6 +39,9 @@ module m_snapshot_manager
     logical :: convert_to_sp = .false.              !! Flag for single precision snapshots
     !! Steps of an existing file kept on restart; negative starts a new file
     integer :: append_after_steps = -1
+    !! Iteration the run restarted from, and the layout of the existing file
+    integer :: restart_iter = 0
+    character(len=:), allocatable :: restart_vtk_xml
   contains
     procedure :: init
     procedure :: handle_restart
@@ -48,6 +52,7 @@ module m_snapshot_manager
     procedure, private :: cleanup_output_buffers
     procedure, private :: generate_vtk_xml
     procedure, private :: open_snapshot_file
+    procedure, private :: retire_snapshot_file
     procedure, private :: close_snapshot_file
   end type snapshot_manager_t
 
@@ -91,14 +96,17 @@ contains
     end if
   end subroutine configure_output
 
-  subroutine handle_restart(self, restart_time, dt, comm)
+  subroutine handle_restart(self, restart_iter, dt, comm)
     !! Prepare to continue the snapshot file of the run being restarted.
     !! Steps up to the restart time are kept and later ones (written past
     !! the checkpoint) are dropped, so the restarted run appends without
     !! duplicating them, whatever snapshot frequency wrote the file.
-    use m_io_backend, only: count_steps_up_to
+    !! The file's layout is kept so the first snapshot can check it still
+    !! matches the output settings.
+    use m_io_backend, only: count_steps_up_to, read_string_attribute
     class(snapshot_manager_t), intent(inout) :: self
-    real(dp), intent(in) :: restart_time, dt
+    integer, intent(in) :: restart_iter
+    real(dp), intent(in) :: dt
     integer, intent(in) :: comm
 
     character(len=256) :: filename
@@ -107,6 +115,7 @@ contains
     integer :: myrank, ierr
 
     if (self%config%snapshot_freq <= 0) return
+    self%restart_iter = restart_iter
 
     call MPI_Comm_rank(comm, myrank, ierr)
     write (filename, '(A,A)') trim(self%config%snapshot_prefix), '.bp'
@@ -115,8 +124,9 @@ contains
     if (.not. file_exists) return
 
     ! Half a time step of slack absorbs rounding in the stored times
-    limit = restart_time + 0.5_dp*dt
+    limit = (real(restart_iter, dp) + 0.5_dp)*dt
     self%append_after_steps = count_steps_up_to(filename, "time", limit, comm)
+    self%restart_vtk_xml = read_string_attribute(filename, "vtk.xml", comm)
   end subroutine handle_restart
 
   subroutine handle_snapshot_step(self, solver, timestep, comm)
@@ -169,24 +179,11 @@ contains
 
     write (filename, '(A,A)') trim(self%config%snapshot_prefix), '.bp'
 
-    ! Open snapshot file on first call (check for existence)
+    ! Build identical VTK XML metadata on every rank when the dataset opens.
+    ! It is built before the file opens, as a restart compares it with the
+    ! layout of the existing file. The reduction finds the global origin
+    ! without assuming how ranks map to mesh subdomains.
     is_first_snapshot_of_run = .not. self%is_snapshot_file_open
-    if (is_first_snapshot_of_run) then
-      call self%open_snapshot_file(filename, comm)
-    else
-      ! For subsequent snapshots, begin a new step
-      call self%snapshot_writer%begin_step()
-    end if
-
-    simulation_time = timestep*solver%dt
-    if (self%snapshot_writer%is_session_functional()) then
-      call log_info('Writing snapshot for time = '//str(simulation_time) &
-                    //' iteration = '//str(timestep))
-    end if
-
-    ! Embed identical VTK XML metadata on every rank when the dataset opens.
-    ! The reduction finds the global origin without assuming how ranks map to
-    ! mesh subdomains.
     if (is_first_snapshot_of_run) then
       global_dims = solver%mesh%get_global_dims(VERT)
       origin = solver%mesh%get_coordinates(1, 1, 1)
@@ -212,7 +209,21 @@ contains
       call self%generate_vtk_xml( &
         output_shape_dims, field_names, origin, output_spacing &
         )
+    end if
+
+    ! Open snapshot file on first call (check for existence)
+    if (is_first_snapshot_of_run) then
+      call self%open_snapshot_file(filename, comm)
       call self%snapshot_writer%write_attribute("vtk.xml", self%vtk_xml)
+    else
+      ! For subsequent snapshots, begin a new step
+      call self%snapshot_writer%begin_step()
+    end if
+
+    simulation_time = timestep*solver%dt
+    if (self%snapshot_writer%is_session_functional()) then
+      call log_info('Writing snapshot for time = '//str(simulation_time) &
+                    //' iteration = '//str(timestep))
     end if
 
     call self%snapshot_writer%write_data("time", real(simulation_time, dp))
@@ -452,8 +463,8 @@ contains
 
   subroutine open_snapshot_file(self, filename, comm)
     !! Open a persistent snapshot file. A restart appends to the file of the
-    !! run it continues; otherwise a new file is created, replacing any old
-    !! one.
+    !! run it continues if the output layout is unchanged; otherwise a new
+    !! file is created, replacing any old one.
     class(snapshot_manager_t), intent(inout) :: self
     character(len=*), intent(in) :: filename
     integer, intent(in) :: comm
@@ -462,6 +473,13 @@ contains
     integer :: myrank, ierr
 
     call MPI_Comm_rank(comm, myrank, ierr)
+
+    ! A changed stride or field list cannot share the file: ParaView reads
+    ! every step with the one vtk.xml it holds
+    if (self%append_after_steps > 0) then
+      if (self%restart_vtk_xml /= self%vtk_xml) &
+        call self%retire_snapshot_file(filename, comm)
+    end if
 
     if (self%append_after_steps >= 0) then
       if (myrank == 0) then
@@ -486,6 +504,57 @@ contains
 
     self%is_snapshot_file_open = .true.
   end subroutine open_snapshot_file
+
+  subroutine retire_snapshot_file(self, filename, comm)
+    !! Keep the steps of the existing file up to the restart, under a name
+    !! marking the iteration they end at, so a new file can take its name
+    use m_io_backend, only: allocate_io_writer
+    use m_io_base, only: io_writer_t, io_file_t, io_mode_append
+    class(snapshot_manager_t), intent(inout) :: self
+    character(len=*), intent(in) :: filename
+    integer, intent(in) :: comm
+
+    class(io_writer_t), allocatable :: writer
+    class(io_file_t), allocatable :: file
+    character(len=256) :: retired_filename
+    logical :: file_exists
+    integer :: myrank, ierr, stat
+
+    write (retired_filename, '(A,A,I0.6,A)') &
+      trim(self%config%snapshot_prefix), '_to_', self%restart_iter, '.bp'
+
+    call MPI_Comm_rank(comm, myrank, ierr)
+    if (myrank == 0) inquire (file=trim(retired_filename), exist=file_exists)
+    call MPI_Bcast(file_exists, 1, MPI_LOGICAL, 0, comm, ierr)
+    if (file_exists) then
+      call abort_run('Snapshot output settings changed on restart, but '// &
+                     trim(retired_filename)//' already exists', &
+                     collective=.true.)
+    end if
+
+    ! Opening for append drops the steps written past the checkpoint
+    call allocate_io_writer(writer)
+    call writer%init(comm, "snapshot_retire")
+    file = writer%open(filename, io_mode_append, comm, &
+                       self%append_after_steps)
+    call file%close()
+    call writer%finalise()
+
+    if (myrank == 0) then
+      call execute_command_line('mv '//trim(filename)//' '// &
+                                trim(retired_filename), exitstat=stat)
+      if (stat /= 0) then
+        call abort_run('Failed to rename '//trim(filename)//' to '// &
+                       trim(retired_filename))
+      end if
+      call log_info('Snapshot output settings changed on restart: kept '// &
+                    str(self%append_after_steps)//' steps in '// &
+                    trim(retired_filename))
+    end if
+    call MPI_Barrier(comm, ierr)
+
+    self%append_after_steps = -1
+  end subroutine retire_snapshot_file
 
   subroutine close_snapshot_file(self)
     !! Close the persistent snapshot file

@@ -326,7 +326,7 @@ These parameters are specified in the ``checkpoint_params`` namelist block in th
 ``checkpoint_prefix``: String prefix for checkpoint filenames. Each checkpoint will be named as ``<checkpoint_prefix>_XXXXXX.bp`` where ``XXXXXX`` is the timestep number.
   **Default:** ``"checkpoint"``
 
-``snapshot_prefix``: String prefix for visualisation snapshot filenames. Each snapshot will be named as ``<snapshot_prefix>_XXXXXX.bp``.
+``snapshot_prefix``: String prefix for the visualisation snapshot file. All snapshots are written as steps of one file, ``<snapshot_prefix>.bp``.
   **Default:** ``"snapshot"``
 
 ``snapshot_sp``: Boolean flag to save visualisation snapshots in single precision (float) instead of double precision (double). This reduces file size but may lose some precision.
@@ -346,7 +346,7 @@ These parameters are specified in the ``checkpoint_params`` namelist block in th
   When both ``'vorticity'`` and ``'qcriterion'`` are requested, the velocity gradient tensor is computed only once.
   **Default:** (empty — only velocity is written)
 
-``restart_from_checkpoint``: Boolean flag to restart the simulation from a checkpoint file.
+``restart_from_checkpoint``: Boolean flag to restart the simulation from a checkpoint file. A restart appends to ``<snapshot_prefix>.bp``, keeping the steps up to the restart time and dropping later ones. If ``output_stride`` or ``output_fields`` changed, the kept steps are moved to ``<snapshot_prefix>_to_XXXXXX.bp``, where ``XXXXXX`` is the restart timestep, and a new ``<snapshot_prefix>.bp`` is started, so that each file can be opened in ParaView.
   **Default:** ``false``
 
 ``restart_file``: Path to the checkpoint file for restarting the simulation. Required when ``restart_from_checkpoint`` is ``true``.

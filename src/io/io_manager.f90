@@ -61,7 +61,7 @@ contains
     call self%checkpoint_mgr%handle_restart(solver, comm_to_use, &
                                             self%stats_mgr)
     call self%snapshot_mgr%handle_restart( &
-      solver%current_iter*solver%dt, solver%dt, comm_to_use &
+      solver%current_iter, solver%dt, comm_to_use &
       )
   end subroutine io_handle_restart
 

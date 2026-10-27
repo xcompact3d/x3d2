@@ -26,6 +26,7 @@ module m_io_backend
 
   private
   public :: allocate_io_reader, allocate_io_writer, count_steps_up_to
+  public :: read_string_attribute
   public :: get_default_backend, IO_BACKEND_DUMMY, IO_BACKEND_ADIOS2
 
   logical, save :: write_warning_shown = .false.
@@ -234,6 +235,15 @@ contains
 
     n = 0
   end function count_steps_up_to
+
+  function read_string_attribute(filename, attribute_name, comm) result(value)
+    !! No file can be read without ADIOS2, so there is no attribute
+    character(len=*), intent(in) :: filename, attribute_name
+    integer, intent(in) :: comm
+    character(len=:), allocatable :: value
+
+    value = ''
+  end function read_string_attribute
 
   subroutine write_data_i8_dummy(self, variable_name, value, file_handle)
     class(io_dummy_writer_t), intent(inout) :: self

@@ -46,7 +46,8 @@ module m_io_backend
                     adios2_init, adios2_finalize, &
                     adios2_declare_io, adios2_set_engine, &
                     adios2_set_parameter, adios2_variable_steps, &
-                    adios2_set_step_selection, &
+                    adios2_set_step_selection, adios2_inquire_attribute, &
+                    adios2_attribute_data, &
                     adios2_open, adios2_close, &
                     adios2_begin_step, adios2_end_step, &
                     adios2_define_variable, adios2_inquire_variable, &
@@ -77,6 +78,7 @@ module m_io_backend
 
   private
   public :: allocate_io_reader, allocate_io_writer, count_steps_up_to
+  public :: read_string_attribute
   public :: get_default_backend, IO_BACKEND_DUMMY, IO_BACKEND_ADIOS2
 
   integer, parameter :: IO_BACKEND_DUMMY = 0
@@ -922,6 +924,44 @@ contains
     call reader%handle_error(ierr, "Failed to close "//trim(filename))
     call reader%finalise()
   end function count_steps_up_to
+
+  function read_string_attribute(filename, attribute_name, comm) result(value)
+    !! Read a string attribute of a file. Returns an empty string if the
+    !! attribute is not in the file.
+    character(len=*), intent(in) :: filename, attribute_name
+    integer, intent(in) :: comm
+    character(len=:), allocatable :: value
+
+    type(io_adios2_reader_t) :: reader
+    type(adios2_engine) :: engine
+    type(adios2_attribute) :: attr
+    character(len=16384) :: buffer
+    integer :: ierr, n
+
+    value = ''
+    call reader%init(comm, "attribute_reader")
+    call open_adios2_engine( &
+      engine, reader%io_handle, filename, adios2_mode_readRandomAccess, &
+      comm, ierr)
+    call reader%handle_error(ierr, "Failed to open "//trim(filename))
+
+    call adios2_inquire_attribute( &
+      attr, reader%io_handle, attribute_name, ierr &
+      )
+    if (ierr == adios2_found) then
+      ! ADIOS2 copies only the attribute's characters, so clear the rest
+      buffer = ''
+      call adios2_attribute_data(buffer, attr, ierr)
+      call reader%handle_error(ierr, "Failed to read "//attribute_name)
+      n = index(buffer, achar(0))
+      if (n > 0) buffer(n:) = ''
+      value = trim(buffer)
+    end if
+
+    call adios2_close(engine, ierr)
+    call reader%handle_error(ierr, "Failed to close "//trim(filename))
+    call reader%finalise()
+  end function read_string_attribute
 
   subroutine write_data_i8_adios2(self, variable_name, value, file_handle)
     class(io_adios2_writer_t), intent(inout) :: self
