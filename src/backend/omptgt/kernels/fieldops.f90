@@ -26,6 +26,7 @@ module m_omptgt_kernels_fieldops
   public :: labelled_sums, labelled_axpy
   public :: field_set_x_face, field_set_y_face, field_set_y_plane, &
             field_set_abl_wall_stress, field_set_x_face_from_field, &
+            field_get_x_band, field_blend_x_band, &
             field_set_y_face_from_field, field_set_x_inlet_plane, &
             field_add_const_x_face, &
             field_add_x_face_from_field, &
@@ -840,6 +841,57 @@ contains
     !$omp end target teams distribute parallel do
 
   end subroutine field_set_abl_wall_stress
+
+  subroutine field_get_x_band(band, f, i_start, nband, ny, nz, n_f, &
+                              n_yb_pad)
+    !! band(i, j, k) = f(i_start + i - 1, j, k) for a DIR_X vertex field
+    integer, intent(in) :: i_start, nband, ny, nz, n_f, n_yb_pad
+    real(dp), intent(out) :: band(nband, ny, nz)
+    real(dp), intent(in) :: f(SZ, n_f, n_yb_pad*nz)
+
+    integer :: i, j, k
+
+    !$omp target teams distribute parallel do collapse(3) &
+    !$omp OMP_DEVICE_ADDR(band, f)
+    do k = 1, nz
+      do j = 1, ny
+        do i = 1, nband
+          band(i, j, k) = f(mod(j - 1, SZ) + 1, i_start + i - 1, &
+                            (j - 1)/SZ + 1 + (k - 1)*n_yb_pad)
+        end do
+      end do
+    end do
+    !$omp end target teams distribute parallel do
+
+  end subroutine field_get_x_band
+
+  subroutine field_blend_x_band(f, band, lambda, i_start, nband, ny, nz, &
+                                n_f, n_yb_pad)
+    !! f(i_start + i - 1, j, k) = lambda(i)*band(i, j, k)
+    !!                            + (1 - lambda(i))*f(i_start + i - 1, j, k)
+    !! for a DIR_X vertex field
+    integer, intent(in) :: i_start, nband, ny, nz, n_f, n_yb_pad
+    real(dp), intent(inout) :: f(SZ, n_f, n_yb_pad*nz)
+    real(dp), intent(in) :: band(nband, ny, nz), lambda(nband)
+
+    integer :: i, j, k, jj, g
+
+    !$omp target teams distribute parallel do collapse(3) private(jj, g) &
+    !$omp OMP_DEVICE_ADDR(f, band, lambda)
+    do k = 1, nz
+      do j = 1, ny
+        do i = 1, nband
+          jj = mod(j - 1, SZ) + 1
+          g = (j - 1)/SZ + 1 + (k - 1)*n_yb_pad
+          f(jj, i_start + i - 1, g) = lambda(i)*band(i, j, k) &
+                                      + (1._dp - lambda(i)) &
+                                      *f(jj, i_start + i - 1, g)
+        end do
+      end do
+    end do
+    !$omp end target teams distribute parallel do
+
+  end subroutine field_blend_x_band
 
   subroutine field_plane_partial_sums(partial, f, n_f, nx, ny, nz, n_yb_pad)
     !! First pass of field_plane_sums: partial(j, z) is the sum over x of y

@@ -16,11 +16,14 @@
 
 module m_omptgt_backend
 
+  use iso_c_binding, only: c_loc, c_f_pointer
   use m_mpi, only: MPI_COMM_WORLD, MPI_IN_PLACE, MPI_MAX, MPI_SUM, &
-                   MPI_Allreduce
+                   MPI_STATUSES_IGNORE, MPI_Allreduce, MPI_Irecv, MPI_Isend, &
+                   MPI_Waitall
 
   use m_allocator, only: allocator_t
-  use m_base_backend, only: base_backend_t, abl_wall_upper_plane
+  use m_base_backend, only: base_backend_t, abl_wall_upper_plane, &
+                            shifted_z_source
   use m_common, only: dp, MPI_X3D2_DP, move_data_loc, get_dirs_from_rdr, &
                       DIR_X, DIR_Y, DIR_Z, DIR_C, VERT, NULL_LOC, &
                       X_FACE, Y_FACE, Z_FACE, BC_DIRICHLET
@@ -33,7 +36,7 @@ module m_omptgt_backend
 
   use m_omptgt_device_info, only: query_device_memory
   use m_omptgt_common, only: SZ, dev_alloc, dev_free, dev_upload, &
-                             dev_download, device_sync
+                             dev_download, device_sync, memcpy_d2d
   use m_omptgt_exec_dist, only: exec_dist_transeq_3fused, &
                                 exec_dist_tds_compact
   use m_omptgt_exec_thom, only: exec_thom_tds_compact
@@ -52,6 +55,8 @@ module m_omptgt_backend
                                        field_set_x_face, field_set_y_face, &
                                        field_set_y_plane, &
                                        field_set_abl_wall_stress, &
+                                       field_get_x_band, &
+                                       field_blend_x_band, &
                                        field_set_x_face_from_field, &
                                        field_set_y_face_from_field, &
                                        field_set_x_inlet_plane, &
@@ -107,6 +112,7 @@ module m_omptgt_backend
     procedure :: field_set_y_plane => field_set_y_plane_omptgt
     procedure :: field_plane_sums => field_plane_sums_omptgt
     procedure :: field_set_abl_wall_stress => field_set_abl_wall_stress_omptgt
+    procedure :: field_shift_blend_x_band => field_shift_blend_x_band_omptgt
     procedure :: field_set_face_from_field => field_set_face_from_field_omptgt
     procedure :: field_set_x_inlet_plane => field_set_x_inlet_plane_omptgt
     procedure :: field_add_const_x_face => field_add_const_x_face_omptgt
@@ -1344,6 +1350,98 @@ contains
                                    n_yb_pad(self), component)
 
   end subroutine field_set_abl_wall_stress_omptgt
+
+  subroutine field_shift_blend_x_band_omptgt(self, f, lambda, i_start, &
+                                             i_offset, nshift, z_plane_rank)
+    !! [[m_base_backend(module):field_shift_blend_x_band(subroutine)]]
+    !!
+    !! The band stays on the device: it is gathered into a buffer, shifted
+    !! in z with device copies and GPU-aware MPI for the planes held by
+    !! other ranks (see m_omptgt_sendrecv), and blended back.
+    implicit none
+
+    class(omptgt_backend_t) :: self
+    class(field_t), intent(inout) :: f
+    real(dp), intent(in) :: lambda(:)
+    integer, intent(in) :: i_start, i_offset, nshift
+    integer, intent(in) :: z_plane_rank(:)
+
+    real(dp), pointer, contiguous, dimension(:, :, :) :: f_d, band_d, &
+                                                         shifted_d
+    real(dp), pointer, contiguous, dimension(:) :: lambda_d, plane
+    integer, allocatable :: requests(:)
+    integer :: dims(3), nband, nz, z_offset, rank, k, kg, k_src, k_dst
+    integer :: n_plane, n_req, ierr
+
+    if (f%dir /= DIR_X .or. f%data_loc /= VERT) &
+      call abort_run('Shifted x band blend requires a DIR_X vertex field.')
+    dims = self%mesh%get_dims(VERT)
+    nband = size(lambda)
+    nz = size(z_plane_rank)
+    z_offset = self%mesh%par%n_offset(3)
+    rank = self%mesh%par%nrank
+    n_plane = nband*dims(2)
+
+    call resolve_field_t(f_d, f)
+    call dev_alloc(band_d, nband, dims(2), dims(3))
+    call dev_alloc(shifted_d, nband, dims(2), dims(3))
+    call dev_alloc(lambda_d, nband)
+    call dev_upload(lambda_d, lambda)
+
+    call field_get_x_band(band_d, f_d, i_start, nband, dims(2), dims(3), &
+                          size(f_d, 2), n_yb_pad(self))
+
+    do k = 1, dims(3)
+      k_src = shifted_z_source(z_offset + k, nshift, nz)
+      if (z_plane_rank(k_src) == rank) &
+        call memcpy_d2d(c_loc(shifted_d(1, 1, k)), &
+                        c_loc(band_d(1, 1, k_src - z_offset)), n_plane)
+    end do
+
+    allocate (requests(2*dims(3)))
+    n_req = 0
+#ifdef MPI
+    ! The band must be complete before MPI reads device memory
+    call device_sync()
+    do k = 1, dims(3)
+      kg = z_offset + k
+      k_src = shifted_z_source(kg, nshift, nz)
+      if (z_plane_rank(k_src) /= rank) then
+        n_req = n_req + 1
+        ! Plane k as a contiguous 1D pointer, so MPI gets its device
+        ! address with no copy-in temporary
+        call c_f_pointer(c_loc(shifted_d(1, 1, k)), plane, [n_plane])
+        call MPI_Irecv(plane, n_plane, MPI_X3D2_DP, &
+                       z_plane_rank(k_src), kg, MPI_COMM_WORLD, &
+                       requests(n_req), ierr)
+      end if
+      k_dst = shifted_z_source(kg, -nshift, nz)
+      if (z_plane_rank(k_dst) /= rank) then
+        n_req = n_req + 1
+        call c_f_pointer(c_loc(band_d(1, 1, k)), plane, [n_plane])
+        call MPI_Isend(plane, n_plane, MPI_X3D2_DP, &
+                       z_plane_rank(k_dst), k_dst, MPI_COMM_WORLD, &
+                       requests(n_req), ierr)
+      end if
+    end do
+    if (n_req > 0) &
+      call MPI_Waitall(n_req, requests, MPI_STATUSES_IGNORE, ierr)
+#else
+    if (any(z_plane_rank /= rank)) &
+      call abort_run('Shifted x band blend needs MPI for a decomposed z.')
+#endif
+
+    call field_blend_x_band(f_d, shifted_d, lambda_d, i_start + i_offset, &
+                            nband, dims(2), dims(3), size(f_d, 2), &
+                            n_yb_pad(self))
+
+    ! Keep the buffers alive until the blend has read them
+    call device_sync()
+    call dev_free(band_d)
+    call dev_free(shifted_d)
+    call dev_free(lambda_d)
+
+  end subroutine field_shift_blend_x_band_omptgt
 
   subroutine field_set_face_from_field_omptgt(self, f, f_start, c_end, face, &
                                               bc_start, bc_end, &
