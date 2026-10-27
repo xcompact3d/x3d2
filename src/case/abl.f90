@@ -7,7 +7,7 @@ module m_case_abl
   use m_base_case, only: base_case_t
   use m_common, only: dp, get_argument, MPI_X3D2_DP, DIR_X, VERT, &
                       X_FACE, Y_FACE, BC_DIRICHLET, BC_NEUMANN, BC_PERIODIC
-  use m_config, only: abl_config_t, inflow_config_t, turbine_config_t
+  use m_config, only: abl_config_t, inflow_config_t, wind_turbine_config_t
   use m_field, only: field_t
   use m_inflow_planes, only: inflow_plane_writer_t, inflow_plane_reader_t
   use m_mesh, only: mesh_t
@@ -31,8 +31,10 @@ module m_case_abl
     real(dp) :: out_vel = 0._dp
     !> y weights of the inlet and outlet flow rates (outflow correction)
     real(dp), allocatable :: flow_rate_y_weights(:)
-    type(turbine_config_t) :: turbine_cfg
-    !> Turbine forcing model; only allocated when turbine_nml asks for one
+    !> Turbine settings from wind_turbine_nml, which is optional here
+    type(wind_turbine_config_t) :: turbine_cfg
+    !> Turbine forcing model; only allocated when wind_turbine_nml asks for
+    !> one
     class(turbine_model_t), pointer :: turbine => null()
   contains
     procedure :: define_BC => define_BC_abl
@@ -64,7 +66,20 @@ contains
 
     call flow_case%abl_cfg%read(nml_file=get_argument(1))
     call flow_case%inflow_cfg%read(nml_file=get_argument(1))
+    ! Turbines are set in wind_turbine_nml, as for the wind_turbine case,
+    ! and are optional here. Its uniform-inflow keys belong to that case, so
+    ! setting one is an error rather than silently ignored.
+    flow_case%turbine_cfg%required = .false.
     call flow_case%turbine_cfg%read(nml_file=get_argument(1))
+    if (any(flow_case%turbine_cfg%init_noise /= 0._dp) &
+        .or. any(flow_case%turbine_cfg%inlet_noise /= 0._dp) &
+        .or. flow_case%turbine_cfg%bc_start_u /= 1._dp &
+        .or. flow_case%turbine_cfg%bc_start_v /= 0._dp &
+        .or. flow_case%turbine_cfg%bc_start_w /= 0._dp) &
+      call abort_run('ABL: wind_turbine_nml init_noise, inlet_noise and &
+                     &bc_start_* belong to the wind_turbine case; the ABL &
+                     &takes its inflow from abl_nml and inflow_nml.', &
+                     collective=.true.)
 
     ! apply_BC_abl and the wall model hard-code these boundaries, so the
     ! mesh must agree with them for the pressure solve and precorrect_walls.
@@ -124,7 +139,8 @@ contains
 
   subroutine init_turbine(self)
     !! Turbines in the boundary layer, typically in a successor driven by a
-    !! precursor's inflow (Incompact3d iturbine with an ABL itype).
+    !! precursor's inflow (Incompact3d iturbine with an ABL itype). They are
+    !! set in wind_turbine_nml, as for the wind_turbine case.
     implicit none
 
     class(case_abl_t) :: self
@@ -141,7 +157,7 @@ contains
         turbine%stats_freq = max(1, self%io_mgr%stats_mgr%config%istatfreq)
       end select
     case default
-      call abort_run('ABL: turbine_nml iturbine must be 0 (none) or 2 &
+      call abort_run('ABL: wind_turbine_nml iturbine must be 0 (none) or 2 &
                      &(actuator disc).', collective=.true.)
     end select
 

@@ -480,43 +480,23 @@ Turbines in the boundary layer
 
 An ``abl`` run can carry wind turbines, typically a successor driven by a
 precursor's inflow (Incompact3d ``iturbine`` with an ABL ``itype``). They are
-set in the optional ``turbine_nml`` namelist block; without it the run has no
-turbines.
+set in the same ``wind_turbine_nml`` block as for the ``wind_turbine`` case,
+with its turbine keys only (``iturbine``, ``iturboutput``, ``adm_coords``,
+``rho_air`` and ``T_relax``; see `Wind Turbine Parameters`_). The block is
+optional here: without it the run has no turbines. Only ``iturbine = 0`` or
+``2`` (actuator disc) is supported, and the uniform-inflow keys
+(``init_noise``, ``inlet_noise``, ``bc_start_*``) must not be set, since the
+ABL takes its inflow from ``abl_nml`` and ``inflow_nml``.
 
 .. code-block:: fortran
 
-   &turbine_nml
+   &wind_turbine_nml
      iturbine = 2
      iturboutput = 250
      adm_coords = 'adm.ad'
      rho_air = 1.2
      T_relax = 1.1291
    /
-
-``iturbine``
-  Turbine model: ``0`` for none, ``2`` for the actuator disc model.
-
-  **Default:** ``0``
-
-``iturboutput``
-  Iterations between turbine outputs, independent of ``n_output``. ``0``
-  disables them.
-
-  **Default:** ``1``
-
-``adm_coords``
-  Actuator disc file, in the format of the ``wind_turbine`` case (one header
-  line, then one disc per line). Required with ``iturbine = 2``.
-
-``rho_air``
-  Air density used for the disc forces and power.
-
-  **Default:** ``1.0``
-
-``T_relax``
-  Time constant of the disc velocity filter; a negative value disables it.
-
-  **Default:** ``-1.0``
 
 The disc statistics start at ``initstat`` of ``stats_params``, as in the
 ``wind_turbine`` case.
@@ -648,8 +628,8 @@ Wind Turbine Parameters
 
 The wind turbine parameters configure the ``wind_turbine`` flow case: a uniform
 inflow / convective outflow domain with an optional turbine forcing model.
-These parameters are specified in the ``wind_turbine_nml`` namelist block and are
-only read when ``flow_case_name = 'wind_turbine'``.
+These parameters are specified in the ``wind_turbine_nml`` namelist block. The
+``abl`` case reads its turbine keys too (see `Turbines in the boundary layer`_).
 
 .. code-block:: fortran
 

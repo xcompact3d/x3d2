@@ -1,5 +1,6 @@
 module m_config
   !! Contains all the namelist configurations used in x3d2
+  use iso_fortran_env, only: iostat_end
   use m_common
   use m_logger, only: log_warn, abort_run
 
@@ -86,6 +87,9 @@ module m_config
     character(len=256) :: adm_coords = '' !! actuator-disc (.ad) coords file
     real(dp) :: rho_air = 1._dp      !! air density used in thrust/power
     real(dp) :: T_relax = -1._dp     !! ADM velocity-filter time; < 0 disables
+    !> When false, a missing wind_turbine_nml keeps the defaults (no
+    !> turbines), for a case that carries turbines optionally (the ABL)
+    logical :: required = .true.
   contains
     procedure :: read => read_wind_turbine_nml
   end type wind_turbine_config_t
@@ -131,18 +135,6 @@ module m_config
   contains
     procedure :: read => read_inflow_nml
   end type inflow_config_t
-
-  type, extends(base_config_t) :: turbine_config_t
-    !! Turbines in a case that can carry them alongside its own physics,
-    !! e.g. the ABL (docs/source/user/input_file.rst)
-    integer :: iturbine = 0            !! 0: none, 2: actuator disc
-    integer :: iturboutput = 1         !! iterations between turbine outputs
-    character(len=256) :: adm_coords = ''  !! actuator disc .ad file
-    real(dp) :: rho_air = 1._dp
-    real(dp) :: T_relax = -1._dp       !! disc velocity filter; < 0 disables
-  contains
-    procedure :: read => read_turbine_nml
-  end type turbine_config_t
 
   type, extends(base_config_t) :: stats_config_t
     integer :: initstat = 0          !! iteration to start accumulating (0 = disabled)
@@ -451,7 +443,8 @@ contains
     character(*), optional, intent(in) :: nml_file
     character(*), optional, intent(in) :: nml_string
 
-    integer :: unit
+    integer :: unit, ierr
+    character(len=256) :: msg
 
     real(dp) :: init_noise(3) = 0._dp
     real(dp) :: inlet_noise(3) = 0._dp
@@ -473,8 +466,12 @@ contains
                      &name or source, not both.', collective=.true.)
     else if (present(nml_file)) then
       open (newunit=unit, file=nml_file)
-      read (unit, nml=wind_turbine_nml)
+      read (unit, nml=wind_turbine_nml, iostat=ierr, iomsg=msg)
       close (unit)
+      ! An end of file means the namelist is absent
+      if (ierr /= 0 .and. (self%required .or. ierr /= iostat_end)) &
+        call abort_run('Reading wind_turbine_nml failed: '//trim(msg), &
+                       collective=.true.)
     else if (present(nml_string)) then
       read (nml_string, nml=wind_turbine_nml)
     else
@@ -493,6 +490,13 @@ contains
     self%adm_coords = adm_coords
     self%rho_air = rho_air
     self%T_relax = T_relax
+
+    if (self%iturboutput < 0) &
+      call abort_run('wind_turbine_nml: iturboutput must be non-negative.', &
+                     collective=.true.)
+    if (self%iturbine == 2 .and. len_trim(self%adm_coords) == 0) &
+      call abort_run('wind_turbine_nml: iturbine = 2 needs adm_coords.', &
+                     collective=.true.)
 
   end subroutine read_wind_turbine_nml
 
@@ -735,62 +739,6 @@ contains
                      &differ, or the run overwrites the planes it reads.', &
                      collective=.true.)
   end subroutine read_inflow_nml
-
-  subroutine read_turbine_nml(self, nml_file, nml_string)
-    !! The namelist is optional: a missing turbine_nml means no turbines.
-    implicit none
-
-    class(turbine_config_t) :: self
-    character(*), optional, intent(in) :: nml_file
-    character(*), optional, intent(in) :: nml_string
-
-    integer :: unit, ierr
-
-    integer :: iturbine, iturboutput
-    character(len=256) :: adm_coords
-    real(dp) :: rho_air, T_relax
-
-    namelist /turbine_nml/ iturbine, iturboutput, adm_coords, rho_air, T_relax
-
-    iturbine = 0
-    iturboutput = 1
-    adm_coords = ''
-    rho_air = 1._dp
-    T_relax = -1._dp
-
-    if (present(nml_file) .and. present(nml_string)) then
-      call abort_run('Reading turbine config failed! Provide only a file name &
-                     &or source, not both.', collective=.true.)
-    else if (present(nml_file)) then
-      open (newunit=unit, file=nml_file, iostat=ierr)
-      if (ierr == 0) then
-        read (unit, nml=turbine_nml, iostat=ierr)
-        ! -1 is end of file: the namelist is absent
-        if (ierr /= 0 .and. ierr /= -1) &
-          call abort_run('Reading turbine config failed! Error in &
-                         &turbine_nml.', collective=.true.)
-      end if
-      close (unit)
-    else if (present(nml_string)) then
-      read (nml_string, nml=turbine_nml)
-    else
-      call abort_run('Reading turbine config failed! Provide at least one of &
-                     &the following: file name or source', collective=.true.)
-    end if
-
-    self%iturbine = iturbine
-    self%iturboutput = iturboutput
-    self%adm_coords = trim(adm_coords)
-    self%rho_air = rho_air
-    self%T_relax = T_relax
-
-    if (self%iturboutput < 0) &
-      call abort_run('turbine_nml: iturboutput must be non-negative.', &
-                     collective=.true.)
-    if (self%iturbine == 2 .and. len_trim(self%adm_coords) == 0) &
-      call abort_run('turbine_nml: iturbine = 2 needs adm_coords.', &
-                     collective=.true.)
-  end subroutine read_turbine_nml
 
   subroutine read_stats_nml(self, nml_file, nml_string)
     implicit none
