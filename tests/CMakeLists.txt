@@ -379,6 +379,7 @@ unset(X3D2_TEST_NAME_SUFFIX)
 if(WITH_ADIOS2)
   define_test(unit/test_adios2_mixed_precision.f90 ${serial} omp)
   define_test(unit/test_adm_checkpoint.f90 ${serial} omp)
+  define_test(unit/test_snapshot_append.f90 ${np} omp)
 endif()
 
 # Backend tests. Every test below is written against base_backend_t through

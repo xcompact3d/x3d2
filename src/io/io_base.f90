@@ -37,10 +37,11 @@ module m_io_base
 
   private
   public :: io_reader_t, io_writer_t, io_file_t
-  public :: io_mode_read, io_mode_write
+  public :: io_mode_read, io_mode_write, io_mode_append
 
   integer, parameter :: io_mode_read = 1
   integer, parameter :: io_mode_write = 2
+  integer, parameter :: io_mode_append = 3
 
   !> Base file handle for I/O operations
   type, abstract :: io_file_t
@@ -161,12 +162,16 @@ module m_io_base
       character(len=*), intent(in) :: name
     end subroutine writer_init
 
-    function writer_open(self, filename, mode, comm) result(file_handle)
+    function writer_open( &
+      self, filename, mode, comm, append_after_steps &
+      ) result(file_handle)
       import :: io_writer_t, io_file_t
       class(io_writer_t), intent(inout) :: self
       character(len=*), intent(in) :: filename
       integer, intent(in) :: mode
       integer, intent(in) :: comm
+      !! In io_mode_append, keep this many existing steps and drop the rest
+      integer, intent(in), optional :: append_after_steps
       class(io_file_t), allocatable :: file_handle
     end function writer_open
 
