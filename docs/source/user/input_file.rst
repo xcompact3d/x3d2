@@ -240,9 +240,10 @@ replaces the SGS shear stress on the first grid plane above the wall, so the
 wall flux passes through the same operator as the SGS stress in the interior.
 
 ``dsampling``
-  Sampling height :math:`h` in grid spacings above the floor,
-  rounded to the nearest grid plane. The sample must lie inside the domain and
-  above ``z0``.
+  Sampling height :math:`h` in grid spacings above the floor, at least one.
+  A non-integer value is interpolated linearly between the two grid planes
+  around :math:`h`, as in Incompact3d. The sample must lie inside the domain
+  and above ``z0``.
 
   **Default:** ``3.0``
 

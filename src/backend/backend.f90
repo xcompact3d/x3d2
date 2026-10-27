@@ -105,6 +105,25 @@ contains
 
   end subroutine not_implemented
 
+  function abl_wall_upper_plane(sample_plane, sample_weight, ny) &
+    result(upper_plane)
+    !! The y-vertex above the ABL wall-model sample plane, checked against
+    !! the interpolation weight. With a zero weight the upper plane is not
+    !! read, so the sample may then sit on the last vertex.
+    implicit none
+
+    integer, intent(in) :: sample_plane, ny
+    real(dp), intent(in) :: sample_weight
+    integer :: upper_plane
+
+    if (sample_weight < 0._dp .or. sample_weight >= 1._dp) &
+      call abort_run('ABL wall stress sample weight must be in [0, 1).')
+    upper_plane = min(sample_plane + 1, ny)
+    if (sample_weight > 0._dp .and. upper_plane == sample_plane) &
+      call abort_run('ABL wall stress interpolates above the domain.')
+
+  end function abl_wall_upper_plane
+
   subroutine base_init(self)
     implicit none
 
@@ -606,15 +625,20 @@ contains
   end subroutine field_set_y_plane_base
 
   subroutine field_set_abl_wall_stress_base(self, stress, u, w, &
-                                            sample_plane, stress_plane, &
-                                            drag_coeff, component)
+                                            sample_plane, sample_weight, &
+                                            stress_plane, drag_coeff, &
+                                            component)
     !! Replace one SGS stress plane using the local sampled velocity.
+    !! The velocity is interpolated linearly between y-vertices
+    !! sample_plane and sample_plane + 1, with weight sample_weight on the
+    !! upper one, as Incompact3d samples at a non-integer dsampling.
     implicit none
 
     class(base_backend_t) :: self
     class(field_t), intent(inout) :: stress
     class(field_t), intent(in) :: u, w
     integer, intent(in) :: sample_plane, stress_plane, component
+    real(dp), intent(in) :: sample_weight !! in [0, 1)
     real(dp), intent(in) :: drag_coeff
 
     call not_implemented('field_set_abl_wall_stress')

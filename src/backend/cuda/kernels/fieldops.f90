@@ -492,25 +492,30 @@ contains
   end subroutine field_set_y_plane
 
   attributes(global) subroutine field_set_abl_wall_stress( &
-    stress, u, w, drag_coeff, sample_i, stress_i, sample_offset, &
-    stress_offset, nx, component)
+    stress, u, w, drag_coeff, upper_weight, sample_i, upper_i, stress_i, &
+    sample_offset, upper_offset, stress_offset, nx, component)
   !! Drag law tau = drag_coeff*u_c*|u_h| from each column's own sampled
-  !! velocity, written into one stress plane (component 1: x, 3: z).
+  !! velocity, written into one stress plane (component 1: x, 3: z). The
+  !! velocity is interpolated between the sample plane and the one above it.
     implicit none
     real(dp), device, intent(inout), dimension(:, :, :) :: stress
     real(dp), device, intent(in), dimension(:, :, :) :: u, w
-    real(dp), value, intent(in) :: drag_coeff
-    integer, value, intent(in) :: sample_i, stress_i, sample_offset
+    real(dp), value, intent(in) :: drag_coeff, upper_weight
+    integer, value, intent(in) :: sample_i, upper_i, stress_i
+    integer, value, intent(in) :: sample_offset, upper_offset
     integer, value, intent(in) :: stress_offset, nx, component
-    integer :: i, sample_group, stress_group
+    integer :: i, sample_group, upper_group, stress_group
     real(dp) :: us, ws, speed
 
     i = threadIdx%x + (blockIdx%x - 1)*blockDim%x
     sample_group = sample_offset + blockIdx%y
+    upper_group = upper_offset + blockIdx%y
     stress_group = stress_offset + blockIdx%y
     if (i > nx) return
-    us = u(sample_i, i, sample_group)
-    ws = w(sample_i, i, sample_group)
+    us = (1._dp - upper_weight)*u(sample_i, i, sample_group) &
+         + upper_weight*u(upper_i, i, upper_group)
+    ws = (1._dp - upper_weight)*w(sample_i, i, sample_group) &
+         + upper_weight*w(upper_i, i, upper_group)
     speed = sqrt(us**2 + ws**2)
     if (component == 1) then
       stress(stress_i, i, stress_group) = drag_coeff*us*speed

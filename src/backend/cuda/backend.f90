@@ -5,7 +5,7 @@ module m_cuda_backend
                    MPI_Allreduce
 
   use m_allocator, only: allocator_t
-  use m_base_backend, only: base_backend_t
+  use m_base_backend, only: base_backend_t, abl_wall_upper_plane
   use m_common, only: dp, sp, MPI_X3D2_DP, move_data_loc, get_rdr_from_dirs, &
                       RDR_X2Y, RDR_X2Z, RDR_Y2X, RDR_Y2Z, RDR_Z2X, RDR_Z2Y, &
                       RDR_C2X, RDR_C2Y, RDR_C2Z, RDR_X2C, RDR_Y2C, RDR_Z2C, &
@@ -1672,17 +1672,19 @@ contains
   end subroutine field_plane_sums_cuda
 
   subroutine field_set_abl_wall_stress_cuda( &
-    self, stress, u, w, sample_plane, stress_plane, drag_coeff, component)
+    self, stress, u, w, sample_plane, sample_weight, stress_plane, &
+    drag_coeff, component)
     !! [[m_base_backend(module):field_set_abl_wall_stress(subroutine)]]
     implicit none
     class(cuda_backend_t) :: self
     class(field_t), intent(inout) :: stress
     class(field_t), intent(in) :: u, w
     integer, intent(in) :: sample_plane, stress_plane, component
-    real(dp), intent(in) :: drag_coeff
+    real(dp), intent(in) :: sample_weight, drag_coeff
     real(dp), device, pointer, dimension(:, :, :) :: stress_d, u_d, w_d
     type(dim3) :: blocks, threads
-    integer :: dims(3), sample_i, stress_i, sample_offset, stress_offset
+    integer :: dims(3), upper_plane, sample_i, upper_i, stress_i
+    integer :: sample_offset, upper_offset, stress_offset
 
     if (stress%dir /= DIR_X .or. u%dir /= DIR_X .or. w%dir /= DIR_X) &
       call abort_run('ABL wall stress requires DIR_X fields.')
@@ -1695,19 +1697,23 @@ contains
       call abort_run('ABL wall stress plane is outside the domain.')
     if (component /= 1 .and. component /= 3) &
       call abort_run('Invalid ABL wall stress component.')
+    upper_plane = abl_wall_upper_plane(sample_plane, sample_weight, dims(2))
 
     call resolve_field_t(stress_d, stress)
     call resolve_field_t(u_d, u)
     call resolve_field_t(w_d, w)
     sample_i = mod(sample_plane - 1, SZ) + 1
+    upper_i = mod(upper_plane - 1, SZ) + 1
     stress_i = mod(stress_plane - 1, SZ) + 1
     sample_offset = dims(3)*((sample_plane - 1)/SZ)
+    upper_offset = dims(3)*((upper_plane - 1)/SZ)
     stress_offset = dims(3)*((stress_plane - 1)/SZ)
     blocks = dim3((dims(1) - 1)/64 + 1, dims(3), 1)
     threads = dim3(64, 1, 1)
     call field_set_abl_wall_stress<<<blocks, threads>>>( &      !&
-      stress_d, u_d, w_d, drag_coeff, sample_i, stress_i, &
-      sample_offset, stress_offset, dims(1), component)
+      stress_d, u_d, w_d, drag_coeff, sample_weight, sample_i, upper_i, &
+      stress_i, sample_offset, upper_offset, stress_offset, dims(1), &
+      component)
   end subroutine field_set_abl_wall_stress_cuda
 
   subroutine field_set_face_from_field_cuda(self, f, f_start, c_end, face, &

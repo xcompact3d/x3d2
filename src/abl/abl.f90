@@ -17,7 +17,7 @@ module m_abl
   use m_logger, only: log_info, abort_run, str
   use m_mesh, only: mesh_t
   use m_mpi, only: MPI_COMM_WORLD, MPI_INTEGER, MPI_Bcast
-  use m_les, only: les_t
+  use m_les, only: les_t, abl_wall_sample_location
 
   implicit none
 
@@ -300,7 +300,7 @@ contains
 
     class(abl_t), intent(in) :: self
     type(les_t), intent(inout) :: les
-    real(dp) :: dy, sampling_height
+    real(dp) :: sampling_height, sample_weight
     integer :: dims(3), sample_plane
 
     ! The wall stress is written at local y-plane 2 and sampled at a local
@@ -313,20 +313,15 @@ contains
     if (dims(2) < 3) &
       call abort_run('ABL wall model requires at least 3 y vertices.')
 
-    dy = abs(self%mesh%geo%vert_coords(2, 2) &
-             - self%mesh%geo%vert_coords(1, 2))
-    ! Vertex 1 is the wall, so a sampling height of n*dy is vertex n+1.
-    sample_plane = nint(self%cfg%dsampling) + 1
-    if (sample_plane < 2 .or. sample_plane > dims(2)) &
-      call abort_run('ABL dsampling puts the wall-model sample outside the &
-                     &domain.')
-    sampling_height = self%mesh%geo%vert_coords(sample_plane, 2) &
-                      - self%mesh%geo%vert_coords(1, 2)
+    call abl_wall_sample_location(self%mesh, self%cfg%dsampling, &
+                                  sample_plane, sample_weight, &
+                                  sampling_height)
     if (sampling_height <= self%cfg%z0) &
       call abort_run('ABL wall-model sampling height must exceed z0.')
 
     call les%configure_abl_wall_boundary( &
-      self%cfg%kappa, self%cfg%z0, sampling_height, sample_plane)
+      self%cfg%kappa, self%cfg%z0, sampling_height, sample_plane, &
+      sample_weight)
   end subroutine configure_wall_boundary_correction
 
 end module m_abl
