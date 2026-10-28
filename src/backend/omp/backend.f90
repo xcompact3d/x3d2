@@ -4,7 +4,7 @@ module m_omp_backend
 
   use m_allocator, only: allocator_t
   use m_base_backend, only: base_backend_t, source_index_boxes, &
-                            check_point_fields
+                            check_point_fields, check_labelled_fields
   use m_common, only: dp, MPI_X3D2_DP, get_dirs_from_rdr, move_data_loc, &
                       DIR_X, DIR_Y, DIR_Z, DIR_C, NULL_LOC, &
                       X_FACE, Y_FACE, Z_FACE, VERT, BC_DIRICHLET
@@ -1155,28 +1155,6 @@ contains
       if (loc(dir) < 1 .or. loc(dir) > dims(dir)) owned = .false.
     end do
   end subroutine local_corner
-
-  subroutine check_labelled_fields(g, label, a, b, c)
-    !! Checks the fields passed to the labelled field operations share a
-    !! valid data location and the DIR_X layout.
-    implicit none
-
-    class(field_t), intent(in) :: g, label, a, b, c
-
-    if (g%data_loc == NULL_LOC .or. label%data_loc == NULL_LOC .or. &
-        a%data_loc == NULL_LOC .or. b%data_loc == NULL_LOC .or. &
-        c%data_loc == NULL_LOC) then
-      call abort_run('You must set data_loc before labelled field operations.')
-    end if
-    if (label%data_loc /= g%data_loc .or. a%data_loc /= g%data_loc .or. &
-        b%data_loc /= g%data_loc .or. c%data_loc /= g%data_loc) then
-      call abort_run('Labelled field operations need one data location.')
-    end if
-    if (g%dir /= DIR_X .or. label%dir /= DIR_X .or. a%dir /= DIR_X .or. &
-        b%dir /= DIR_X .or. c%dir /= DIR_X) then
-      call abort_run('Labelled field operations need DIR_X layout.')
-    end if
-  end subroutine check_labelled_fields
 
   subroutine copy_into_buffers(u_send_s, u_send_e, u, n, n_groups)
     implicit none

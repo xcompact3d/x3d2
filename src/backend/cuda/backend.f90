@@ -6,7 +6,7 @@ module m_cuda_backend
 
   use m_allocator, only: allocator_t
   use m_base_backend, only: base_backend_t, source_index_boxes, &
-                            check_point_fields
+                            check_point_fields, check_labelled_fields
   use m_common, only: dp, sp, MPI_X3D2_DP, move_data_loc, get_rdr_from_dirs, &
                       RDR_X2Y, RDR_X2Z, RDR_Y2X, RDR_Y2Z, RDR_Z2X, RDR_Z2Y, &
                       RDR_C2X, RDR_C2Y, RDR_C2Z, RDR_X2C, RDR_Y2C, RDR_Z2C, &
@@ -1348,28 +1348,6 @@ contains
       periodic(1), periodic(2), periodic(3), dims_padded(3))
 
   end subroutine field_add_gaussian_sources_cuda
-
-  subroutine check_labelled_fields(g, label, a, b, c)
-    !! Checks the fields passed to the labelled field operations share a
-    !! valid data location and the DIR_X layout.
-    implicit none
-
-    class(field_t), intent(in) :: g, label, a, b, c
-
-    if (g%data_loc == NULL_LOC .or. label%data_loc == NULL_LOC .or. &
-        a%data_loc == NULL_LOC .or. b%data_loc == NULL_LOC .or. &
-        c%data_loc == NULL_LOC) then
-      call abort_run('You must set data_loc before labelled field operations.')
-    end if
-    if (label%data_loc /= g%data_loc .or. a%data_loc /= g%data_loc .or. &
-        b%data_loc /= g%data_loc .or. c%data_loc /= g%data_loc) then
-      call abort_run('Labelled field operations need one data location.')
-    end if
-    if (g%dir /= DIR_X .or. label%dir /= DIR_X .or. a%dir /= DIR_X .or. &
-        b%dir /= DIR_X .or. c%dir /= DIR_X) then
-      call abort_run('Labelled field operations need DIR_X layout.')
-    end if
-  end subroutine check_labelled_fields
 
   subroutine copy_into_buffers(u_send_s_dev, u_send_e_dev, u_dev, n)
     implicit none

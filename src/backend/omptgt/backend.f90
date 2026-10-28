@@ -21,7 +21,7 @@ module m_omptgt_backend
 
   use m_allocator, only: allocator_t
   use m_base_backend, only: base_backend_t, source_index_boxes, &
-                            check_point_fields
+                            check_point_fields, check_labelled_fields
   use m_common, only: dp, MPI_X3D2_DP, move_data_loc, get_dirs_from_rdr, &
                       DIR_X, DIR_Y, DIR_Z, DIR_C, VERT, NULL_LOC, &
                       X_FACE, Y_FACE, Z_FACE, BC_DIRICHLET
@@ -1087,28 +1087,6 @@ contains
                               size(a_d, 3), d, grid)
 
   end subroutine field_add_gaussian_sources_omptgt
-
-  subroutine check_labelled_fields(g, label, a, b, c)
-    !! Checks the fields passed to the labelled field operations share a
-    !! valid data location and the DIR_X layout.
-    implicit none
-
-    class(field_t), intent(in) :: g, label, a, b, c
-
-    if (g%data_loc == NULL_LOC .or. label%data_loc == NULL_LOC .or. &
-        a%data_loc == NULL_LOC .or. b%data_loc == NULL_LOC .or. &
-        c%data_loc == NULL_LOC) then
-      call abort_run('You must set data_loc before labelled field operations.')
-    end if
-    if (label%data_loc /= g%data_loc .or. a%data_loc /= g%data_loc .or. &
-        b%data_loc /= g%data_loc .or. c%data_loc /= g%data_loc) then
-      call abort_run('Labelled field operations need one data location.')
-    end if
-    if (g%dir /= DIR_X .or. label%dir /= DIR_X .or. a%dir /= DIR_X .or. &
-        b%dir /= DIR_X .or. c%dir /= DIR_X) then
-      call abort_run('Labelled field operations need DIR_X layout.')
-    end if
-  end subroutine check_labelled_fields
 
   subroutine field_max_mean_omptgt(self, max_val, mean_val, f, &
                                    enforced_data_loc)

@@ -2,7 +2,7 @@ module m_base_backend
   use iso_c_binding, only: c_ptr
 
   use m_allocator, only: allocator_t
-  use m_common, only: dp, DIR_C, DIR_X, VERT, get_rdr_from_dirs
+  use m_common, only: dp, DIR_C, DIR_X, VERT, NULL_LOC, get_rdr_from_dirs
   use m_field, only: field_t
   use m_logger, only: abort_run
   use m_mesh, only: mesh_t
@@ -548,6 +548,28 @@ contains
     if (a%data_loc /= VERT .or. b%data_loc /= VERT .or. c%data_loc /= VERT) &
       call abort_run('Point sampling and sources need VERT fields.')
   end subroutine check_point_fields
+
+  subroutine check_labelled_fields(g, label, a, b, c)
+    !! Checks the fields passed to the labelled field operations share a
+    !! valid data location and the DIR_X layout.
+    implicit none
+
+    class(field_t), intent(in) :: g, label, a, b, c
+
+    if (g%data_loc == NULL_LOC .or. label%data_loc == NULL_LOC .or. &
+        a%data_loc == NULL_LOC .or. b%data_loc == NULL_LOC .or. &
+        c%data_loc == NULL_LOC) then
+      call abort_run('You must set data_loc before labelled field operations.')
+    end if
+    if (label%data_loc /= g%data_loc .or. a%data_loc /= g%data_loc .or. &
+        b%data_loc /= g%data_loc .or. c%data_loc /= g%data_loc) then
+      call abort_run('Labelled field operations need one data location.')
+    end if
+    if (g%dir /= DIR_X .or. label%dir /= DIR_X .or. a%dir /= DIR_X .or. &
+        b%dir /= DIR_X .or. c%dir /= DIR_X) then
+      call abort_run('Labelled field operations need DIR_X layout.')
+    end if
+  end subroutine check_labelled_fields
 
   subroutine field_max_mean_base(self, max_val, mean_val, f, &
                                  enforced_data_loc)
