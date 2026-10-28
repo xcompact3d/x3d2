@@ -31,7 +31,7 @@ program test_abl_shifted_periodic
   character(len=9), parameter :: bc_periodic(2) = ['periodic ', 'periodic ']
   character(len=9), parameter :: bc_wall(2) = ['dirichlet', 'neumann  ']
 
-  real(dp), allocatable :: host(:, :, :)
+  real(dp), allocatable :: host(:, :, :), reference(:, :, :)
   real(dp) :: max_error
   integer :: dims_global(3), nproc_dir(3), dims(3), dims_padded(3)
   integer :: nproc, ierr, comp
@@ -77,10 +77,12 @@ program test_abl_shifted_periodic
     case (3)
       call backend%get_field_data(host, w)
     end select
-    max_error = maxval(abs(host(1:dims(1), 1:dims(2), 1:dims(3)) &
-                           - legacy_fringe(comp)))
+    reference = legacy_fringe(comp)
+    max_error = maxval(abs(host(1:dims(1), 1:dims(2), 1:dims(3)) - reference))
     print *, 'component', comp, 'max error', max_error
-    if (max_error > 10._dp*epsilon(1._dp)) all_pass = .false.
+    ! The field is O(10), so a last-bit difference in the blend is ~2e-15
+    if (max_error > 10._dp*epsilon(1._dp)*maxval(abs(reference))) &
+      all_pass = .false.
   end do
 
   call allocator%release_block(u)
