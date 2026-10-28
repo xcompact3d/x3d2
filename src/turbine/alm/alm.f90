@@ -376,10 +376,11 @@ contains
     logical, intent(in) :: is_root
 
     real(dp) :: time
-    integer :: t, ib
+    integer :: t, ib, n, ne
 
     if (.not. is_root) return
     time = real(iter, dp)*self%dt
+    n = 0
     do t = 1, self%n_turb
       associate (tb => self%turbine(t))
         call log_info('ALM turbine '//trim(tb%name)//' iter '//str(iter) &
@@ -402,10 +403,20 @@ contains
                                        self%torque_mean(t), &
                                        self%power_mean(t)])
         end if
+        ! src_points holds the positions sampled this step, in source order
         do ib = 1, tb%n_blades
-          call write_line_loads(tb%blade(ib), iter, time, is_root)
+          ne = tb%blade(ib)%n_elem
+          call write_line_loads(tb%blade(ib), &
+                                self%src_points(:, n + 1:n + ne), &
+                                iter, time, is_root)
+          n = n + ne
         end do
-        if (tb%has_tower) call write_line_loads(tb%tower, iter, time, is_root)
+        if (tb%has_tower) then
+          ne = tb%tower%n_elem
+          call write_line_loads(tb%tower, self%src_points(:, n + 1:n + ne), &
+                                iter, time, is_root)
+          n = n + ne
+        end if
       end associate
     end do
   end subroutine write_output_alm
@@ -452,7 +463,7 @@ contains
     class(alm_t), intent(inout) :: self
     type(writer_session_t), intent(inout) :: writer
 
-    integer :: t, k
+    integer :: t, k, ib, ie
 
     call writer%write_data('alm_n_turb', self%n_turb)
     call writer%write_data('alm_sample_count', self%sample_count)
@@ -482,6 +493,12 @@ contains
           call put('ctrl_pit_com_'//str(k), c%pit_com(k))
         end do
         call writer%write_data('alm_ctrl_status_'//str(t), c%status)
+        ! The end corrections use the previous step's angles of attack
+        do ib = 1, tb%n_blades
+          do ie = 1, tb%blade(ib)%n_elem
+            call put('eaoa_'//str(ib)//'_'//str(ie), tb%blade(ib)%eaoa(ie))
+          end do
+        end do
       end associate
     end do
 
@@ -498,7 +515,7 @@ contains
     class(alm_t), intent(inout) :: self
     type(reader_session_t), intent(inout) :: reader
 
-    integer :: checkpoint_n_turb, t, k
+    integer :: checkpoint_n_turb, t, k, ib, ie
 
     call reader%read_data('alm_n_turb', checkpoint_n_turb)
     if (checkpoint_n_turb /= self%n_turb) &
@@ -534,6 +551,11 @@ contains
 
         ! Rebuild the blades at the restored azimuth and pitch
         call set_turbine_geometry(tb, restart=.true.)
+        do ib = 1, tb%n_blades
+          do ie = 1, tb%blade(ib)%n_elem
+            call get('eaoa_'//str(ib)//'_'//str(ie), tb%blade(ib)%eaoa(ie))
+          end do
+        end do
       end associate
     end do
 

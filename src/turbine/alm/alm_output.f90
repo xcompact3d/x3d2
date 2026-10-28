@@ -37,10 +37,13 @@ contains
     close (unit)
   end subroutine init_loads_file
 
-  subroutine write_line_loads(line, iter, time, is_root)
-    !! Append the element loads of `line` at iteration `iter`.
+  subroutine write_line_loads(line, points, iter, time, is_root)
+    !! Append the element loads of `line` at iteration `iter`. `points` are
+    !! the element positions the loads were computed at, before the rotor
+    !! advanced.
     implicit none
     type(actuator_line_t), intent(in) :: line
+    real(dp), intent(in) :: points(:, :)
     integer, intent(in) :: iter
     real(dp), intent(in) :: time
     logical, intent(in) :: is_root
@@ -54,7 +57,7 @@ contains
                                  //trim(line%name))
     do ie = 1, line%n_elem
       write (unit, '(I0,",",ES20.12,",",I0,15(",",ES20.12))') &
-        iter, time, ie, line%pe(:, ie), line%erdist(ie)/line%length, &
+        iter, time, ie, points(:, ie), line%erdist(ie)/line%length, &
         line%eaoa(ie)/deg2rad, line%ere(ie), line%eur(ie), line%ecl(ie), &
         line%ecd(ie), line%ecm(ie), line%ecn(ie), line%ect(ie), &
         line%efn(ie), line%eft(ie), line%end_factor(ie)
