@@ -41,9 +41,13 @@ module m_io_backend
                     adios2_variable, adios2_attribute, &
                     adios2_mode_sync, adios2_mode_write, &
                     adios2_mode_deferred, adios2_mode_read, &
+                    adios2_mode_append, adios2_mode_readRandomAccess, &
                     adios2_step_mode_append, adios2_step_mode_read, &
                     adios2_init, adios2_finalize, &
                     adios2_declare_io, adios2_set_engine, &
+                    adios2_set_parameter, adios2_variable_steps, &
+                    adios2_set_step_selection, adios2_inquire_attribute, &
+                    adios2_attribute_data, &
                     adios2_open, adios2_close, &
                     adios2_begin_step, adios2_end_step, &
                     adios2_define_variable, adios2_inquire_variable, &
@@ -65,7 +69,7 @@ module m_io_backend
   use m_nvtx, only: nvtx_push, nvtx_pop, nvtx_enabled
   use m_base_backend, only: base_backend_t
   use m_io_base, only: io_reader_t, io_writer_t, io_file_t, &
-                       io_mode_read, io_mode_write
+                       io_mode_read, io_mode_write, io_mode_append
   use iso_c_binding, only: c_double, c_int, c_int8_t, c_int64_t, c_char, &
                            c_null_char, c_ptr, c_loc
   use m_logger, only: log_info, abort_run, str
@@ -73,7 +77,8 @@ module m_io_backend
   implicit none
 
   private
-  public :: allocate_io_reader, allocate_io_writer
+  public :: allocate_io_reader, allocate_io_writer, count_steps_up_to
+  public :: read_string_attribute
   public :: get_default_backend, IO_BACKEND_DUMMY, IO_BACKEND_ADIOS2
   public :: parse_gpu_write_mode, gpu_write_mode_from_env, &
             gpu_write_mode_force_host, gpu_write_mode_names
@@ -841,15 +846,19 @@ contains
       call self%handle_error(1, "Failed to create ADIOS2 IO object")
   end subroutine writer_init_adios2
 
-  function writer_open_adios2(self, filename, mode, comm) result(file_handle)
+  function writer_open_adios2( &
+    self, filename, mode, comm, append_after_steps &
+    ) result(file_handle)
     class(io_adios2_writer_t), intent(inout) :: self
     character(len=*), intent(in) :: filename
     integer, intent(in) :: mode
     integer, intent(in) :: comm
+    integer, intent(in), optional :: append_after_steps
 
     class(io_file_t), allocatable :: file_handle
     type(io_adios2_file_t) :: temp_handle
-    integer :: ierr, use_comm
+    integer :: ierr, use_comm, adios2_mode
+    character(len=16) :: steps_str
 
     use_comm = comm
     if (.not. self%io_handle%valid) &
@@ -857,15 +866,28 @@ contains
 
     ! if opening in write mode, we are starting a new independent dataset
     ! remove all old variables from the IO object
-    if (mode == io_mode_write) then
+    if (mode == io_mode_write .or. mode == io_mode_append) then
       call adios2_remove_all_variables(self%io_handle, ierr)
       call self%handle_error(ierr, "Failed to remove old ADIOS2 variables &
                              &before open")
     end if
 
+    adios2_mode = adios2_mode_write
+    if (mode == io_mode_append) then
+      adios2_mode = adios2_mode_append
+      ! BP5 truncates the file after this many steps before appending
+      if (present(append_after_steps)) then
+        write (steps_str, '(I0)') append_after_steps
+        call adios2_set_parameter( &
+          self%io_handle, "AppendAfterSteps", trim(steps_str), ierr &
+          )
+        call self%handle_error(ierr, "Failed to set AppendAfterSteps")
+      end if
+    end if
+
     call open_adios2_engine( &
       temp_handle%engine, self%io_handle, filename, &
-      adios2_mode_write, use_comm, ierr)
+      adios2_mode, use_comm, ierr)
     call self%handle_error(ierr, "Failed to open ADIOS2 engine for writing")
     temp_handle%is_writer = .true.
     temp_handle%comm = use_comm
@@ -874,6 +896,87 @@ contains
 
     file_handle = temp_handle
   end function writer_open_adios2
+
+  function count_steps_up_to(filename, variable_name, limit, comm) result(n)
+    !! Count the leading steps of a file whose scalar `variable_name` is no
+    !! greater than `limit`. Returns 0 if the variable is not in the file.
+    character(len=*), intent(in) :: filename, variable_name
+    real(dp), intent(in) :: limit
+    integer, intent(in) :: comm
+    integer :: n
+
+    type(io_adios2_reader_t) :: reader
+    type(adios2_engine) :: engine
+    type(adios2_variable) :: var
+    real(dp), allocatable :: values(:)
+    integer(i8) :: nsteps
+    integer :: ierr
+
+    n = 0
+    call reader%init(comm, "step_counter")
+    call open_adios2_engine( &
+      engine, reader%io_handle, filename, adios2_mode_readRandomAccess, &
+      comm, ierr)
+    call reader%handle_error(ierr, "Failed to open "//trim(filename))
+
+    call adios2_inquire_variable(var, reader%io_handle, variable_name, ierr)
+    if (ierr == adios2_found) then
+      call adios2_variable_steps(nsteps, var, ierr)
+      call reader%handle_error(ierr, "Failed to count steps")
+      allocate (values(nsteps))
+      call adios2_set_step_selection(var, 0_i8, nsteps, ierr)
+      call reader%handle_error(ierr, "Failed to select steps")
+      call adios2_get(engine, var, values, adios2_mode_sync, ierr)
+      call reader%handle_error(ierr, "Failed to read "//variable_name)
+
+      do while (n < nsteps)
+        if (values(n + 1) > limit) exit
+        n = n + 1
+      end do
+    end if
+
+    call adios2_close(engine, ierr)
+    call reader%handle_error(ierr, "Failed to close "//trim(filename))
+    call reader%finalise()
+  end function count_steps_up_to
+
+  function read_string_attribute(filename, attribute_name, comm) result(value)
+    !! Read a string attribute of a file. Returns an empty string if the
+    !! attribute is not in the file.
+    character(len=*), intent(in) :: filename, attribute_name
+    integer, intent(in) :: comm
+    character(len=:), allocatable :: value
+
+    type(io_adios2_reader_t) :: reader
+    type(adios2_engine) :: engine
+    type(adios2_attribute) :: attr
+    character(len=16384) :: buffer
+    integer :: ierr, n
+
+    value = ''
+    call reader%init(comm, "attribute_reader")
+    call open_adios2_engine( &
+      engine, reader%io_handle, filename, adios2_mode_readRandomAccess, &
+      comm, ierr)
+    call reader%handle_error(ierr, "Failed to open "//trim(filename))
+
+    call adios2_inquire_attribute( &
+      attr, reader%io_handle, attribute_name, ierr &
+      )
+    if (ierr == adios2_found) then
+      ! ADIOS2 copies only the attribute's characters, so clear the rest
+      buffer = ''
+      call adios2_attribute_data(buffer, attr, ierr)
+      call reader%handle_error(ierr, "Failed to read "//attribute_name)
+      n = index(buffer, achar(0))
+      if (n > 0) buffer(n:) = ''
+      value = trim(buffer)
+    end if
+
+    call adios2_close(engine, ierr)
+    call reader%handle_error(ierr, "Failed to close "//trim(filename))
+    call reader%finalise()
+  end function read_string_attribute
 
   subroutine write_data_i8_adios2(self, variable_name, value, file_handle)
     class(io_adios2_writer_t), intent(inout) :: self

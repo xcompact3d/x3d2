@@ -11,7 +11,7 @@ module m_case_wind_turbine
   !! Poisson solver requires z periodic and only supports a single rank for
   !! non-periodic directions. The two_turbines case uses free-slip walls
   !! in y and z (wind-tunnel walls), which the FFT solver cannot currently do.
-  use m_mpi, only: MPI_COMM_WORLD, MPI_IN_PLACE, MPI_SUM, MPI_MAX, &
+  use m_mpi, only: MPI_COMM_WORLD, MPI_IN_PLACE, MPI_SUM, &
                    MPI_Allreduce
 
   use m_allocator, only: allocator_t
@@ -42,7 +42,6 @@ module m_case_wind_turbine
     procedure :: postprocess => postprocess_wind_turbine
     procedure :: post_step => post_step_wind_turbine
     procedure :: finalise_case_specific => finalise_wind_turbine
-    procedure :: compute_outflow_params
   end type case_wind_turbine_t
 
   interface case_wind_turbine_t
@@ -190,34 +189,6 @@ contains
     call self%solver%w%set_data_loc(VERT)
   end subroutine initial_conditions_wind_turbine
 
-  ! Convective outflow velocity cx = uxmax*gdt/dx, where uxmax is the global
-  ! max of the streamwise velocity on the x = nx-1 plane of the
-  ! post-integration field. This matches the cylinder case rather than
-  ! Incompact3d's outflow, which uses 0.5*(uxmax + uxmin).
-  subroutine compute_outflow_params(self, out_vel)
-    implicit none
-    class(case_wind_turbine_t) :: self
-    real(dp), intent(out) :: out_vel
-
-    integer :: dims(3), nx, ierr
-    real(dp) :: uxmax, sum_discard
-    real(dp) :: dx, gdt
-
-    dims = self%solver%mesh%get_dims(VERT)
-    nx = dims(1)
-    dx = self%solver%mesh%geo%d(1)
-    gdt = self%solver%time_integrator%gdt
-
-    call self%solver%backend%slice_max_sum( &
-      uxmax, sum_discard, self%solver%u, nx - 1)
-
-    call MPI_Allreduce(MPI_IN_PLACE, uxmax, 1, MPI_X3D2_DP, &
-                       MPI_MAX, MPI_COMM_WORLD, ierr)
-
-    out_vel = uxmax*gdt/dx
-
-  end subroutine compute_outflow_params
-
   subroutine define_BC_wind_turbine(self)
     !! Boundary Conditions hook (called per substep before transeq).
     !! Builds the inlet Dirichlet profile only; outflow parameters are
@@ -295,7 +266,7 @@ contains
     class(field_t), intent(inout) :: u, v, w
 
     integer :: dims(3), nx, ierr
-    real(dp) :: out_vel, ny_nz, udif, max_discard
+    real(dp) :: out_vel, ny_nz, udif, max_discard, flow_rate_diff_discard
     real(dp) :: fl_sums(2)
     integer :: gdims(3)
 
@@ -306,8 +277,10 @@ contains
     gdims = self%solver%mesh%get_global_dims(VERT)
     ny_nz = real(gdims(2)*gdims(3), dp)
 
-    ! Convective speed from the already-integrated velocity field.
-    call self%compute_outflow_params(out_vel)
+    ! Convective speed from the already-integrated velocity field. The
+    ! flow-rate imbalance is not used: the mass correction below measures the
+    ! outlet after the convective update instead.
+    call self%compute_outflow_params(out_vel, flow_rate_diff_discard)
 
     ! Dirichlet inflow + convective outflow (no mass correction yet).
     call self%solver%backend%field_set_face_from_field( &

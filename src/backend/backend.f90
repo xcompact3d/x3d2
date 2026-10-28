@@ -64,6 +64,7 @@ module m_base_backend
       field_add_gaussian_sources_base
     procedure :: field_max_mean => field_max_mean_base
     procedure :: slice_max_sum => slice_max_sum_base
+    procedure :: x_slice_weighted_sum => x_slice_weighted_sum_base
     procedure :: field_plane_sums => field_plane_sums_base
     procedure :: field_scale => field_scale_base
     procedure :: field_shift => field_shift_base
@@ -605,6 +606,25 @@ contains
     call not_implemented('slice_max_sum')
 
   end subroutine slice_max_sum_base
+
+  subroutine x_slice_weighted_sum_base(self, sum_val, f, i_slice, y_weights)
+  !! Weighted sum of the x slice f(i_slice, :, :) of a DIR_X field: the
+  !! point with local y index j counts y_weights(j) times. Gives the flow
+  !! rate through an x face as the discrete divergence sees it, whose y
+  !! interpolation weights the boundary planes differently from the
+  !! interior ones. Caller is responsible for MPI_Allreduce across ranks.
+    implicit none
+
+    class(base_backend_t) :: self
+    real(dp), intent(out) :: sum_val
+    class(field_t), intent(in) :: f
+    integer, intent(in) :: i_slice
+    real(dp), intent(in) :: y_weights(:)
+
+    sum_val = 0._dp
+    call not_implemented('x_slice_weighted_sum')
+
+  end subroutine x_slice_weighted_sum_base
 
   subroutine field_plane_sums_base(self, sums, f)
     !! Sum a DIR_X field over x and z on every local y-plane:

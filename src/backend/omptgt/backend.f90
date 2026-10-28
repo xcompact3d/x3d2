@@ -49,11 +49,14 @@ module m_omptgt_backend
                                        scalar_product, scalar_product_cart, &
                                        vector_norm_squared, field_max_sum, &
                                        volume_integral, slice_max_sum, &
+                                       x_slice_weighted_sum, &
                                        field_set_x_face, field_set_y_face, &
                                        field_set_y_plane, &
                                        field_set_abl_wall_stress, &
                                        field_set_x_face_from_field, &
                                        field_set_y_face_from_field, &
+                                       field_set_x_inlet_plane, &
+                                       field_add_const_x_face, &
                                        field_add_x_face_from_field, &
                                        field_add_y_face_from_field, &
                                        field_plane_partial_sums, &
@@ -102,6 +105,7 @@ module m_omptgt_backend
       field_add_gaussian_sources_omptgt
     procedure :: field_max_mean => field_max_mean_omptgt
     procedure :: slice_max_sum => slice_max_sum_omptgt
+    procedure :: x_slice_weighted_sum => x_slice_weighted_sum_omptgt
     procedure :: field_scale => field_scale_omptgt
     procedure :: field_shift => field_shift_omptgt
     procedure :: field_set_face => field_set_face_omptgt
@@ -109,6 +113,8 @@ module m_omptgt_backend
     procedure :: field_plane_sums => field_plane_sums_omptgt
     procedure :: field_set_abl_wall_stress => field_set_abl_wall_stress_omptgt
     procedure :: field_set_face_from_field => field_set_face_from_field_omptgt
+    procedure :: field_set_x_inlet_plane => field_set_x_inlet_plane_omptgt
+    procedure :: field_add_const_x_face => field_add_const_x_face_omptgt
     procedure :: field_add_face_from_field => field_add_face_from_field_omptgt
     procedure :: compute_vorticity => compute_vorticity_omptgt
     procedure :: compute_qcriterion => compute_qcriterion_omptgt
@@ -1174,6 +1180,38 @@ contains
 
   end subroutine slice_max_sum_omptgt
 
+  subroutine x_slice_weighted_sum_omptgt(self, sum_val, f, i_slice, &
+                                         y_weights)
+    !! [[m_base_backend(module):x_slice_weighted_sum_base(subroutine)]]
+    implicit none
+
+    class(omptgt_backend_t) :: self
+    real(dp), intent(out) :: sum_val
+    class(field_t), intent(in) :: f
+    integer, intent(in) :: i_slice
+    real(dp), intent(in) :: y_weights(:)
+
+    real(dp), pointer, contiguous, dimension(:, :, :) :: f_d
+    integer :: n, n_i, n_groups_pad, n_j
+
+    if (f%dir /= DIR_X) &
+      call abort_run('x_slice_weighted_sum: only supported for DIR_X fields.')
+    if (f%data_loc == NULL_LOC) &
+      call abort_run('x_slice_weighted_sum: requires a valid data_loc.')
+    call pencil_extents(self, f%dir, f%data_loc, n, n_i, n_groups_pad, n_j)
+
+    if (i_slice < 1 .or. i_slice > n) &
+      call abort_run('x_slice_weighted_sum: i_slice out of range')
+    if (size(y_weights) /= n_j) &
+      call abort_run('x_slice_weighted_sum: one weight per y point needed')
+
+    ! Rank-local value; caller is responsible for MPI_Allreduce.
+    call resolve_field_t(f_d, f)
+    call x_slice_weighted_sum(sum_val, f_d, y_weights, size(f_d, 2), &
+                              i_slice, n_i, n_groups_pad, n_j)
+
+  end subroutine x_slice_weighted_sum_omptgt
+
   real(dp) function field_volume_integral_omptgt(self, f) result(s)
     !! volume integral of a field
     implicit none
@@ -1423,6 +1461,64 @@ contains
     end select
 
   end subroutine field_set_face_from_field_omptgt
+
+  subroutine field_set_x_inlet_plane_omptgt(self, f, plane)
+    !! [[m_base_backend(module):field_set_x_inlet_plane_base(subroutine)]]
+    implicit none
+
+    class(omptgt_backend_t) :: self
+    class(field_t), intent(inout) :: f
+    real(dp), dimension(:, :), intent(in) :: plane
+
+    real(dp), pointer, contiguous, dimension(:, :, :) :: f_d
+    integer :: dims(3)
+
+    if (f%dir /= DIR_X) &
+      call abort_run('field_set_x_inlet_plane: only supported for DIR_X &
+                     &fields.')
+    if (f%data_loc == NULL_LOC) &
+      call abort_run('field_set_x_inlet_plane: requires a valid data_loc.')
+
+    dims = self%mesh%get_dims(f%data_loc)
+    if (size(plane, 1) /= dims(2) .or. size(plane, 2) /= dims(3)) &
+      call abort_run('field_set_x_inlet_plane: plane must be (ny, nz).')
+
+    call resolve_field_t(f_d, f)
+    call field_set_x_inlet_plane(f_d, plane, size(f_d, 2), dims(2), &
+                                 dims(3), n_yb_pad(self))
+
+  end subroutine field_set_x_inlet_plane_omptgt
+
+  subroutine field_add_const_x_face_omptgt(self, f, c, at_end)
+    !! [[m_base_backend(module):field_add_const_x_face_base(subroutine)]]
+    implicit none
+
+    class(omptgt_backend_t) :: self
+    class(field_t), intent(inout) :: f
+    real(dp), intent(in) :: c
+    logical, intent(in) :: at_end
+
+    real(dp), pointer, contiguous, dimension(:, :, :) :: f_d
+    integer :: dims(3), i_plane
+
+    if (f%dir /= DIR_X) &
+      call abort_run('field_add_const_x_face: only supported for DIR_X &
+                     &fields.')
+    if (f%data_loc == NULL_LOC) &
+      call abort_run('field_add_const_x_face: requires a valid data_loc.')
+
+    dims = self%mesh%get_dims(f%data_loc)
+    if (at_end) then
+      i_plane = dims(1)   ! global x = nx (outlet)
+    else
+      i_plane = 1         ! global x = 1  (inlet)
+    end if
+
+    call resolve_field_t(f_d, f)
+    call field_add_const_x_face(f_d, c, i_plane, size(f_d, 2), dims(2), &
+                                dims(3), n_yb_pad(self))
+
+  end subroutine field_add_const_x_face_omptgt
 
   subroutine field_add_face_from_field_omptgt(self, f, g, face, bc_start, &
                                               bc_end)

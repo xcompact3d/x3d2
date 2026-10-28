@@ -8,6 +8,7 @@ module m_cuda_memcheck_device
                      cudaLibXtDesc
   use m_common, only: dp, i8
   use m_logger, only: abort_run
+  use iso_c_binding, only: c_int, c_long_long, c_ptr, c_char
   use m_memory_estimate, only: predicted_fft_heap_bytes, round_up_bytes, &
                                fft_xtdesc_step_bytes
   use m_cuda_common, only: SZ
@@ -18,7 +19,60 @@ module m_cuda_memcheck_device
   implicit none
 
   private
-  public :: cuda_memcheck_device_t, fft_workspace_bytes_query
+  public :: cuda_memcheck_device_t, fft_workspace_bytes_query, &
+            foreign_start_ok, foreign_start_nproc, foreign_start_bytes, &
+            foreign_worst, foreign_nproc_last, foreign_valid
+
+  !> The v3 layout of nvmlProcessInfo_t.
+  type, bind(C) :: nvml_proc_t
+    integer(c_int) :: pid
+    integer(c_long_long) :: used_bytes
+    integer(c_int) :: gpu_instance_id, compute_instance_id
+  end type nvml_proc_t
+  integer, parameter :: nvml_max_procs = 256
+  !> NVML_VALUE_NOT_AVAILABLE: all bits set.
+  integer(c_long_long), parameter :: nvml_not_available = -1_c_long_long
+
+  !> The other processes on the card at the start (false: NVML gave no usable
+  !> list), the largest change from the start over all samples so far, and the
+  !> process count of the last sample.
+  logical, save, protected :: foreign_start_ok = .false.
+  integer, save, protected :: foreign_start_nproc = 0, foreign_nproc_last = 0
+  integer(i8), save, protected :: foreign_start_bytes = 0_i8, &
+                                  foreign_worst = 0_i8
+  !> False after a failed sample, which stops the sampling.
+  logical, save, protected :: foreign_valid = .false.
+
+  interface
+    integer(c_int) function nvmlInit_v2() bind(C, name='nvmlInit_v2')
+      import :: c_int
+    end function nvmlInit_v2
+
+    integer(c_int) function nvmlDeviceGetHandleByPciBusId_v2(busid, device) &
+      bind(C, name='nvmlDeviceGetHandleByPciBusId_v2')
+      import :: c_int, c_char, c_ptr
+      character(kind=c_char), dimension(*), intent(in) :: busid
+      type(c_ptr), intent(out) :: device
+    end function nvmlDeviceGetHandleByPciBusId_v2
+
+    !> NVML_ERROR_INSUFFICIENT_SIZE (7) is a failure like any other.
+    integer(c_int) function nvmlDeviceGetComputeRunningProcesses_v3( &
+      device, count, infos) &
+      bind(C, name='nvmlDeviceGetComputeRunningProcesses_v3')
+      import :: c_int, c_ptr, nvml_proc_t, nvml_max_procs
+      type(c_ptr), value :: device
+      integer(c_int), intent(inout) :: count
+      type(nvml_proc_t), intent(out) :: infos(nvml_max_procs)
+    end function nvmlDeviceGetComputeRunningProcesses_v3
+
+    !> The CUDA runtime call: cudafor has no Fortran binding for it.
+    integer(c_int) function cudaDeviceGetPCIBusId(busid, len, device) &
+      bind(C, name='cudaDeviceGetPCIBusId')
+      import :: c_int, c_char
+      character(kind=c_char), dimension(*), intent(out) :: busid
+      integer(c_int), value :: len, device
+    end function cudaDeviceGetPCIBusId
+  end interface
 
   !> What one FFT probe returned. ok is false when the probe returned a
   !> failure status.
@@ -98,6 +152,11 @@ contains
     call check_status(ierr, 'cudaMemGetInfo (context size)')
     self%start_used_bytes = int(total_b, i8) - int(free_b, i8)
     self%start_free_bytes = int(free_b, i8)
+    call foreign_gpu_bytes(foreign_start_ok, foreign_start_nproc, &
+                           foreign_start_bytes)
+    foreign_valid = foreign_start_ok
+    foreign_worst = 0_i8
+    foreign_nproc_last = foreign_start_nproc
     ok = .true.
   end subroutine init
 
@@ -111,6 +170,7 @@ contains
     call check_status(ierr, 'cudaMemGetInfo')
     total_bytes = int(total_b, i8)
     free_bytes = int(free_b, i8)
+    call foreign_note()
   end subroutine mem_info
 
   function context_bytes(self) result(nbytes8)
@@ -315,6 +375,62 @@ contains
     nbytes8 = self%start_used_bytes + (self%start_free_bytes - free_end_bytes)
   end function footprint_bytes
 
+  subroutine foreign_gpu_bytes(ok, nproc, nbytes)
+    !! The processes other than this one on the device, and the memory they
+    !! hold, from NVML. ok is false when a call fails, a memory value is not
+    !! available or our own PID is not in the list (a container shows host
+    !! PIDs). NVML picks the card by PCI bus id, not by CUDA_VISIBLE_DEVICES.
+    logical, intent(out) :: ok
+    integer, intent(out) :: nproc
+    integer(i8), intent(out) :: nbytes
+    character(kind=c_char, len=32) :: busid
+    type(c_ptr) :: handle
+    type(nvml_proc_t) :: procs(nvml_max_procs)
+    integer(c_int) :: count
+    integer :: i, getpid
+    logical :: found_self
+
+    ok = .false.
+    nproc = 0
+    nbytes = 0_i8
+    count = nvml_max_procs
+    ! The driver cleans NVML up at process exit, so there is no shutdown.
+    if (nvmlInit_v2() /= 0) return
+    ! Device 0 is the one init set.
+    if (cudaDeviceGetPCIBusId(busid, int(len(busid), c_int), 0_c_int) /= 0) &
+      return
+    if (nvmlDeviceGetHandleByPciBusId_v2(busid, handle) /= 0) return
+    if (nvmlDeviceGetComputeRunningProcesses_v3(handle, count, procs) /= 0) &
+      return
+    found_self = .false.
+    do i = 1, count
+      if (procs(i)%used_bytes == nvml_not_available) return
+      if (procs(i)%pid == getpid()) then
+        found_self = .true.
+      else
+        nproc = nproc + 1
+        nbytes = nbytes + int(procs(i)%used_bytes, i8)
+      end if
+    end do
+    ok = found_self
+  end subroutine foreign_gpu_bytes
+
+  subroutine foreign_note()
+    !! Samples the other processes next to a cudaMemGetInfo reading and keeps
+    !! the largest change from the start.
+    logical :: ok
+    integer :: nproc
+    integer(i8) :: nbytes
+
+    if (.not. foreign_valid) return
+    call foreign_gpu_bytes(ok, nproc, nbytes)
+    foreign_valid = ok
+    if (.not. ok) return
+    foreign_nproc_last = nproc
+    if (abs(nbytes - foreign_start_bytes) > abs(foreign_worst)) &
+      foreign_worst = nbytes - foreign_start_bytes
+  end subroutine foreign_note
+
   function fft_path_known(self) result(known)
     class(cuda_memcheck_device_t), intent(in) :: self
     logical :: known
@@ -406,18 +522,21 @@ contains
 
     ierr = cudaMemGetInfo(free_before, total_b)
     call check_status(ierr, 'cudaMemGetInfo (before plans)')
+    call foreign_note()
     call create_fft_plan_pair(plan_fw, plan_bw, used_cufftmp, fft_n, &
                               fw_plan_type, bw_plan_type, ' memcheck probe', &
                               worksize_fw, worksize_bw, stat, no_auto_alloc)
     if (stat /= 0) return
     ierr = cudaMemGetInfo(free_after, total_b)
     call check_status(ierr, 'cudaMemGetInfo (after plans)')
+    call foreign_note()
     worksize_bytes = int(worksize_fw, i8) + int(worksize_bw, i8)
     heap_bytes = int(free_before, i8) - int(free_after, i8)
 
     if (used_cufftmp .and. (.not. no_auto_alloc)) then
       ierr = cudaMemGetInfo(free_before, total_b)
       call check_status(ierr, 'cudaMemGetInfo (before xtdesc)')
+      call foreign_note()
       ierr = cufftXtMalloc(plan_fw, xtdesc, CUFFT_XT_FORMAT_INPLACE)
       call check_status(ierr, 'cufftXtMalloc', stat)
       if (stat /= 0) then
@@ -427,6 +546,7 @@ contains
       end if
       ierr = cudaMemGetInfo(free_after, total_b)
       call check_status(ierr, 'cudaMemGetInfo (after xtdesc)')
+      call foreign_note()
       xtdesc_bytes = int(free_before, i8) - int(free_after, i8)
       ierr = cufftXtFree(xtdesc)
       call check_status(ierr, 'cufftXtFree')

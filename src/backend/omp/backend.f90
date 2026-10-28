@@ -54,6 +54,7 @@ module m_omp_backend
     procedure :: field_add_gaussian_sources => field_add_gaussian_sources_omp
     procedure :: field_max_mean => field_max_mean_omp
     procedure :: slice_max_sum => slice_max_sum_omp
+    procedure :: x_slice_weighted_sum => x_slice_weighted_sum_omp
     procedure :: field_scale => field_scale_omp
     procedure :: field_shift => field_shift_omp
     procedure :: field_set_face => field_set_face_omp
@@ -1340,6 +1341,49 @@ contains
     sum_val = sum_p
 
   end subroutine slice_max_sum_omp
+
+  subroutine x_slice_weighted_sum_omp(self, sum_val, f, i_slice, y_weights)
+    !! [[m_base_backend(module):x_slice_weighted_sum_base(subroutine)]]
+    implicit none
+    class(omp_backend_t) :: self
+    real(dp), intent(out) :: sum_val
+    class(field_t), intent(in) :: f
+    integer, intent(in) :: i_slice
+    real(dp), intent(in) :: y_weights(:)
+
+    real(dp) :: sum_p
+    integer :: dims(3), y_stride, i, k, y_block, z
+
+    if (f%dir /= DIR_X) &
+      call abort_run('x_slice_weighted_sum: only supported for DIR_X fields.')
+    if (f%data_loc == NULL_LOC) &
+      call abort_run('x_slice_weighted_sum: requires a valid data_loc.')
+
+    dims = self%mesh%get_dims(f%data_loc)
+    y_stride = y_group_stride(self)
+
+    if (i_slice < 1 .or. i_slice > dims(1)) &
+      call abort_run('x_slice_weighted_sum: i_slice out of range')
+    if (size(y_weights) /= dims(2)) &
+      call abort_run('x_slice_weighted_sum: one weight per y point needed')
+
+    sum_p = 0._dp
+    ! y-block is the fast-varying component of the group index
+    !$omp parallel do collapse(2) reduction(+:sum_p) private(k)
+    do z = 1, dims(3)
+      do y_block = 1, (dims(2) - 1)/SZ + 1
+        k = y_stride*(z - 1) + y_block
+        do i = 1, min(SZ, dims(2) - (y_block - 1)*SZ)
+          sum_p = sum_p + y_weights(i + (y_block - 1)*SZ)*f%data(i, i_slice, k)
+        end do
+      end do
+    end do
+    !$omp end parallel do
+
+    ! Rank-local value; caller is responsible for MPI_Allreduce.
+    sum_val = sum_p
+
+  end subroutine x_slice_weighted_sum_omp
 
   subroutine field_scale_omp(self, f, a)
     implicit none

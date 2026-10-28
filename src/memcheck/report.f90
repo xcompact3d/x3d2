@@ -1,6 +1,9 @@
 module m_memcheck_report
   !! Printed report of x3d2-memcheck: header, tables and verdict lines.
   use m_common, only: dp, i8, is_sp
+  use m_cuda_memcheck_device, only: foreign_start_ok, foreign_start_nproc, &
+                                    foreign_start_bytes, foreign_worst, &
+                                    foreign_nproc_last, foreign_valid
   use m_logger, only: log_info
   use m_memcheck_context, only: memcheck_ctx_t
   use m_memory_estimate, only: gpu_io_staging_bytes, gpu_io_staging_parts
@@ -13,13 +16,43 @@ module m_memcheck_report
 
   private
   public :: report, n_gpu_list, print_rule, print_table_header, &
-            print_table_row, print_requested_line
+            print_table_row, print_requested_line, card_shared_skip
 
   !> The GPU counts of the table. The CUDA backend only supports nproc_dir =
   !> [1,1,num_gpus].
   integer, parameter :: n_gpu_list(4) = [1, 2, 4, 8]
 
+  !> A change of the memory of the other processes on the card above this
+  !> skips the measurement. 128 MiB is the plan decision for issue #458. It
+  !> is above the NVML reporting noise and the idle CHECK error (0.01 to 0.04
+  !> GiB), and below the 1.5 GiB churn seen on the typhoon runner.
+  integer(i8), parameter :: FOREIGN_SKIP_BYTES = 128_i8*1024_i8*1024_i8
+  logical, save :: skip_printed = .false.
+
 contains
+
+  function card_shared_skip(emit_line) result(skipped)
+    !! True when another process changes its card memory by more than 128 MiB
+    !! or an NVML sample fails. Log the skip line once when emit_line is true
+    logical, intent(in) :: emit_line
+    logical :: skipped
+    character(len=16) :: delta_buf
+    character(len=256) :: line_buf
+
+    skipped = .not. foreign_valid .or. abs(foreign_worst) > FOREIGN_SKIP_BYTES
+    if (.not. skipped .or. .not. emit_line .or. skip_printed) return
+    skip_printed = .true.
+    if (.not. foreign_valid) then
+      call log_info('CHECK skipped: GPU process attribution unavailable')
+      return
+    end if
+    write (delta_buf, '(sp,f8.2)') to_gib(foreign_worst)
+    write (line_buf, '(a,a,a,i0,a,i0,a)') &
+      'CHECK skipped: card shared, other GPU processes changed by ', &
+      trim(adjustl(delta_buf)), ' GiB (', foreign_start_nproc, &
+      ' at start, ', foreign_nproc_last, ' at end)'
+    call log_info(trim(line_buf))
+  end function card_shared_skip
 
   subroutine print_rule(fill)
     !! A separator line of 60 characters.
@@ -251,19 +284,23 @@ contains
       'CUDA context (used at start): ', &
       to_gib(ctx%device%context_bytes()), ' GiB'
     call log_info(trim(line_buf))
-    if (ctx%device%heap_predicted) then
-      write (line_buf, '(a,f0.2,a,f0.2,a)') &
-        'Calibration on this GPU: CUDA context ', &
-        to_gib(ctx%device%probe%context), ' GiB, NVSHMEM heap ', &
-        to_gib(ctx%device%heap_bytes()), ' GiB (predicted).'
-      call log_info(trim(line_buf))
+    if (foreign_start_ok) then
+      write (line_buf, '(a,i0,a,f0.2,a)') &
+        'Other GPU processes at start: ', foreign_start_nproc, ', ', &
+        to_gib(foreign_start_bytes), ' GiB'
     else
-      write (line_buf, '(a,f0.2,a,f0.2,a)') &
-        'Calibration on this GPU: CUDA context ', &
-        to_gib(ctx%device%probe%context), ' GiB, NVSHMEM heap ', &
-        to_gib(ctx%device%heap_bytes()), ' GiB.'
-      call log_info(trim(line_buf))
+      line_buf = 'Other GPU processes at start: not checked (NVML gave no &
+                 &usable process list)'
     end if
+    call log_info(trim(line_buf))
+    write (line_buf, '(a,f0.2,a,f0.2,a,a)') &
+      'Calibration on this GPU: CUDA context ', &
+      to_gib(ctx%device%probe%context), ' GiB, NVSHMEM heap ', &
+      to_gib(ctx%device%heap_bytes()), ' GiB', &
+      merge(' (predicted).', '.            ', ctx%device%heap_predicted)
+    ! A change of the other processes since the start shifts these readings.
+    if (.not. card_shared_skip(emit_line=ctx%run_mode /= 'BUILD')) &
+      call log_info(trim(line_buf))
     write (line_buf, '(a,i0)') &
       'peak_fields (static estimate): ', ctx%peak_fields
     call log_info(trim(line_buf))

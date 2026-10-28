@@ -60,3 +60,18 @@ coriolis = F
 mass_conserve = F
 damping = F
 /End
+
+&inflow_nml
+! Precursor output for a successor run (needs ADIOS2). Sample u, v, w on the
+! last x plane every step and write them in files of ntimesteps planes.
+write_planes = F
+plane_x_index = 0
+ntimesteps = 100
+sample_every = 1
+inflow_prefix = 'inflow'
+! Successor input: impose a precursor's planes at an x inlet. Needs
+! BC_x = 'dirichlet', 'dirichlet'; the driving switches above may all be off.
+read_planes = F
+inflow_read_prefix = '../precursor/inflow'
+ninflows = 1
+/End
