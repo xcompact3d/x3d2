@@ -3,7 +3,8 @@ module m_omp_backend
                    MPI_Allreduce
 
   use m_allocator, only: allocator_t
-  use m_base_backend, only: base_backend_t, source_index_boxes
+  use m_base_backend, only: base_backend_t, source_index_boxes, &
+                            check_point_fields
   use m_common, only: dp, MPI_X3D2_DP, get_dirs_from_rdr, move_data_loc, &
                       DIR_X, DIR_Y, DIR_Z, DIR_C, NULL_LOC, &
                       X_FACE, Y_FACE, Z_FACE, VERT, BC_DIRICHLET
@@ -1154,19 +1155,6 @@ contains
       if (loc(dir) < 1 .or. loc(dir) > dims(dir)) owned = .false.
     end do
   end subroutine local_corner
-
-  subroutine check_point_fields(a, b, c)
-    !! Checks the fields passed to the point sampling and source operations
-    !! are DIR_X VERT fields.
-    implicit none
-
-    class(field_t), intent(in) :: a, b, c
-
-    if (a%dir /= DIR_X .or. b%dir /= DIR_X .or. c%dir /= DIR_X) &
-      call abort_run('Point sampling and sources need DIR_X fields.')
-    if (a%data_loc /= VERT .or. b%data_loc /= VERT .or. c%data_loc /= VERT) &
-      call abort_run('Point sampling and sources need VERT fields.')
-  end subroutine check_point_fields
 
   subroutine check_labelled_fields(g, label, a, b, c)
     !! Checks the fields passed to the labelled field operations share a

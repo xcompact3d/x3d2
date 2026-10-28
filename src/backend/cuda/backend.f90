@@ -5,7 +5,8 @@ module m_cuda_backend
                    MPI_Allreduce
 
   use m_allocator, only: allocator_t
-  use m_base_backend, only: base_backend_t, source_index_boxes
+  use m_base_backend, only: base_backend_t, source_index_boxes, &
+                            check_point_fields
   use m_common, only: dp, sp, MPI_X3D2_DP, move_data_loc, get_rdr_from_dirs, &
                       RDR_X2Y, RDR_X2Z, RDR_Y2X, RDR_Y2Z, RDR_Z2X, RDR_Z2Y, &
                       RDR_C2X, RDR_C2Y, RDR_C2Z, RDR_X2C, RDR_Y2C, RDR_Z2C, &
@@ -1347,19 +1348,6 @@ contains
       periodic(1), periodic(2), periodic(3), dims_padded(3))
 
   end subroutine field_add_gaussian_sources_cuda
-
-  subroutine check_point_fields(a, b, c)
-    !! Checks the fields passed to the point sampling and source operations
-    !! are DIR_X VERT fields.
-    implicit none
-
-    class(field_t), intent(in) :: a, b, c
-
-    if (a%dir /= DIR_X .or. b%dir /= DIR_X .or. c%dir /= DIR_X) &
-      call abort_run('Point sampling and sources need DIR_X fields.')
-    if (a%data_loc /= VERT .or. b%data_loc /= VERT .or. c%data_loc /= VERT) &
-      call abort_run('Point sampling and sources need VERT fields.')
-  end subroutine check_point_fields
 
   subroutine check_labelled_fields(g, label, a, b, c)
     !! Checks the fields passed to the labelled field operations share a

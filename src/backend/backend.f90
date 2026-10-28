@@ -2,7 +2,7 @@ module m_base_backend
   use iso_c_binding, only: c_ptr
 
   use m_allocator, only: allocator_t
-  use m_common, only: dp, DIR_C, VERT, get_rdr_from_dirs
+  use m_common, only: dp, DIR_C, DIR_X, VERT, get_rdr_from_dirs
   use m_field, only: field_t
   use m_logger, only: abort_run
   use m_mesh, only: mesh_t
@@ -535,6 +535,19 @@ contains
     end do
 
   end subroutine source_index_boxes
+
+  subroutine check_point_fields(a, b, c)
+    !! Checks the fields passed to the point sampling and source operations
+    !! are DIR_X VERT fields.
+    implicit none
+
+    class(field_t), intent(in) :: a, b, c
+
+    if (a%dir /= DIR_X .or. b%dir /= DIR_X .or. c%dir /= DIR_X) &
+      call abort_run('Point sampling and sources need DIR_X fields.')
+    if (a%data_loc /= VERT .or. b%data_loc /= VERT .or. c%data_loc /= VERT) &
+      call abort_run('Point sampling and sources need VERT fields.')
+  end subroutine check_point_fields
 
   subroutine field_max_mean_base(self, max_val, mean_val, f, &
                                  enforced_data_loc)
