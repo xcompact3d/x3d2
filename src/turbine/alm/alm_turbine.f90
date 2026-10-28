@@ -228,6 +228,12 @@ contains
 
     select case (OperFlag)
     case (OPER_CONSTANT, OPER_UPSTREAM)
+      ! uref sets the initial rotor speed and normalises the first step's
+      ! coefficients, before the upstream probe (OperFlag = 4) replaces it
+      if (uref <= 0._dp) &
+        call abort_run('ALM: uref must be positive for OperFlag = ' &
+                       //str(OperFlag)//' in '//trim(filename), &
+                       collective=.true.)
       turb%uref = uref
       turb%tsr = tsr
     case (OPER_NREL)
@@ -516,7 +522,9 @@ contains
     turb%torque = torq_tot
     turb%ctr = torq_tot/(q_ref*turb%rmax)
     turb%power = abs(torq_tot)*turb%angular_vel
-    turb%cp = abs(turb%ctr)*turb%tsr
+    ! From the actual rotor speed rather than the input tsr, which the NREL
+    ! controller does not hold (the two agree in the other modes)
+    turb%cp = turb%power/(q_ref*turb%uref)
   end subroutine compute_performance
 
   subroutine compute_end_effects(turb)
@@ -524,27 +532,35 @@ contains
     implicit none
     type(turbine_t), intent(inout) :: turb
 
-    real(dp) :: g1, phi, rroot, rtip, f_tip, f_root, e
+    real(dp) :: g1, phi, sin_phi, rroot, rtip, f_tip, f_root, e, tsr
     integer :: ib, ie
 
     if (turb%end_glauert) then
       g1 = 1._dp
     else
-      g1 = exp(-turb%shen_c1*(turb%n_blades*turb%tsr - turb%shen_c2)) + 0.1_dp
+      tsr = turb%angular_vel*turb%rmax/turb%uref
+      g1 = exp(-turb%shen_c1*(turb%n_blades*tsr - turb%shen_c2)) + 0.1_dp
     end if
 
     do ib = 1, turb%n_blades
       associate (bl => turb%blade(ib))
         do ie = 1, bl%n_elem
           phi = bl%eaoa(ie) + bl%epitch(ie)
+          sin_phi = sin(phi)
           rroot = bl%erdist(ie)/turb%rmax
           rtip = (turb%rmax - bl%erdist(ie))/turb%rmax
           f_tip = 1._dp
           f_root = 1._dp
+          ! Both factors tend to 1 as phi -> 0; take the limit rather than
+          ! divide by zero (the infinities are unsafe under fast-math)
+          if (abs(sin_phi) < epsilon(1._dp)) then
+            bl%end_factor(ie) = 1._dp
+            cycle
+          end if
           ! As Incompact3d, the "tip" factor uses r/R and the "root" factor
           ! (R - r)/R
           if (turb%tip_correction) then
-            e = exp(-g1*turb%n_blades*0.5_dp*(1._dp/rroot - 1._dp)/sin(phi))
+            e = exp(-g1*turb%n_blades*0.5_dp*(1._dp/rroot - 1._dp)/sin_phi)
             if (abs(e) > 1._dp) then
               call log_warn('ALM: tip correction failed, phi = ' &
                             //str(phi, '(es12.5)'))
@@ -553,7 +569,7 @@ contains
             end if
           end if
           if (turb%root_correction) then
-            e = exp(-g1*turb%n_blades*0.5_dp*(1._dp/rtip - 1._dp)/sin(phi))
+            e = exp(-g1*turb%n_blades*0.5_dp*(1._dp/rtip - 1._dp)/sin_phi)
             if (abs(e) > 1._dp) then
               call log_warn('ALM: root correction failed, phi = ' &
                             //str(phi, '(es12.5)'))

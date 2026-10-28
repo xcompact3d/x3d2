@@ -549,9 +549,11 @@ Supported options: horizontal-axis rotors (``TypeFlag = 1``), clockwise or
 counterclockwise rotation, constant rotation (``OperFlag = 1``), the NREL 5 MW
 torque and pitch controller (``OperFlag = 2``), rotation from an upstream
 velocity probe (``OperFlag = 4``), the tower model, and Glauert or Shen et al.
-tip/root corrections (``EndEffectsFlag = 1, 2``). The list controller,
-dynamic stall, added mass, random-walk forcing, aeroelasticity and standalone
-actuator lines are not ported yet; selecting them stops the run.
+tip/root corrections (``EndEffectsFlag = 1, 2``). ``OperFlag = 1`` and ``4``
+need a positive ``uref``: it sets the initial rotor speed ``uref*tsr/R``,
+which with ``OperFlag = 4`` the upstream probe then updates. The list
+controller, dynamic stall, added mass, random-walk forcing, aeroelasticity and
+standalone actuator lines are not ported yet; selecting them stops the run.
 
 Rotor performance (revolutions, angular velocity, controller state, upstream
 velocity, thrust, torque, power, :math:`C_T`, :math:`C_P` and running means) is
