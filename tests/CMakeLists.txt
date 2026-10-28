@@ -526,16 +526,32 @@ if(${ENABLE_BACKEND} STREQUAL "CUDA" AND WITH_MPI)
   # working test run). TGV/generic/channel are the three example inputs
   # that build unattended - cylinder needs an external IBM mask file not
   # in the repo, foil is not tracked here.
+  # <name>_accuracy: a strict copy of the test <name>, for a run by hand on an
+  # exclusive GPU. It has the label memcheck-accuracy only, so CI's
+  # -L "unit|verification" does not select it, and no SKIP_REGULAR_EXPRESSION:
+  # a skipped CHECK on a shared card fails it.
+  function(add_memcheck_accuracy_test name cmd)
+    get_test_property(${name} PASS_REGULAR_EXPRESSION pass_regex)
+    get_test_property(${name} FAIL_REGULAR_EXPRESSION fail_regex)
+    add_test(NAME ${name}_accuracy COMMAND sh -c "${cmd}")
+    set_tests_properties(${name}_accuracy PROPERTIES
+      LABELS "memcheck-accuracy"
+      PASS_REGULAR_EXPRESSION "${pass_regex}"
+      FAIL_REGULAR_EXPRESSION "${fail_regex}")
+  endfunction()
+
   function(define_memcheck_test case mode)
     set(name memcheck_${mode}_${case})
     set(input ${CMAKE_SOURCE_DIR}/examples/${case}/input.x3d)
-    add_test(NAME ${name} COMMAND sh -c
-      "mpirun --oversubscribe -np 1 ${PROJECT_BINARY_DIR}/bin/x3d2-memcheck ${input} --${mode}")
+    set(cmd "mpirun --oversubscribe -np 1 ${PROJECT_BINARY_DIR}/bin/x3d2-memcheck ${input} --${mode}")
+    add_test(NAME ${name} COMMAND sh -c "${cmd}")
     set_tests_properties(${name} PROPERTIES LABELS "verification;cuda")
     if(${mode} STREQUAL build)
       set_tests_properties(${name} PROPERTIES
         PASS_REGULAR_EXPRESSION "CHECK num_gpus=1: .* - OK"
-        FAIL_REGULAR_EXPRESSION "WARNING: peak_fields_lookup|MISMATCH")
+        FAIL_REGULAR_EXPRESSION "WARNING: peak_fields_lookup|MISMATCH"
+        SKIP_REGULAR_EXPRESSION "CHECK skipped:")
+      add_memcheck_accuracy_test(${name} "${cmd}")
     else()
       set_tests_properties(${name} PROPERTIES
         PASS_REGULAR_EXPRESSION "Requested nproc_dir gives num_gpus=")
@@ -549,11 +565,14 @@ if(${ENABLE_BACKEND} STREQUAL "CUDA" AND WITH_MPI)
   # Every mode measures the CUDA context and the NVSHMEM heap on the GPU in
   # use, with the small-grid probe in the main process, and prints both on
   # one line. --static needs nothing else from the GPU.
-  add_test(NAME memcheck_static_TGV_calibration COMMAND sh -c
-    "mpirun --oversubscribe -np 1 ${PROJECT_BINARY_DIR}/bin/x3d2-memcheck ${CMAKE_SOURCE_DIR}/examples/TGV/input.x3d --static")
+  set(calibration_cmd "mpirun --oversubscribe -np 1 ${PROJECT_BINARY_DIR}/bin/x3d2-memcheck ${CMAKE_SOURCE_DIR}/examples/TGV/input.x3d --static")
+  add_test(NAME memcheck_static_TGV_calibration COMMAND sh -c "${calibration_cmd}")
   set_tests_properties(memcheck_static_TGV_calibration PROPERTIES
     LABELS "verification;cuda"
-    PASS_REGULAR_EXPRESSION "Calibration on this GPU: CUDA context [0-9.]+ GiB, NVSHMEM heap [0-9.]+ GiB\\.")
+    PASS_REGULAR_EXPRESSION "Calibration on this GPU: CUDA context [0-9.]+ GiB, NVSHMEM heap [0-9.]+ GiB\\."
+    FAIL_REGULAR_EXPRESSION "MISMATCH"
+    SKIP_REGULAR_EXPRESSION "CHECK skipped:")
+  add_memcheck_accuracy_test(memcheck_static_TGV_calibration "${calibration_cmd}")
 
   # Hiding every GPU from the process (CUDA_VISIBLE_DEVICES=) must be caught
   # cleanly by the device checks in memcheck.f90's main program, not crash.
@@ -606,19 +625,24 @@ if(${ENABLE_BACKEND} STREQUAL "CUDA" AND WITH_MPI)
       set(pass_regex "${name}_OK")
       set(snippet "${ARGV2}")
     endif()
-    add_test(NAME ${name} COMMAND sh -c
-      "d=$(mktemp -d); \
+    set(cmd "d=$(mktemp -d); \
        sed '${sed_expr}' ${base} > $d/input.x3d; \
-       if cmp -s ${base} $d/input.x3d; then echo SED_NOOP; fi; \
+       if cmp -s ${base} $d/input.x3d; then echo SED_NOOP; rm -rf $d; exit 1; fi; \
        mpirun --oversubscribe -np 1 ${PROJECT_BINARY_DIR}/bin/x3d2-memcheck \
          $d/input.x3d ${mode_flag} > $d/build.log 2>&1; \
        rc=$?; cat $d/build.log; \
        ${snippet}; \
        rm -rf $d")
+    add_test(NAME ${name} COMMAND sh -c "${cmd}")
     set_tests_properties(${name} PROPERTIES
       LABELS "verification;cuda"
       PASS_REGULAR_EXPRESSION "${pass_regex}"
       FAIL_REGULAR_EXPRESSION "SED_NOOP|WARNING: peak_fields_lookup|MISMATCH")
+    # Only the tests with the default CHECK regex have a strict copy.
+    if(ARGC LESS 3)
+      set_tests_properties(${name} PROPERTIES SKIP_REGULAR_EXPRESSION "CHECK skipped:")
+      add_memcheck_accuracy_test(${name} "${cmd}")
+    endif()
   endfunction()
   define_memcheck_build_edit_test(memcheck_build_TGV_rk4
     "s/^time_intg *=.*/time_intg = \"RK4\"/")
@@ -632,7 +656,7 @@ if(${ENABLE_BACKEND} STREQUAL "CUDA" AND WITH_MPI)
   # and in --static, with the same exit code. TGV's z=256 divides by 16.
   define_memcheck_build_edit_test(memcheck_build_ng16_matches_static
     "s/^nproc_dir *=.*/nproc_dir = 1, 1, 16/"
-    "mpirun --oversubscribe -np 1 ${PROJECT_BINARY_DIR}/bin/x3d2-memcheck $d/input.x3d --static > $d/static.log 2>&1; rc_s=$?; v_s=$(sed -n 's/^Requested nproc_dir gives num_gpus=16: .* - //p' $d/static.log); v_i=$(sed -n 's/^Requested nproc_dir gives num_gpus=16: .* - //p' $d/build.log); v_r=$(sed -n 's/^ *16 |.*| //p' $d/build.log); if test x$v_s != x && test x$v_s = x$v_i && test x$v_s = x$v_r && test $rc_s -eq $rc; then echo memcheck_build_ng16_matches_static_OK; fi")
+    "mpirun --oversubscribe -np 1 ${PROJECT_BINARY_DIR}/bin/x3d2-memcheck $d/input.x3d --static > $d/static.log 2>&1; rc_s=$?; v_s=$(sed -n 's/^Requested nproc_dir gives num_gpus=16: .* - //p' $d/static.log); v_i=$(sed -n 's/^Requested nproc_dir gives num_gpus=16: .* - //p' $d/build.log); v_r=$(sed -n 's/^ *16 |.*| //p' $d/build.log); if test x$v_r = x && grep -q '^CHECK skipped:' $d/build.log; then v_r=$v_i; fi; if test x$v_s != x && test x$v_s = x$v_i && test x$v_s = x$v_r && test $rc_s -eq $rc; then echo memcheck_build_ng16_matches_static_OK; fi")
 
   # A requested nproc_dir that splits x must stay UNSUPPORTED after the real
   # build: exit code 2, never the FITS of the 1 GPU measurement.
@@ -671,17 +695,20 @@ if(${ENABLE_BACKEND} STREQUAL "CUDA" AND WITH_MPI)
 
   # A relative input path works: the real build re-reads argument 1 as the
   # input file, and the CHECK line stays OK.
-  add_test(NAME memcheck_build_relative_input COMMAND sh -c
-    "tmp=$(mktemp -d) && \
+  set(relative_input_cmd "tmp=$(mktemp -d) && \
      cp ${CMAKE_SOURCE_DIR}/examples/TGV/input.x3d \"$tmp/input.x3d\" && \
      cd \"$tmp\" && \
      mpirun --oversubscribe -np 1 ${PROJECT_BINARY_DIR}/bin/x3d2-memcheck \
        input.x3d --build; \
      rm -rf \"$tmp\"")
+  add_test(NAME memcheck_build_relative_input COMMAND sh -c
+    "${relative_input_cmd}")
   set_tests_properties(memcheck_build_relative_input PROPERTIES
     LABELS "verification;cuda"
     PASS_REGULAR_EXPRESSION "CHECK num_gpus=1: .* - OK"
-    FAIL_REGULAR_EXPRESSION "MISMATCH")
+    FAIL_REGULAR_EXPRESSION "MISMATCH"
+    SKIP_REGULAR_EXPRESSION "CHECK skipped:")
+  add_memcheck_accuracy_test(memcheck_build_relative_input "${relative_input_cmd}")
 
   # A real --build run writes no file in the working directory: the case
   # build writes no monitoring.csv. The directory holds only the input and
@@ -737,6 +764,16 @@ if(${ENABLE_BACKEND} STREQUAL "CUDA" AND WITH_MPI)
       PASS_REGULAR_EXPRESSION "MiB/GPU at num_gpus=1 \\(write mode auto, "
       FAIL_REGULAR_EXPRESSION "write mode bogus")
   endif()
+
+  # gpu_churn allocates and frees device memory in a loop. Run it by hand
+  # beside x3d2-memcheck --build to check that the CHECK line is skipped on a
+  # shared card. It is not registered as a test.
+  add_executable(gpu_churn memcheck/gpu_churn.f90)
+  target_compile_options(gpu_churn PRIVATE "-cuda")
+  target_link_options(gpu_churn PRIVATE "-cuda")
+  set_target_properties(gpu_churn PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/bin"
+    Fortran_MODULE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/modules/gpu_churn")
 endif()
 
 # Regression smoke test: fast full-solver TGV vs golden monitoring.csv.

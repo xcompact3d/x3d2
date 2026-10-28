@@ -249,6 +249,11 @@ if (${ENABLE_BACKEND} STREQUAL "CUDA")
     target_link_libraries(x3d2_memcheck PRIVATE x3d2_backends x3d2)
     target_compile_options(x3d2_memcheck PRIVATE "-DCUDA")
 
+    # NVML tells x3d2-memcheck when another process changes its memory on the
+    # card, so the --build CHECK is skipped then.
+    find_package(CUDAToolkit REQUIRED)
+    target_link_libraries(x3d2_memcheck PRIVATE CUDA::nvml)
+
     add_executable(x3d2-memcheck memcheck.f90)
     target_link_libraries(x3d2-memcheck PRIVATE x3d2_memcheck)
     target_link_libraries(x3d2-memcheck PRIVATE x3d2_backends)

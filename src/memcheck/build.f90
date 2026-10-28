@@ -14,7 +14,7 @@ module m_memcheck_build
   use m_case_abl, only: case_abl_t
   use m_memcheck_context, only: memcheck_ctx_t
   use m_memcheck_report, only: n_gpu_list, print_rule, print_table_header, &
-                               print_table_row
+                               print_table_row, card_shared_skip
   use m_memcheck_estimate, only: to_gib, num_gpus_unsupported_reason, &
                                  requested_unsupported_reason, &
                                  estimate_for_num_gpus, &
@@ -70,14 +70,13 @@ contains
     ok = .true.
   end subroutine validate_build_inputs
 
-  subroutine check_peak_fields_table(ctx, measured)
+  subroutine check_peak_fields_table(ctx, measured, table_ok)
     !! Warns when peak_fields_lookup differs from the measured peak_fields.
     type(memcheck_ctx_t), intent(in) :: ctx
     integer, intent(in) :: measured
+    logical, intent(out) :: table_ok
     integer :: predicted
     character(len=256) :: line_buf
-
-    if (ctx%irank /= 0) return
 
     predicted = peak_fields_lookup(trim(ctx%domain_cfg%flow_case_name), &
                                    ctx%solver_cfg%time_intg, &
@@ -87,7 +86,9 @@ contains
                                    ctx%output_vorticity, &
                                    ctx%output_qcriterion, &
                                    ctx%solver_cfg%lowmem_transeq)
-    if (predicted /= measured) then
+    table_ok = predicted == measured
+    if (ctx%irank /= 0) return
+    if (.not. table_ok) then
       write (line_buf, '(a,i0,a,i0,a)') &
         'peak_fields_lookup predicted ', predicted, &
         ' but the real build measured ', measured, &
@@ -285,7 +286,7 @@ contains
     real(dp) :: pct_error, estimate_ng1_excl_io_gib
     character(len=8) :: check_word
     integer :: measured_peak_fields
-    logical :: inputs_ok
+    logical :: inputs_ok, table_ok
     character(len=12) :: measured_verdict
     character(len=256) :: line_buf
 
@@ -301,7 +302,11 @@ contains
 
     call run_real_build(ctx, measured_peak_fields, used_gib)
 
-    call check_peak_fields_table(ctx, measured_peak_fields)
+    call check_peak_fields_table(ctx, measured_peak_fields, table_ok)
+
+    ! Another process changes its card memory or NVML cannot identify it.
+    ! Keep the estimate when the measurement is not reliable
+    if (card_shared_skip(emit_line=table_ok)) return
 
     workspace_gib_measured = &
       to_gib(fields_plus_halo_bytes_n(ctx, 1, measured_peak_fields))
