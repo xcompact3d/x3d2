@@ -176,7 +176,7 @@ if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "GNU" OR
     set(CMAKE_Fortran_FLAGS_RELEASE "-O3 -ffast-math -funroll-loops -march=native")
     set(CMAKE_Fortran_FLAGS_DEBUG "-g -Wall -Wno-ambiguous-structure-constructor -Werror")
   else()
-    set(CMAKE_Fortran_FLAGS_RELEASE "-O3 -ffast-math -funroll-loops -floop-optimize -march=native")
+    set(CMAKE_Fortran_FLAGS_RELEASE "-O3 -funroll-loops -floop-optimize -march=native")
     set(CMAKE_Fortran_FLAGS_DEBUG "-g -Og -Wall -Wpedantic -Werror -Wimplicit-interface -Wimplicit-procedure -Wno-unused-dummy-argument")
   endif()
 elseif(${CMAKE_Fortran_COMPILER_ID} STREQUAL "IntelLLVM" OR
