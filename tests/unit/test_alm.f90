@@ -1,14 +1,17 @@
 program test_alm
   !! Tests the actuator line model pieces: airfoil polar interpolation, the
-  !! rotation helper, the backend point sampling (trilinear, across ranks and
-  !! periodic boundaries) and Gaussian source projection, and a full ALM
-  !! step whose projected momentum source must balance the element forces.
+  !! rotation helper, the NREL 5 MW controller, the backend point sampling
+  !! (trilinear, across ranks and periodic boundaries) and Gaussian source
+  !! projection, and a full ALM step whose projected momentum source must
+  !! balance the element forces.
   use m_mpi, only: MPI_COMM_WORLD, MPI_IN_PLACE, MPI_SUM, MPI_Init, &
                    MPI_Finalize, MPI_Comm_rank, MPI_Comm_size, MPI_Barrier, &
                    MPI_Allreduce
 
   use m_alm, only: alm_t
   use m_alm_airfoil, only: airfoil_t, read_airfoil, eval_static_coeffs
+  use m_alm_controller, only: controller_t, init_controller, &
+                              operate_controller
   use m_alm_element, only: quat_rot
   use m_allocator, only: allocator_t
   use m_backend_runtime, only: backend_runtime_t
@@ -26,6 +29,7 @@ program test_alm
   type(backend_runtime_t), target :: runtime
   type(airfoil_t) :: airfoil
   type(alm_t) :: alm
+  type(controller_t) :: ctrl
   class(field_t), pointer :: u, v, w, du, dv, dw, host_data
   character(len=9) :: dirichlet_bcs(2), periodic_bcs(2)
   integer :: ierr, nrank, nproc, i, j, k, dims(3), gdims(3), s, t, ib, ie
@@ -89,6 +93,33 @@ program test_alm
                         [2._dp, 0._dp, 0._dp], [1._dp, 2._dp, 2._dp]) &
                - [1._dp, 1._dp, 2._dp]) < tol)
   call report('airfoil and rotation')
+
+  ! NREL 5 MW controller at dt = vs_dt = pc_dt. In region 2 the first call
+  ! already commands the torque law (k*w^2), held at constant speed
+  call init_nrel_controller(ctrl)
+  do s = 1, 3
+    call operate_controller(ctrl, s*ctrl%vs_dt, 3, 100._dp/ctrl%gear_box_ratio)
+    ctrl%status = ctrl%status + 1
+    ok = ok .and. close_enough(ctrl%gen_trq, ctrl%vs_rgn2_k*100._dp**2, tol) &
+         .and. all(ctrl%pit_com == 0._dp)
+    if (.not. ok .and. nrank == 0) print *, 'step', s, 'torque', ctrl%gen_trq
+  end do
+  ! A speed jump is then rate limited over one interval, not two
+  expected = ctrl%gen_trq + ctrl%vs_max_rat*ctrl%vs_dt
+  call operate_controller(ctrl, 4*ctrl%vs_dt, 3, 130._dp/ctrl%gear_box_ratio)
+  ok = ok .and. close_enough(ctrl%gen_trq, expected, tol)
+  if (.not. ok .and. nrank == 0) print *, 'rate limited torque', ctrl%gen_trq
+
+  ! Starting above rated speed, the first call commands region 3 torque and
+  ! pitches at the maximum rate
+  call init_nrel_controller(ctrl)
+  call operate_controller(ctrl, ctrl%vs_dt, 3, 130._dp/ctrl%gear_box_ratio)
+  ok = ok .and. close_enough(ctrl%gen_trq, ctrl%vs_rt_pwr/130._dp, tol) &
+       .and. all(abs(ctrl%pit_com - ctrl%pc_max_rat*ctrl%pc_dt) &
+                 < tol*ctrl%pc_max_rat*ctrl%pc_dt)
+  if (.not. ok .and. nrank == 0) print *, 'region 3 first call', &
+    ctrl%gen_trq, ctrl%pit_com
+  call report('controller')
 
   ! Inflow/outflow in x, periodic y and z, decomposed in z so sampling and
   ! sources straddle rank boundaries
@@ -328,6 +359,19 @@ contains
     allpass = allpass .and. ok
     ok = .true.
   end subroutine report
+
+  subroutine init_nrel_controller(ctrl)
+    !! A fresh controller with the NREL 5 MW parameters of the
+    !! Incompact3d example.
+    type(controller_t), intent(out) :: ctrl
+
+    call init_controller(ctrl, generator_inertia=534.116_dp, &
+                         gb_ratio=97._dp, rated_gen_speed=121.6805_dp, &
+                         rated_limit_gen_torque=15000._dp, &
+                         cut_in_gen_speed=70.16224_dp, &
+                         region2_start_gen_speed=91.21091_dp, kgen=2.33_dp, &
+                         rated_power=5296610._dp, maximum_torque=47402.91_dp)
+  end subroutine init_nrel_controller
 
   logical function close_enough(actual, expected, relative_tol)
     real(dp), intent(in) :: actual, expected, relative_tol

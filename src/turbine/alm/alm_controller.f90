@@ -164,7 +164,8 @@ contains
 
     if (ctrl%status == 0) then
       ! First call: start the filter and integrator so the pitch stays
-      ! unchanged for a zero speed error, and fire both controllers
+      ! unchanged for a zero speed error, and fire both controllers below.
+      ! As in DISCON (iStatus >= 0); Incompact3d skips control on this call
       ctrl%gen_speed_f = ctrl%gen_speed
       ctrl%pit_com = ctrl%bl_pitch
       ctrl%gk = 1._dp/(1._dp + ctrl%pit_com(1)/ctrl%pc_kk)
@@ -172,7 +173,6 @@ contains
       ctrl%last_time = time
       ctrl%last_time_pc = time - ctrl%pc_dt
       ctrl%last_time_vs = time - ctrl%vs_dt
-      return
     end if
 
     ! Single-pole low-pass filter on the generator speed
@@ -203,6 +203,8 @@ contains
 
       ! Saturate with the torque and torque-rate limits
       ctrl%gen_trq = min(ctrl%gen_trq, ctrl%vs_max_tq)
+      ! Start the rate limit from the first command, not from zero torque
+      if (ctrl%status == 0) ctrl%last_gen_trq = ctrl%gen_trq
       trq_rate = (ctrl%gen_trq - ctrl%last_gen_trq)/elap_time
       trq_rate = min(max(trq_rate, -ctrl%vs_max_rat), ctrl%vs_max_rat)
       ctrl%gen_trq = ctrl%last_gen_trq + trq_rate*elap_time
