@@ -461,6 +461,16 @@ function(define_backend_tests backend)
         set(X3D2_TEST_NAME_SUFFIX _pdp_${stretch})
         define_verification_test(verification/test_poisson_bc.f90 1 ${backend} --bc pdp --stretch ${stretch})
       endforeach()
+      # The other BC codes stop at the abort of the solver
+      foreach(bc ppp dpp ddp)
+        set(X3D2_TEST_NAME_SUFFIX _${bc}_centred_abort)
+        define_verification_test(verification/test_poisson_bc.f90 1 ${backend} --bc ${bc} --stretch centred)
+        set_tests_properties(
+          test_poisson_bc_${backend}_1_${bc}_centred_abort PROPERTIES
+          PASS_REGULAR_EXPRESSION "supports stretching in y-direction only"
+          FAIL_REGULAR_EXPRESSION "must never be reached"
+          TIMEOUT 60)
+      endforeach()
     endif()
     # Validated 2 rank runs of the same test: the suffix keeps their names apart
     set(X3D2_TEST_NAME_SUFFIX _dpp)
