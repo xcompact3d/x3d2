@@ -8,6 +8,12 @@ module m_poisson_fft
 
   implicit none
 
+  private :: fill_stretched_diagonals
+
+  !> Stretching matrix kinds of fill_stretched_diagonals
+  integer, parameter, private :: STRETCH_MAT_BOTTOM = 1, STRETCH_MAT_ODD = 2, &
+                                 STRETCH_MAT_EVEN = 3
+
   type, abstract :: poisson_fft_t
     !! FFT based Poisson solver
     type(mesh_t), pointer :: mesh => null()
@@ -327,8 +333,8 @@ contains
       a0 = (geo%alpha(2)/pi + 1._dp/(2*pi*geo%beta(2)))*geo%L(2)
       a1 = -1._dp/(4*pi*geo%beta(2))*geo%L(2)
 
-      call fill_stretched_diagonals(self, self%a_re, self%a_im, self%ny_spec, &
-                                    1, 0, 1, a0, a1, 'bottom')
+      call fill_stretched_diagonals(self, self%a_re, self%a_im, &
+                                    STRETCH_MAT_BOTTOM, a0, a1)
 
       ! tweak the matrix to make it not singular
       self%a_re(1, 1, 1, 3) = 1._dp; self%a_im(1, 1, 1, 3) = 1._dp
@@ -357,9 +363,9 @@ contains
       end select
 
       call fill_stretched_diagonals(self, self%a_odd_re, self%a_odd_im, &
-                                    self%ny_spec/2, 2, -1, 2, a0, a1, 'odd')
+                                    STRETCH_MAT_ODD, a0, a1)
       call fill_stretched_diagonals(self, self%a_even_re, self%a_even_im, &
-                                    self%ny_spec/2, 2, 0, 2, a0, a1, 'even')
+                                    STRETCH_MAT_EVEN, a0, a1)
 
       do k = 1, self%nz_spec
         do i = 1, self%nx_spec
@@ -379,12 +385,13 @@ contains
 
   end subroutine stretching_matrix
 
-  subroutine fill_stretched_diagonals(self, a_re, a_im, nrows, iy_scale, &
-                                      iy_off, shift, a0, a1, edge)
+  subroutine fill_stretched_diagonals(self, a_re, a_im, matrix_kind, a0, a1)
     !! Fill the five diagonals of one stretching matrix. Row j of the matrix
     !! couples the cosine modes iy_scale*iy + iy_off + (-2:2)*shift, with
     !! iy = j + sp_st(2). The caller zeroes a_re and a_im beforehand.
-    !! The edge rule selects the first and last rows: 'bottom' and 'odd' double
+    !! The matrix kind sets nrows, iy_scale, iy_off and shift: 'bottom' takes
+    !! all the modes, 'odd' and 'even' take every second mode.
+    !! The kind also selects the first and last rows: 'bottom' and 'odd' double
     !! the off-diagonals of row 1, as the ky=0 cosine mode has half the weight
     !! of the other modes. 'even' has its own edge coefficients and no doubling.
     !! No kind has a diagonal + 1 on its last row, as there is no mode above.
@@ -393,16 +400,27 @@ contains
 
     class(poisson_fft_t), intent(in) :: self
     real(dp), intent(inout) :: a_re(:, :, :, :), a_im(:, :, :, :)
-    integer, intent(in) :: nrows, iy_scale, iy_off, shift
+    integer, intent(in) :: matrix_kind
     real(dp), intent(in) :: a0, a1
-    character(len=*), intent(in) :: edge
 
     real(dp) :: c1, c2, c_first
     complex(dp) :: km_a1
     integer :: i, j, k, ix, iy, iz, r, nup1
+    integer :: nrows, iy_scale, iy_off, shift
     logical :: is_even
 
-    is_even = trim(edge) == 'even'
+    select case (matrix_kind)
+    case (STRETCH_MAT_BOTTOM)
+      nrows = self%ny_spec; iy_scale = 1; iy_off = 0; shift = 1
+    case (STRETCH_MAT_ODD)
+      nrows = self%ny_spec/2; iy_scale = 2; iy_off = -1; shift = 2
+    case (STRETCH_MAT_EVEN)
+      nrows = self%ny_spec/2; iy_scale = 2; iy_off = 0; shift = 2
+    case default
+      call abort_run('fill_stretched_diagonals: unknown matrix kind')
+    end select
+
+    is_even = matrix_kind == STRETCH_MAT_EVEN
     ! First-row coefficient of the even diagonal + 1. Compute it outside the loop
     ! to keep the rounding of the old code (no fused multiply-add in the loop).
     c_first = a0*a1 - a1*a1
