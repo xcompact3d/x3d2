@@ -2,7 +2,7 @@ module m_base_backend
   use iso_c_binding, only: c_ptr
 
   use m_allocator, only: allocator_t
-  use m_common, only: dp, DIR_C, get_rdr_from_dirs
+  use m_common, only: dp, DIR_C, X_FACE, get_rdr_from_dirs
   use m_field, only: field_t
   use m_logger, only: abort_run
   use m_mesh, only: mesh_t
@@ -698,13 +698,14 @@ contains
     !! the host array `plane(ny, nz)`, in local VERT dims. Only the plane
     !! crosses to the device, so a time-varying inlet can be refreshed
     !! without uploading and reordering a full 3D field.
+    !! A thin wrapper on set_field_face_data with face = X_FACE.
     implicit none
 
     class(base_backend_t) :: self
     class(field_t), intent(inout) :: f
     real(dp), dimension(:, :), intent(in) :: plane
 
-    call not_implemented('field_set_x_inlet_plane')
+    call self%set_field_face_data(f, plane, face=X_FACE)
 
   end subroutine field_set_x_inlet_plane_base
 

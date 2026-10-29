@@ -754,35 +754,6 @@ contains
     end if
   end subroutine add_scalar_x_face
 
-  attributes(global) subroutine set_x_inlet_plane(f, plane, nx, ny, nz)
-  !! Copies plane(y, z) into the x = 1 plane (pencil index 1) of a DIR_X
-  !! VERT field, where f(i, 1, b) holds y = (y_block - 1)*SZ + i and
-  !! z = b - (y_block - 1)*nz. Launch as add_scalar_x_face.
-    implicit none
-    real(dp), device, intent(inout), dimension(:, :, :) :: f
-    real(dp), device, intent(in), dimension(:, :) :: plane
-    integer, value, intent(in) :: nx, ny, nz
-
-    integer :: i, b, n_mod, n_y_blocks, y_block, i_max
-
-    i = threadIdx%x + (blockIdx%x - 1)*blockDim%x  ! 1..SZ (or n_mod)
-    b = blockIdx%y                                 ! 1..n_y_blocks*nz
-
-    n_mod = mod(ny - 1, SZ) + 1
-    n_y_blocks = (ny - 1)/SZ + 1
-    y_block = (b - 1)/nz + 1
-
-    if (y_block == n_y_blocks) then
-      i_max = n_mod    ! last y-block: only i in [1, n_mod] are real
-    else
-      i_max = SZ       ! interior y-blocks: all i in [1, SZ] are real
-    end if
-
-    if (i <= i_max) then
-      f(i, 1, b) = plane((y_block - 1)*SZ + i, b - (y_block - 1)*nz)
-    end if
-  end subroutine set_x_inlet_plane
-
   attributes(global) subroutine field_add_x_face_from_field( &
     f, g, set_start, set_end, nx, ny, nz)
   !! f += g on the x-faces (pencil index 1 and nx) flagged by

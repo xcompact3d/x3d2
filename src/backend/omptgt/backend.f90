@@ -54,7 +54,6 @@ module m_omptgt_backend
                                        field_set_abl_wall_stress, &
                                        field_set_x_face_from_field, &
                                        field_set_y_face_from_field, &
-                                       field_set_x_inlet_plane, &
                                        field_add_const_x_face, &
                                        field_add_x_face_from_field, &
                                        field_add_y_face_from_field, &
@@ -110,7 +109,6 @@ module m_omptgt_backend
     procedure :: field_plane_sums => field_plane_sums_omptgt
     procedure :: field_set_abl_wall_stress => field_set_abl_wall_stress_omptgt
     procedure :: field_set_face_from_field => field_set_face_from_field_omptgt
-    procedure :: field_set_x_inlet_plane => field_set_x_inlet_plane_omptgt
     procedure :: field_add_const_x_face => field_add_const_x_face_omptgt
     procedure :: set_field_face_data => set_field_face_data_omptgt
     procedure :: field_add_face_from_field => field_add_face_from_field_omptgt
@@ -1408,33 +1406,6 @@ contains
     end select
 
   end subroutine field_set_face_from_field_omptgt
-
-  subroutine field_set_x_inlet_plane_omptgt(self, f, plane)
-    !! [[m_base_backend(module):field_set_x_inlet_plane_base(subroutine)]]
-    implicit none
-
-    class(omptgt_backend_t) :: self
-    class(field_t), intent(inout) :: f
-    real(dp), dimension(:, :), intent(in) :: plane
-
-    real(dp), pointer, contiguous, dimension(:, :, :) :: f_d
-    integer :: dims(3)
-
-    if (f%dir /= DIR_X) &
-      call abort_run('field_set_x_inlet_plane: only supported for DIR_X &
-                     &fields.')
-    if (f%data_loc == NULL_LOC) &
-      call abort_run('field_set_x_inlet_plane: requires a valid data_loc.')
-
-    dims = self%mesh%get_dims(f%data_loc)
-    if (size(plane, 1) /= dims(2) .or. size(plane, 2) /= dims(3)) &
-      call abort_run('field_set_x_inlet_plane: plane must be (ny, nz).')
-
-    call resolve_field_t(f_d, f)
-    call field_set_x_inlet_plane(f_d, plane, size(f_d, 2), dims(2), &
-                                 dims(3), n_yb_pad(self))
-
-  end subroutine field_set_x_inlet_plane_omptgt
 
   subroutine field_add_const_x_face_omptgt(self, f, c, at_end)
     !! [[m_base_backend(module):field_add_const_x_face_base(subroutine)]]

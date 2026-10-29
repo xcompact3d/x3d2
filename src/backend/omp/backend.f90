@@ -61,7 +61,6 @@ module m_omp_backend
     procedure :: field_set_face_from_field => field_set_face_from_field_omp
     procedure :: set_field_face_data => set_field_face_data_omp
     procedure :: field_add_const_x_face => field_add_const_x_face_omp
-    procedure :: field_set_x_inlet_plane => field_set_x_inlet_plane_omp
     procedure :: field_add_face_from_field => field_add_face_from_field_omp
     procedure :: compute_vorticity => compute_vorticity_omp
     procedure :: compute_qcriterion => compute_qcriterion_omp
@@ -1663,46 +1662,6 @@ contains
     !$omp end parallel do
 
   end subroutine field_add_const_x_face_omp
-
-  subroutine field_set_x_inlet_plane_omp(self, f, plane)
-    !! [[m_base_backend(module):field_set_x_inlet_plane_base(subroutine)]]
-    implicit none
-    class(omp_backend_t) :: self
-    class(field_t), intent(inout) :: f
-    real(dp), dimension(:, :), intent(in) :: plane
-    integer :: dims(3), k, i, z, i_max, n_mod, n_y_blocks, y_block, y_stride
-
-    if (f%dir /= DIR_X) &
-      call abort_run('field_set_x_inlet_plane: only supported for DIR_X &
-                     &fields.')
-    if (f%data_loc == NULL_LOC) &
-      call abort_run('field_set_x_inlet_plane: requires a valid data_loc.')
-
-    dims = self%mesh%get_dims(f%data_loc)
-    if (size(plane, 1) /= dims(2) .or. size(plane, 2) /= dims(3)) &
-      call abort_run('field_set_x_inlet_plane: plane must be (ny, nz).')
-    n_mod = mod(dims(2) - 1, SZ) + 1
-    n_y_blocks = (dims(2) - 1)/SZ + 1
-    y_stride = y_group_stride(self)
-
-    !$omp parallel do collapse(2) private(k, i, i_max)
-    do z = 1, dims(3)
-      do y_block = 1, n_y_blocks
-        ! y-block is the fast-varying component of the group index
-        k = y_stride*(z - 1) + y_block
-        if (y_block == n_y_blocks) then
-          i_max = n_mod
-        else
-          i_max = SZ
-        end if
-        do i = 1, i_max
-          f%data(i, 1, k) = plane((y_block - 1)*SZ + i, z)
-        end do
-      end do
-    end do
-    !$omp end parallel do
-
-  end subroutine field_set_x_inlet_plane_omp
 
   subroutine field_add_face_from_field_omp(self, f, g, face, bc_start, bc_end)
     !! [[m_base_backend(module):field_add_face_from_field(subroutine)]]

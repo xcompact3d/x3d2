@@ -32,7 +32,7 @@ module m_cuda_backend
                                      field_set_abl_wall_stress, &
                                      field_set_x_face_from_field, &
                                      field_set_y_face_from_field, &
-                                     add_scalar_x_face, set_x_inlet_plane, &
+                                     add_scalar_x_face, &
                                      field_add_x_face_from_field, &
                                      field_plane_partial_sums, &
                                      field_plane_sums_reduce, &
@@ -97,7 +97,6 @@ module m_cuda_backend
     procedure :: field_set_face_from_field => field_set_face_from_field_cuda
     procedure :: set_field_face_data => set_field_face_data_cuda
     procedure :: field_add_const_x_face => field_add_const_x_face_cuda
-    procedure :: field_set_x_inlet_plane => field_set_x_inlet_plane_cuda
     procedure :: field_add_face_from_field => field_add_face_from_field_cuda
     procedure :: compute_vorticity => compute_vorticity_cuda
     procedure :: compute_qcriterion => compute_qcriterion_cuda
@@ -1894,39 +1893,6 @@ contains
         f_d, c, i_plane, dims(1), dims(2), dims(3))
 
   end subroutine field_add_const_x_face_cuda
-
-  subroutine field_set_x_inlet_plane_cuda(self, f, plane)
-    !! [[m_base_backend(module):field_set_x_inlet_plane_base(subroutine)]]
-    implicit none
-    class(cuda_backend_t) :: self
-    class(field_t), intent(inout) :: f
-    real(dp), dimension(:, :), intent(in) :: plane
-
-    real(dp), device, pointer, dimension(:, :, :) :: f_d
-    real(dp), device, allocatable, dimension(:, :) :: plane_d
-    type(dim3) :: blocks, threads
-    integer :: dims(3)
-
-    if (f%dir /= DIR_X) &
-      call abort_run('field_set_x_inlet_plane: only supported for DIR_X &
-                     &fields.')
-    if (f%data_loc == NULL_LOC) &
-      call abort_run('field_set_x_inlet_plane: requires a valid data_loc.')
-
-    call resolve_field_t(f_d, f)
-    dims = self%mesh%get_dims(f%data_loc)
-    if (size(plane, 1) /= dims(2) .or. size(plane, 2) /= dims(3)) &
-      call abort_run('field_set_x_inlet_plane: plane must be (ny, nz).')
-
-    plane_d = plane
-
-    ! Same launch shape as field_set_x_face - one thread per (i, b).
-    blocks = dim3((SZ - 1)/64 + 1, ((dims(2) - 1)/SZ + 1)*dims(3), 1)
-    threads = dim3(64, 1, 1)
-    call set_x_inlet_plane<<<blocks, threads>>>( &      !&
-        f_d, plane_d, dims(1), dims(2), dims(3))
-
-  end subroutine field_set_x_inlet_plane_cuda
 
   subroutine field_add_face_from_field_cuda(self, f, g, face, bc_start, bc_end)
     !! [[m_base_backend(module):field_add_face_from_field(subroutine)]]
