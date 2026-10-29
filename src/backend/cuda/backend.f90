@@ -1815,13 +1815,13 @@ contains
 
     allocate (p_start_d(size(data_start, 1), size(data_start, 2)))
     p_start_d = data_start
-    ! When data_end is absent p_end_d is only a placeholder argument, the
-    ! kernel never reads it.
+    ! When data_end is absent the kernel never reads its end plane argument,
+    ! so p_end_d is a 1x1 placeholder instead of a full plane.
     if (present(data_end)) then
       allocate (p_end_d(size(data_end, 1), size(data_end, 2)))
       p_end_d = data_end
     else
-      allocate (p_end_d(size(data_start, 1), size(data_start, 2)))
+      allocate (p_end_d(1, 1))
     end if
 
     select case (face)
