@@ -387,7 +387,8 @@ contains
     !! The edge rule selects the first and last rows: 'bottom' and 'odd' double
     !! the off-diagonals of row 1, as the ky=0 cosine mode has half the weight
     !! of the other modes. 'even' has its own edge coefficients and no doubling.
-    !! 'bottom' has no diagonal + 1 on its last row, as there is no mode above.
+    !! No kind has a diagonal + 1 on its last row, as there is no mode above.
+    !! Leave it zero, so the loop never reads ky past ny_glob.
     implicit none
 
     class(poisson_fft_t), intent(in) :: self
@@ -405,8 +406,7 @@ contains
     ! First-row coefficient of the even diagonal + 1. Compute it outside the loop
     ! to keep the rounding of the old code (no fused multiply-add in the loop).
     c_first = a0*a1 - a1*a1
-    nup1 = nrows
-    if (trim(edge) == 'bottom') nup1 = nrows - 1
+    nup1 = nrows - 1
 
     do k = 1, self%nz_spec
       do j = 1, nrows
@@ -457,8 +457,6 @@ contains
               end if
             else if (is_even .and. iy == nrows - 1) then
               c2 = (a0 + a1)*a1
-            else if (is_even .and. iy == nrows) then
-              c1 = 0; c2 = 0
             end if
             a_re(i, j, k, 4) = &
               c1*(self%get_km_re(ix, r, iz) &
