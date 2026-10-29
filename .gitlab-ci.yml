@@ -3,14 +3,14 @@ workflow:
     # Run pipeline on tags for the main project
     - if: $CI_COMMIT_TAG && $CI_PROJECT_PATH == "xcompact3d/x3d2"
     # Run pipeline on the default branch for the main project
-    - if: $CI_COMMIT_BRANCH == "main" && $CI_PROJECT_PATH == "xcompact3d/x3d2"
+    #- if: $CI_COMMIT_BRANCH == "main" && $CI_PROJECT_PATH == "xcompact3d/x3d2"
     # Pipelines started by the GitHub Actions bridge
     # (.github/workflows/gitlab-ci-bridge.yml). It pushes the pull request head
     # to github-pr-<n> and starts the pipeline through the API, so the trigger
     # does not race the mirror update the way external_pull_request_event does.
     - if: $CI_PIPELINE_SOURCE == "api" && $GH_PR_NUMBER
     # Manual runs
-    - if: $CI_PIPELINE_SOURCE == "web"
+    #- if: $CI_PIPELINE_SOURCE == "web"
 
 stages:
   - build-and-test
@@ -143,7 +143,7 @@ build-and-test-cuda:
 
 build-and-test-cuda-single-prec:
   <<: *build-and-test-template
-  needs: []
+  needs: ["build-and-test-cuda"]
   variables:
     ADIOS2_VERSION: 2.10.2
     EXTRA_MODULE: "adios2-nvfortran"
