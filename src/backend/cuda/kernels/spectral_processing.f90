@@ -1106,25 +1106,26 @@ contains
   end subroutine process_spectral_110_y_pair_fw
 
   attributes(global) subroutine process_spectral_110_poisson( &
-    div_u, waves, nz_h, nx, ny, nz, x_sp_st, nx_glob &
+    div_u, waves, nz_h, nx, ny &
     )
     !! Step 4: Poisson solve — divide by waves
-    !! nx is the local loop bound; the Nyquist test always needs nx_glob.
+    !! x and y are cosine transformed, so neither has a Nyquist mode and the
+    !! only singular entry is the mean, which the eps_wave test handles. The
+    !! x Nyquist zeroing of the 010 case must not be copied here: in this
+    !! layout x index nx/2 + 1 is the regular cosine mode N/2 (#465).
     implicit none
 
     complex(dp), device, intent(inout), dimension(:, :, :) :: div_u ! (nz/2+1, nx, ny)
     complex(dp), device, intent(in), dimension(:, :, :) :: waves    ! (nz/2+1, nx, ny)
-    integer, value, intent(in) :: nz_h, nx, ny, nz
-    integer, value, intent(in) :: x_sp_st, nx_glob
+    integer, value, intent(in) :: nz_h, nx, ny
 
-    integer :: i, j, k, ix
+    integer :: i, j, k
     real(dp) :: div_r, div_c, tmp_r, tmp_c
 
     i = threadIdx%x + (blockIdx%x - 1)*blockDim%x  ! X index
     k = blockIdx%y                                   ! Y index
 
     if (i <= nx .and. k <= ny) then
-      ix = i + x_sp_st
       do j = 1, nz_h
         div_r = real(div_u(j, i, k), kind=dp)
         div_c = aimag(div_u(j, i, k))
@@ -1143,8 +1144,6 @@ contains
         end if
 
         div_u(j, i, k) = cmplx(div_r, div_c, kind=dp)
-        ! Zero Nyquist modes
-        if (ix == nx_glob/2 + 1 .and. j == nz/2 + 1) div_u(j, i, k) = 0._dp
       end do
     end if
 

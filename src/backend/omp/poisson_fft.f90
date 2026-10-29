@@ -716,9 +716,7 @@ contains
       call process_spectral_110_solve( &
         div_u=self%c_x, waves=self%waves, &
         n1=self%nx_spec, n2=self%ny_spec, n3=self%nz_spec, &
-        st1=self%sp_st(1), st2=self%sp_st(2), st3=self%sp_st(3), &
-        nx=self%nx_glob, ny=self%ny_glob, nz=self%nz_glob, &
-        ay=self%ay, by=self%by &
+        st3=self%sp_st(3), ay=self%ay, by=self%by &
         )
 
       call transpose_z_to_y(self%c_x, self%c_pair, self%sp)
