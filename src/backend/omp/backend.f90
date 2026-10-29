@@ -1577,7 +1577,7 @@ contains
           call abort_run('set_field_face_data: X_FACE planes must be &
                          &(ny, nz).')
       end if
-      !$omp parallel do private(y_block, i_max, k, i)
+      !$omp parallel do collapse(2) private(k, i, i_max)
       do z = 1, dims(3)
         do y_block = 1, n_y_blocks
           ! OMP DIR_X ordering: k = y_stride*(z - 1) + y_block
@@ -1601,11 +1601,11 @@ contains
           call abort_run('set_field_face_data: Y_FACE planes must be &
                          &(nx, nz).')
       end if
-      !$omp parallel do private(k_start, k_end, j)
+      !$omp parallel do collapse(2) private(k_start, k_end)
       do z = 1, dims(3)
-        k_start = 1 + (z - 1)*y_stride
-        k_end = (z - 1)*y_stride + n_y_blocks
         do j = 1, dims(1)
+          k_start = 1 + (z - 1)*y_stride
+          k_end = (z - 1)*y_stride + n_y_blocks
           f%data(1, j, k_start) = data_start(j, z)
           if (present(data_end)) f%data(n_mod, j, k_end) = data_end(j, z)
         end do
