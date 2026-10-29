@@ -454,6 +454,14 @@ function(define_backend_tests backend)
       set(X3D2_TEST_NAME_SUFFIX _${bc})
       define_verification_test(verification/test_poisson_bc.f90 1 ${backend} --bc ${bc})
     endforeach()
+    # Stretching in y is specific to the pdp (010) solver and needs the CUDA
+    # backend on 1 rank, so these cases are registered for CUDA only
+    if(${backend} STREQUAL cuda)
+      foreach(stretch bottom centred top-bottom)
+        set(X3D2_TEST_NAME_SUFFIX _pdp_${stretch})
+        define_verification_test(verification/test_poisson_bc.f90 1 ${backend} --bc pdp --stretch ${stretch})
+      endforeach()
+    endif()
     # Validated 2 rank runs of the same test: the suffix keeps their names apart
     set(X3D2_TEST_NAME_SUFFIX _dpp)
     if(is_omp)
