@@ -1,4 +1,4 @@
-module m_case_turbine
+module m_turbine_setup
   !! Turbine set-up and tear-down shared by the cases that carry turbines
   !! (wind_turbine and abl). This is the only place the `iturbine` switch
   !! appears (at allocation time); downstream a case calls the polymorphic
@@ -69,4 +69,4 @@ contains
     deallocate (turbine)
   end subroutine finalise_turbine_model
 
-end module m_case_turbine
+end module m_turbine_setup

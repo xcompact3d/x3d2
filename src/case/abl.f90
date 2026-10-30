@@ -4,7 +4,6 @@ module m_case_abl
   use m_abl_diagnostics, only: abl_diagnostics_t
   use m_base_backend, only: base_backend_t
   use m_base_case, only: base_case_t
-  use m_case_turbine, only: init_turbine_model, finalise_turbine_model
   use m_common, only: dp, get_argument, MPI_X3D2_DP, DIR_X, VERT, &
                       X_FACE, Y_FACE, BC_DIRICHLET, BC_NEUMANN, BC_PERIODIC
   use m_config, only: abl_config_t, inflow_config_t, wind_turbine_config_t
@@ -14,6 +13,7 @@ module m_case_abl
   use m_mpi, only: MPI_COMM_WORLD, MPI_IN_PLACE, MPI_SUM, MPI_Allreduce
   use m_logger, only: log_info, abort_run, str
   use m_turbine_model, only: turbine_model_t
+  use m_turbine_setup, only: init_turbine_model, finalise_turbine_model
 
   implicit none
 

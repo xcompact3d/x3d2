@@ -3,7 +3,7 @@ module m_case_wind_turbine
   !! uniform inflow and convective outflow in x, periodic in y and z.
   !!
   !! The case owns a polymorphic turbine forcing model (turbine_model_t), set up
-  !! by m_case_turbine from the `iturbine` switch. It drives the model from its
+  !! by m_turbine_setup from the `iturbine` switch. It drives the model from its
   !! forcings()/postprocess() hooks.
   !!
   !! The inflow/outflow boundary treatment mirrors m_case_cylinder. BCs are
@@ -17,7 +17,6 @@ module m_case_wind_turbine
   use m_allocator, only: allocator_t
   use m_base_backend, only: base_backend_t
   use m_base_case, only: base_case_t
-  use m_case_turbine, only: init_turbine_model, finalise_turbine_model
   use m_common, only: dp, MPI_X3D2_DP, get_argument, DIR_C, DIR_X, &
                       VERT, X_FACE, BC_DIRICHLET
   use m_config, only: wind_turbine_config_t
@@ -25,6 +24,7 @@ module m_case_wind_turbine
   use m_mesh, only: mesh_t
   use m_solver, only: init
   use m_turbine_model, only: turbine_model_t
+  use m_turbine_setup, only: init_turbine_model, finalise_turbine_model
   use m_logger, only: log_info, abort_run, str
 
   implicit none
