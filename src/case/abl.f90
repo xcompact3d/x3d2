@@ -6,12 +6,14 @@ module m_case_abl
   use m_base_case, only: base_case_t
   use m_common, only: dp, get_argument, MPI_X3D2_DP, DIR_X, VERT, &
                       X_FACE, Y_FACE, BC_DIRICHLET, BC_NEUMANN, BC_PERIODIC
-  use m_config, only: abl_config_t, inflow_config_t
+  use m_config, only: abl_config_t, inflow_config_t, wind_turbine_config_t
   use m_field, only: field_t
   use m_inflow_planes, only: inflow_plane_writer_t, inflow_plane_reader_t
   use m_mesh, only: mesh_t
   use m_mpi, only: MPI_COMM_WORLD, MPI_IN_PLACE, MPI_SUM, MPI_Allreduce
   use m_logger, only: log_info, abort_run, str
+  use m_turbine_model, only: turbine_model_t
+  use m_turbine_setup, only: init_turbine_model, finalise_turbine_model
 
   implicit none
 
@@ -29,6 +31,11 @@ module m_case_abl
     real(dp) :: out_vel = 0._dp
     !> y weights of the inlet and outlet flow rates (outflow correction)
     real(dp), allocatable :: flow_rate_y_weights(:)
+    !> Turbine settings from wind_turbine_nml, which is optional here
+    type(wind_turbine_config_t) :: turbine_cfg
+    !> Turbine forcing model; only allocated when wind_turbine_nml asks for
+    !> one
+    class(turbine_model_t), pointer :: turbine => null()
   contains
     procedure :: define_BC => define_BC_abl
     procedure :: initial_conditions => initial_conditions_abl
@@ -36,6 +43,7 @@ module m_case_abl
     procedure :: apply_BC => apply_BC_abl
     procedure :: postprocess => postprocess_abl
     procedure :: post_step => post_step_abl
+    procedure :: finalise_case_specific => finalise_abl
     procedure :: update_inflow_plane
   end type case_abl_t
 
@@ -57,6 +65,24 @@ contains
 
     call flow_case%abl_cfg%read(nml_file=get_argument(1))
     call flow_case%inflow_cfg%read(nml_file=get_argument(1))
+    ! Turbines are set in wind_turbine_nml, as for the wind_turbine case,
+    ! and are optional here. Its uniform-inflow keys belong to that case, so
+    ! setting one is an error rather than silently ignored.
+    flow_case%turbine_cfg%required = .false.
+    call flow_case%turbine_cfg%read(nml_file=get_argument(1))
+    if (any(flow_case%turbine_cfg%init_noise /= 0._dp) &
+        .or. any(flow_case%turbine_cfg%inlet_noise /= 0._dp) &
+        .or. flow_case%turbine_cfg%bc_start_u /= 1._dp &
+        .or. flow_case%turbine_cfg%bc_start_v /= 0._dp &
+        .or. flow_case%turbine_cfg%bc_start_w /= 0._dp) &
+      call abort_run('ABL: wind_turbine_nml init_noise, inlet_noise and &
+                     &bc_start_* belong to the wind_turbine case; the ABL &
+                     &takes its inflow from abl_nml and inflow_nml.', &
+                     collective=.true.)
+    if (flow_case%turbine_cfg%iturbine /= 0 .and. &
+        flow_case%turbine_cfg%iturbine /= 2) &
+      call abort_run('ABL: wind_turbine_nml iturbine must be 0 (none) or 2 &
+                     &(actuator disc).', collective=.true.)
 
     ! apply_BC_abl and the wall model hard-code these boundaries, so the
     ! mesh must agree with them for the pressure solve and precorrect_walls.
@@ -79,7 +105,13 @@ contains
       call abort_run('ABL config error: enable pressure_gradient, coriolis, &
                      &or mass_conserve, or read inflow planes.', &
                      collective=.true.)
+    if (flow_case%abl_cfg%shifted_periodic .and. &
+        flow_case%inflow_cfg%read_planes) &
+      call abort_run('ABL shifted_periodic needs a periodic x direction; it &
+                     &cannot be used with read_planes.', collective=.true.)
     flow_case%abl = abl_t(backend, mesh, host_allocator, flow_case%abl_cfg)
+    if (flow_case%abl_cfg%shifted_periodic) &
+      call flow_case%abl%configure_shifted_periodic()
 
     call flow_case%case_init(backend, mesh, host_allocator)
     flow_case%solver%keep_wall_correction = .true.
@@ -103,6 +135,12 @@ contains
       flow_case%flow_rate_y_weights(1) = 0._dp
       flow_case%flow_rate_y_weights(dims(2)) = 0.5_dp
     end if
+
+    ! Turbines in the boundary layer, typically in a successor driven by a
+    ! precursor's inflow (Incompact3d iturbine with an ABL itype)
+    if (flow_case%turbine_cfg%iturbine /= 0) &
+      call init_turbine_model(flow_case%turbine, flow_case%turbine_cfg, &
+                              flow_case%solver, flow_case%io_mgr)
 
   end function case_abl_init
 
@@ -158,6 +196,12 @@ contains
       call self%solver%backend%field_shift(self%solver%u, can)
     end if
 
+    ! After the flow-rate correction, as in Incompact3d
+    ! boundary_conditions_abl
+    if (self%abl_cfg%shifted_periodic) &
+      call self%abl%apply_shifted_periodic(self%solver%u, self%solver%v, &
+                                           self%solver%w)
+
     ! The flow-rate correction is left to apply_BC, which sees the field
     ! the stamp is applied to
     if (self%inflow_cfg%read_planes) then
@@ -210,6 +254,12 @@ contains
 
     call self%abl%apply_forcing(du, dv, dw, &
                                 self%solver%u, self%solver%v, self%solver%w)
+
+    if (associated(self%turbine)) then
+      call self%turbine%update(real(iter, dp)*self%solver%dt, self%solver%dt)
+      call self%turbine%project_forces(du, dv, dw, self%solver%u, &
+                                       self%solver%v, self%solver%w)
+    end if
 
   end subroutine forcings_abl
 
@@ -286,6 +336,20 @@ contains
     call self%inflow_writer%sample( &
       iter, t, self%solver%u, self%solver%v, self%solver%w)
 
+    ! Every iturboutput steps, independent of n_output, as in Incompact3d
+    if (associated(self%turbine) .and. self%turbine_cfg%iturboutput > 0) then
+      if (mod(iter, self%turbine_cfg%iturboutput) == 0) &
+        call self%turbine%write_output(iter, self%solver%mesh%par%is_root())
+    end if
+
   end subroutine post_step_abl
+
+  subroutine finalise_abl(self)
+    implicit none
+
+    class(case_abl_t) :: self
+
+    call finalise_turbine_model(self%turbine, self%io_mgr)
+  end subroutine finalise_abl
 
 end module m_case_abl

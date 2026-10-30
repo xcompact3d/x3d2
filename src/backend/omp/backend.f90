@@ -4,7 +4,8 @@ module m_omp_backend
 
   use m_allocator, only: allocator_t
   use m_base_backend, only: base_backend_t, source_index_boxes, &
-                            check_point_fields, check_labelled_fields
+                            check_point_fields, check_labelled_fields, &
+                            abl_wall_upper_plane
   use m_common, only: dp, MPI_X3D2_DP, get_dirs_from_rdr, move_data_loc, &
                       DIR_X, DIR_Y, DIR_Z, DIR_C, NULL_LOC, &
                       X_FACE, Y_FACE, Z_FACE, VERT, BC_DIRICHLET
@@ -1567,16 +1568,19 @@ contains
   end subroutine field_set_y_plane_omp
 
   subroutine field_set_abl_wall_stress_omp( &
-    self, stress, u, w, sample_plane, stress_plane, drag_coeff, component)
+    self, stress, u, w, sample_plane, sample_weight, stress_plane, &
+    drag_coeff, component)
     !! [[m_base_backend(module):field_set_abl_wall_stress(subroutine)]]
     implicit none
     class(omp_backend_t) :: self
     class(field_t), intent(inout) :: stress
     class(field_t), intent(in) :: u, w
     integer, intent(in) :: sample_plane, stress_plane, component
-    real(dp), intent(in) :: drag_coeff
-    integer :: dims(3), y_stride, sample_block, stress_block
-    integer :: sample_i, stress_i, k, i, sample_group, stress_group
+    real(dp), intent(in) :: sample_weight, drag_coeff
+    integer :: dims(3), y_stride, upper_plane
+    integer :: sample_block, upper_block, stress_block
+    integer :: sample_i, upper_i, stress_i, k, i
+    integer :: sample_group, upper_group, stress_group
     real(dp) :: us, ws, speed
 
     if (stress%dir /= DIR_X .or. u%dir /= DIR_X .or. w%dir /= DIR_X) &
@@ -1590,20 +1594,27 @@ contains
       call abort_run('ABL wall stress plane is outside the domain.')
     if (component /= 1 .and. component /= 3) &
       call abort_run('Invalid ABL wall stress component.')
+    upper_plane = abl_wall_upper_plane(sample_plane, sample_weight, dims(2))
 
     y_stride = y_group_stride(self)
     sample_block = (sample_plane - 1)/SZ + 1
+    upper_block = (upper_plane - 1)/SZ + 1
     stress_block = (stress_plane - 1)/SZ + 1
     sample_i = mod(sample_plane - 1, SZ) + 1
+    upper_i = mod(upper_plane - 1, SZ) + 1
     stress_i = mod(stress_plane - 1, SZ) + 1
 
-    !$omp parallel do private(sample_group, stress_group, i, us, ws, speed)
+    !$omp parallel do private(sample_group, upper_group, stress_group, i, &
+    !$omp us, ws, speed)
     do k = 1, dims(3)
       sample_group = y_stride*(k - 1) + sample_block
+      upper_group = y_stride*(k - 1) + upper_block
       stress_group = y_stride*(k - 1) + stress_block
       do i = 1, dims(1)
-        us = u%data(sample_i, i, sample_group)
-        ws = w%data(sample_i, i, sample_group)
+        us = (1._dp - sample_weight)*u%data(sample_i, i, sample_group) &
+             + sample_weight*u%data(upper_i, i, upper_group)
+        ws = (1._dp - sample_weight)*w%data(sample_i, i, sample_group) &
+             + sample_weight*w%data(upper_i, i, upper_group)
         speed = sqrt(us**2 + ws**2)
         if (component == 1) then
           stress%data(stress_i, i, stress_group) = drag_coeff*us*speed

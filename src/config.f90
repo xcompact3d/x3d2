@@ -1,5 +1,6 @@
 module m_config
   !! Contains all the namelist configurations used in x3d2
+  use iso_fortran_env, only: iostat_end
   use m_common
   use m_logger, only: log_warn, abort_run
 
@@ -92,6 +93,9 @@ module m_config
     !! actuator-line turbine (.turb) files, one per turbine
     character(len=256), allocatable :: alm_turbines(:)
     real(dp) :: eps_factor = 2._dp   !! ALM kernel width in cell sizes
+    !> When false, a missing wind_turbine_nml keeps the defaults (no
+    !> turbines), for a case that carries turbines optionally (the ABL)
+    logical :: required = .true.
   contains
     procedure :: read => read_wind_turbine_nml
   end type wind_turbine_config_t
@@ -114,6 +118,9 @@ module m_config
     logical :: coriolis = .false.
     logical :: mass_conserve = .false.
     logical :: damping = .false.
+    !> Blend the outlet towards a spanwise-shifted copy of the flow
+    !> (Incompact3d ishiftedper); periodic x only
+    logical :: shifted_periodic = .false.
   contains
     procedure :: read => read_abl_nml
   end type abl_config_t
@@ -442,7 +449,8 @@ contains
     character(*), optional, intent(in) :: nml_file
     character(*), optional, intent(in) :: nml_string
 
-    integer :: unit
+    integer :: unit, ierr
+    character(len=256) :: msg
 
     real(dp) :: init_noise(3) = 0._dp
     real(dp) :: inlet_noise(3) = 0._dp
@@ -466,8 +474,18 @@ contains
                      &name or source, not both.', collective=.true.)
     else if (present(nml_file)) then
       open (newunit=unit, file=nml_file)
-      read (unit, nml=wind_turbine_nml)
+      read (unit, nml=wind_turbine_nml, iostat=ierr, iomsg=msg)
       close (unit)
+      ! An end of file means the namelist is absent, unless its group is in
+      ! the file and only the closing / is missing
+      if (ierr == iostat_end .and. .not. self%required) then
+        if (nml_group_in_file(nml_file, 'wind_turbine_nml')) &
+          call abort_run('Reading wind_turbine_nml failed: the file ends &
+                         &before its closing /.', collective=.true.)
+      else if (ierr /= 0) then
+        call abort_run('Reading wind_turbine_nml failed: '//trim(msg), &
+                       collective=.true.)
+      end if
     else if (present(nml_string)) then
       read (nml_string, nml=wind_turbine_nml)
     else
@@ -489,6 +507,13 @@ contains
     self%alm_turbines = pack(alm_turbines, len_trim(alm_turbines) > 0)
     self%eps_factor = eps_factor
 
+    if (self%iturboutput < 0) &
+      call abort_run('wind_turbine_nml: iturboutput must be non-negative.', &
+                     collective=.true.)
+    if (self%iturbine == 2 .and. len_trim(self%adm_coords) == 0) &
+      call abort_run('wind_turbine_nml: iturbine = 2 needs adm_coords.', &
+                     collective=.true.)
+
   end subroutine read_wind_turbine_nml
 
   subroutine read_abl_nml(self, nml_file, nml_string)
@@ -505,11 +530,12 @@ contains
     integer :: profile_start_iter, seed
     character(len=256) :: profile_file
     logical :: pressure_gradient, coriolis, mass_conserve, damping
+    logical :: shifted_periodic
 
     namelist /abl_nml/ z0, u_star, delta, kappa, dsampling, &
       u_geo, coriolis_freq, &
       init_noise, seed, u_bulk, profile_start_iter, profile_file, &
-      pressure_gradient, coriolis, mass_conserve, damping
+      pressure_gradient, coriolis, mass_conserve, damping, shifted_periodic
 
     ! Defaults
     z0 = 0.1_dp
@@ -528,6 +554,7 @@ contains
     coriolis = .false.
     mass_conserve = .false.
     damping = .false.
+    shifted_periodic = .false.
 
     if (present(nml_file) .and. present(nml_string)) then
       call abort_run('Reading ABL config failed! Provide only a file name or &
@@ -559,6 +586,7 @@ contains
     self%coriolis = coriolis
     self%mass_conserve = mass_conserve
     self%damping = damping
+    self%shifted_periodic = shifted_periodic
 
     call validate_abl_config(self)
 
@@ -789,5 +817,36 @@ contains
     active = has_output_field(checkpoint_cfg, name) .and. &
              checkpoint_cfg%snapshot_freq > 0
   end function output_field_active
+
+  logical function nml_group_in_file(nml_file, group) result(found)
+    !! Whether a line of the file opens the namelist group (&group, in any
+    !! case), so an optional namelist that is present but unterminated can be
+    !! told apart from an absent one.
+    character(*), intent(in) :: nml_file
+    character(*), intent(in) :: group
+
+    character(len=1024) :: line
+    integer :: unit, ios, i, c, n
+
+    found = .false.
+    n = len(group) + 1
+    open (newunit=unit, file=nml_file, status='old', action='read', &
+          iostat=ios)
+    if (ios /= 0) return
+    do
+      read (unit, '(a)', iostat=ios) line
+      if (ios /= 0) exit
+      line = adjustl(line)
+      do i = 1, n
+        c = iachar(line(i:i))
+        if (c >= iachar('A') .and. c <= iachar('Z')) &
+          line(i:i) = achar(c + 32)
+      end do
+      ! A blank after the name, so a longer group name does not match
+      found = line(1:n) == '&'//group .and. line(n + 1:n + 1) == ' '
+      if (found) exit
+    end do
+    close (unit)
+  end function nml_group_in_file
 
 end module m_config

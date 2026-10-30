@@ -18,6 +18,7 @@ set(SRC
   turbine/alm/alm_turbine.f90
   turbine/alm/alm_output.f90
   turbine/alm/alm.f90
+  turbine/turbine_setup.f90
   case/base_case.f90
   case/abl.f90
   case/channel.f90

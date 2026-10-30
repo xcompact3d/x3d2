@@ -27,6 +27,7 @@ module m_omptgt_kernels_fieldops
   public :: labelled_sums, labelled_axpy
   public :: field_set_x_face, field_set_y_face, field_set_y_plane, &
             field_set_abl_wall_stress, field_set_x_face_from_field, &
+            field_get_x_band, field_blend_x_band, &
             field_set_y_face_from_field, &
             field_add_const_x_face, &
             field_add_x_face_from_field, &
@@ -832,43 +833,99 @@ contains
   end subroutine field_set_y_plane
 
   subroutine field_set_abl_wall_stress(stress, u, w, drag_coeff, &
-                                       sample_plane, stress_plane, n_f, nx, &
+                                       upper_weight, sample_plane, &
+                                       upper_plane, stress_plane, n_f, nx, &
                                        nz, n_yb_pad, component)
     !! Drag law tau = drag_coeff*u_c*|u_h| from each column's own sampled
-    !! velocity, written into one stress plane (component 1: x, 3: z).
-    integer, intent(in) :: sample_plane, stress_plane
+    !! velocity, written into one stress plane (component 1: x, 3: z). The
+    !! velocity is interpolated between sample_plane and upper_plane.
+    integer, intent(in) :: sample_plane, upper_plane, stress_plane
     integer, intent(in) :: n_f, nx, nz, n_yb_pad, component
     real(dp), intent(inout) :: stress(SZ, n_f, n_yb_pad*nz)
     real(dp), intent(in) :: u(SZ, n_f, n_yb_pad*nz), w(SZ, n_f, n_yb_pad*nz)
-    real(dp), intent(in) :: drag_coeff
+    real(dp), intent(in) :: drag_coeff, upper_weight
 
-    integer :: j, z, i_sa, yb_sa, i_st, yb_st
+    integer :: j, z, i_sa, yb_sa, i_up, yb_up, i_st, yb_st
+    real(dp) :: us, ws
 
     i_sa = mod(sample_plane - 1, SZ) + 1
     yb_sa = (sample_plane - 1)/SZ + 1
+    i_up = mod(upper_plane - 1, SZ) + 1
+    yb_up = (upper_plane - 1)/SZ + 1
     i_st = mod(stress_plane - 1, SZ) + 1
     yb_st = (stress_plane - 1)/SZ + 1
 
-    !$omp target teams distribute parallel do collapse(2) &
+    !$omp target teams distribute parallel do collapse(2) private(us, ws) &
     !$omp OMP_DEVICE_ADDR(stress, u, w)
     do z = 1, nz
       do j = 1, nx
+        us = (1._dp - upper_weight)*u(i_sa, j, yb_sa + (z - 1)*n_yb_pad) &
+             + upper_weight*u(i_up, j, yb_up + (z - 1)*n_yb_pad)
+        ws = (1._dp - upper_weight)*w(i_sa, j, yb_sa + (z - 1)*n_yb_pad) &
+             + upper_weight*w(i_up, j, yb_up + (z - 1)*n_yb_pad)
         if (component == 1) then
           stress(i_st, j, yb_st + (z - 1)*n_yb_pad) = &
-            drag_coeff*u(i_sa, j, yb_sa + (z - 1)*n_yb_pad) &
-            *sqrt(u(i_sa, j, yb_sa + (z - 1)*n_yb_pad)**2 &
-                  + w(i_sa, j, yb_sa + (z - 1)*n_yb_pad)**2)
+            drag_coeff*us*sqrt(us**2 + ws**2)
         else
           stress(i_st, j, yb_st + (z - 1)*n_yb_pad) = &
-            drag_coeff*w(i_sa, j, yb_sa + (z - 1)*n_yb_pad) &
-            *sqrt(u(i_sa, j, yb_sa + (z - 1)*n_yb_pad)**2 &
-                  + w(i_sa, j, yb_sa + (z - 1)*n_yb_pad)**2)
+            drag_coeff*ws*sqrt(us**2 + ws**2)
         end if
       end do
     end do
     !$omp end target teams distribute parallel do
 
   end subroutine field_set_abl_wall_stress
+
+  subroutine field_get_x_band(band, f, i_start, nband, ny, nz, n_f, &
+                              n_yb_pad)
+    !! band(i, j, k) = f(i_start + i - 1, j, k) for a DIR_X vertex field
+    integer, intent(in) :: i_start, nband, ny, nz, n_f, n_yb_pad
+    real(dp), intent(out) :: band(nband, ny, nz)
+    real(dp), intent(in) :: f(SZ, n_f, n_yb_pad*nz)
+
+    integer :: i, j, k
+
+    !$omp target teams distribute parallel do collapse(3) &
+    !$omp OMP_DEVICE_ADDR(band, f)
+    do k = 1, nz
+      do j = 1, ny
+        do i = 1, nband
+          band(i, j, k) = f(mod(j - 1, SZ) + 1, i_start + i - 1, &
+                            (j - 1)/SZ + 1 + (k - 1)*n_yb_pad)
+        end do
+      end do
+    end do
+    !$omp end target teams distribute parallel do
+
+  end subroutine field_get_x_band
+
+  subroutine field_blend_x_band(f, band, lambda, i_start, nband, ny, nz, &
+                                n_f, n_yb_pad)
+    !! f(i_start + i - 1, j, k) = lambda(i)*band(i, j, k)
+    !!                            + (1 - lambda(i))*f(i_start + i - 1, j, k)
+    !! for a DIR_X vertex field
+    integer, intent(in) :: i_start, nband, ny, nz, n_f, n_yb_pad
+    real(dp), intent(inout) :: f(SZ, n_f, n_yb_pad*nz)
+    real(dp), intent(in) :: band(nband, ny, nz), lambda(nband)
+
+    integer :: i, j, k, jj, g
+
+    !$omp target teams distribute parallel do collapse(3) private(jj, g) &
+    !$omp OMP_DEVICE_ADDR(f, band, lambda)
+    do k = 1, nz
+      do j = 1, ny
+        do i = 1, nband
+          jj = mod(j - 1, SZ) + 1
+          g = (j - 1)/SZ + 1 + (k - 1)*n_yb_pad
+          f(jj, i_start + i - 1, g) = lambda(i)*band(i, j, k) &
+                                      + (1._dp - lambda(i)) &
+                                      *f(jj, i_start + i - 1, g)
+        end do
+      end do
+    end do
+    !$omp end target teams distribute parallel do
+
+  end subroutine field_blend_x_band
 
   subroutine field_plane_partial_sums(partial, f, n_f, nx, ny, nz, n_yb_pad)
     !! First pass of field_plane_sums: partial(j, z) is the sum over x of y
