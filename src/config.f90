@@ -468,10 +468,16 @@ contains
       open (newunit=unit, file=nml_file)
       read (unit, nml=wind_turbine_nml, iostat=ierr, iomsg=msg)
       close (unit)
-      ! An end of file means the namelist is absent
-      if (ierr /= 0 .and. (self%required .or. ierr /= iostat_end)) &
+      ! An end of file means the namelist is absent, unless its group is in
+      ! the file and only the closing / is missing
+      if (ierr == iostat_end .and. .not. self%required) then
+        if (nml_group_in_file(nml_file, 'wind_turbine_nml')) &
+          call abort_run('Reading wind_turbine_nml failed: the file ends &
+                         &before its closing /.', collective=.true.)
+      else if (ierr /= 0) then
         call abort_run('Reading wind_turbine_nml failed: '//trim(msg), &
                        collective=.true.)
+      end if
     else if (present(nml_string)) then
       read (nml_string, nml=wind_turbine_nml)
     else
@@ -801,5 +807,36 @@ contains
     active = has_output_field(checkpoint_cfg, name) .and. &
              checkpoint_cfg%snapshot_freq > 0
   end function output_field_active
+
+  logical function nml_group_in_file(nml_file, group) result(found)
+    !! Whether a line of the file opens the namelist group (&group, in any
+    !! case), so an optional namelist that is present but unterminated can be
+    !! told apart from an absent one.
+    character(*), intent(in) :: nml_file
+    character(*), intent(in) :: group
+
+    character(len=1024) :: line
+    integer :: unit, ios, i, c, n
+
+    found = .false.
+    n = len(group) + 1
+    open (newunit=unit, file=nml_file, status='old', action='read', &
+          iostat=ios)
+    if (ios /= 0) return
+    do
+      read (unit, '(a)', iostat=ios) line
+      if (ios /= 0) exit
+      line = adjustl(line)
+      do i = 1, n
+        c = iachar(line(i:i))
+        if (c >= iachar('A') .and. c <= iachar('Z')) &
+          line(i:i) = achar(c + 32)
+      end do
+      ! A blank after the name, so a longer group name does not match
+      found = line(1:n) == '&'//group .and. line(n + 1:n + 1) == ' '
+      if (found) exit
+    end do
+    close (unit)
+  end function nml_group_in_file
 
 end module m_config
