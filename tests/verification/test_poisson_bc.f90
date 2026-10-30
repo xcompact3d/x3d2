@@ -19,6 +19,21 @@ program test_poisson
   !!   Check 2: div(grad(p)) recovers original RHS f (round-trip relative L2
   !!            error)
   !!
+  !! Every configuration also runs a random test: f = div(u) for a random
+  !! vertex velocity u, with its mean removed (the mean mode is singular, and
+  !! a random u has a net flux through non-periodic faces), must survive the
+  !! div(grad(p)) round trip. It covers every mode at once, the way the
+  !! pressure projection uses the solver; a genuinely singular mode (zero
+  !! div-grad eigenvalue) is one where div(u) vanishes too, so no mode needs
+  !! special casing.
+  !!
+  !! Configurations with a non-periodic x also run a mode test (#465): the
+  !! RHS is the x cosine mode N/2 times the z Nyquist mode, built from the
+  !! grid indices, and only Check 2 applies (the analytical solution uses the
+  !! exact wavenumber, which a mode this close to the grid scale cannot
+  !! match). That x index is the Nyquist mode only when x is periodic, so a
+  !! solver that zeroes it as if it were leaves the RHS unsolved.
+  !!
   !! Layout: setup_case builds one poisson_ctx_t for each configuration
   !! (mesh, backend, allocators, tdsops, vector_calculus, poisson_fft) and
   !! every test of that configuration reuses it. run_single_test(ctx, test)
@@ -56,9 +71,10 @@ program test_poisson
   use m_base_backend, only: base_backend_t
   use m_backend_runtime, only: backend_runtime_t, backend_is_cuda
   use m_common, only: dp, pi, MPI_X3D2_DP, DIR_C, DIR_X, DIR_Y, DIR_Z, &
-                      CELL, RDR_C2Z, RDR_C2X, RDR_Z2X
+                      CELL, VERT, RDR_C2Z, RDR_C2X, RDR_Z2X
   use m_mesh, only: mesh_t
-  use m_mpi, only: MPI_COMM_WORLD, MPI_Bcast
+  use m_mpi, only: MPI_COMM_WORLD, MPI_Bcast, MPI_Allreduce, MPI_IN_PLACE, &
+                   MPI_SUM
   use m_tdsops_setup, only: allocate_tdsops
   use m_tdsops, only: dirps_t
   use m_vector_calculus, only: vector_calculus_t
@@ -192,6 +208,9 @@ program test_poisson
 
   ! Per-config results for final summary
   type(test_result_t) :: results(size(tests), size(cases))
+  !> Mode and random tests per configuration; a skipped one keeps the
+  !> passing default
+  type(test_result_t) :: mode_results(size(cases)), random_results(size(cases))
 
   ! Initialise MPI
   call initialise_mpi(nrank, nproc)
@@ -284,6 +303,8 @@ program test_poisson
         allpass = .false.
       end if
     end do
+    if (.not. mode_results(ic)%passed) allpass = .false.
+    if (.not. random_results(ic)%passed) allpass = .false.
   end do
 
   call finalise_test(allpass, nrank)
@@ -308,6 +329,9 @@ contains
     do idx = 1, size(tests)
       results(idx, config_id) = run_single_test(ctx, tests(idx))
     end do
+
+    random_results(config_id) = run_random_test(ctx)
+    if (.not. ctx%periodic(1)) mode_results(config_id) = run_mode_test(ctx)
 
   end subroutine run_config
 
@@ -670,5 +694,126 @@ contains
     res%xfail = is_expected_fail(test, ctx%periodic)
 
   end function run_single_test
+
+  function run_mode_test(ctx) result(res)
+    !! Round trip of the x cosine mode N/2 times the z Nyquist mode, constant
+    !! in y, on a configuration with a non-periodic x (see the header).
+    type(poisson_ctx_t), target, intent(in) :: ctx
+    type(test_result_t) :: res
+
+    class(field_t), pointer :: f_device, f_reference, host_field, temp
+    integer :: i, j, k, dims(3), offset(3)
+
+    dims = ctx%mesh%get_dims(CELL)
+    ! x is not decomposed, as the FFT solver requires
+    offset = ctx%mesh%par%n_offset
+    host_field => ctx%host_allocator%get_block(DIR_C)
+    do k = 1, dims(3)
+      do j = 1, dims(2)
+        do i = 1, dims(1)
+          ! cos(pi*(N/2)*(i - 1/2)/N) = cos(pi*(i - 1/2)/2): +, -, -, +
+          host_field%data(i, j, k) = cos(0.5_dp*pi*(real(i, dp) - 0.5_dp)) &
+                                     *real(1 - 2*mod(k + offset(3), 2), dp)
+        end do
+      end do
+    end do
+
+    f_device => ctx%backend%allocator%get_block(DIR_C, CELL)
+    f_reference => ctx%backend%allocator%get_block(DIR_X)
+    call ctx%backend%set_field_data(f_device, host_field%data, DIR_C)
+    call f_device%set_data_loc(CELL)
+    call ctx%host_allocator%release_block(host_field)
+    call ctx%backend%reorder(f_reference, f_device, RDR_C2X)
+
+    temp => ctx%backend%allocator%get_block(DIR_C)
+    call ctx%backend%poisson_fft%solve_poisson(f_device, temp)
+    call ctx%backend%allocator%release_block(temp)
+
+    res%divgrad_err = divgrad_error(ctx, f_device, f_reference)
+    res%passed = res%divgrad_err <= DIVGRAD_TOLERANCE
+    call ctx%backend%allocator%release_block(f_device)
+    call ctx%backend%allocator%release_block(f_reference)
+
+    if (ctx%mesh%par%is_root()) write (stderr, '(4X,A,ES12.4,A,A)') &
+      'Mode x N/2, z Nyquist: DivGrad rel L2: ', res%divgrad_err, '  ', &
+      merge('PASS', 'FAIL', res%passed)
+  end function run_mode_test
+
+  function run_random_test(ctx) result(res)
+    !! Round trip of f = div(u) for a random vertex velocity u, with the
+    !! mean of f removed (see the header).
+    type(poisson_ctx_t), target, intent(in) :: ctx
+    type(test_result_t) :: res
+
+    class(field_t), pointer :: u, v, w, f_div, f_device, f_reference
+    class(field_t), pointer :: host_field, temp
+    integer :: dims(3), gdims(3), ierr
+    real(dp) :: f_mean
+
+    u => ctx%backend%allocator%get_block(DIR_X, VERT)
+    v => ctx%backend%allocator%get_block(DIR_X, VERT)
+    w => ctx%backend%allocator%get_block(DIR_X, VERT)
+    call upload_random(ctx, u)
+    call upload_random(ctx, v)
+    call upload_random(ctx, w)
+
+    f_div => ctx%backend%allocator%get_block(DIR_Z)
+    call ctx%vector_calculus%divergence_v2c( &
+      f_div, u, v, w, &
+      ctx%xdirps%stagder_v2p, ctx%xdirps%interpl_v2p, &
+      ctx%ydirps%stagder_v2p, ctx%ydirps%interpl_v2p, &
+      ctx%zdirps%stagder_v2p, ctx%zdirps%interpl_v2p &
+      )
+    call ctx%backend%allocator%release_block(u)
+    call ctx%backend%allocator%release_block(v)
+    call ctx%backend%allocator%release_block(w)
+
+    ! Remove the mean on the host, then hand f to the solver in DIR_C
+    dims = ctx%mesh%get_dims(CELL)
+    gdims = ctx%mesh%get_global_dims(CELL)
+    host_field => ctx%host_allocator%get_block(DIR_C)
+    call ctx%backend%get_field_data(host_field%data, f_div)
+    call ctx%backend%allocator%release_block(f_div)
+    f_mean = sum(host_field%data(1:dims(1), 1:dims(2), 1:dims(3)))
+    call MPI_Allreduce(MPI_IN_PLACE, f_mean, 1, MPI_X3D2_DP, MPI_SUM, &
+                       MPI_COMM_WORLD, ierr)
+    f_mean = f_mean/real(product(gdims), dp)
+    host_field%data = host_field%data - f_mean
+
+    f_device => ctx%backend%allocator%get_block(DIR_C, CELL)
+    f_reference => ctx%backend%allocator%get_block(DIR_X)
+    call ctx%backend%set_field_data(f_device, host_field%data, DIR_C)
+    call f_device%set_data_loc(CELL)
+    call ctx%host_allocator%release_block(host_field)
+    call ctx%backend%reorder(f_reference, f_device, RDR_C2X)
+
+    temp => ctx%backend%allocator%get_block(DIR_C)
+    call ctx%backend%poisson_fft%solve_poisson(f_device, temp)
+    call ctx%backend%allocator%release_block(temp)
+
+    res%divgrad_err = divgrad_error(ctx, f_device, f_reference)
+    res%passed = res%divgrad_err <= DIVGRAD_TOLERANCE
+    call ctx%backend%allocator%release_block(f_device)
+    call ctx%backend%allocator%release_block(f_reference)
+
+    if (ctx%mesh%par%is_root()) write (stderr, '(4X,A,ES12.4,A,A)') &
+      'Random div(u): DivGrad rel L2: ', res%divgrad_err, '  ', &
+      merge('PASS', 'FAIL', res%passed)
+  end function run_random_test
+
+  subroutine upload_random(ctx, f)
+    !! Fill a vertex field with uniform random values in [-1, 1)
+    type(poisson_ctx_t), target, intent(in) :: ctx
+    class(field_t), intent(inout) :: f
+
+    class(field_t), pointer :: host_field
+
+    host_field => ctx%host_allocator%get_block(DIR_C)
+    call random_number(host_field%data)
+    host_field%data = 2.0_dp*host_field%data - 1.0_dp
+    call ctx%backend%set_field_data(f, host_field%data, DIR_C)
+    call f%set_data_loc(VERT)
+    call ctx%host_allocator%release_block(host_field)
+  end subroutine upload_random
 
 end program test_poisson

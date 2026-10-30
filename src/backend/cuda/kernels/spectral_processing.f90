@@ -746,14 +746,15 @@ contains
   end subroutine process_spectral_010_bw
 
   ! ------------------------------------------------------------------
-  ! 100 SPECTRAL KERNELS, MULTIPLE RANKS (3 staged launches)
+  ! STAGED DIM2 MIRROR SPECTRAL KERNELS, MULTIPLE RANKS (3 staged launches)
   !
-  ! Staged form of the 100 postprocess. The X paired split couples
-  ! mode ix with mode n - ix + 2, so once X is distributed over ranks
-  ! the partner value sits on another GPU. Splitting the single 100
-  ! kernel into three launches leaves room for a mirror exchange either
-  ! side of the Poisson solve, and the pairing then reads its partner
-  ! from that mirror instead of from div_u itself.
+  ! Staged form of the dim2 mirror postprocess, shared by the 010 and
+  ! 100 cases. The paired split couples mode j with mode n - j + 2, so
+  ! once dim2 is distributed over ranks the partner value sits on
+  ! another GPU. Splitting the single kernel into three launches leaves
+  ! room for a mirror exchange either side of the Poisson solve, and the
+  ! pairing then reads its partner from that mirror instead of from
+  ! div_u itself.
   !
   ! Every rank updates only the modes it owns. The 010 pairing rule is
   ! symmetric, new(iy) = f(own(iy), partner(n - iy + 2), iy), so nothing
@@ -766,11 +767,12 @@ contains
   ! loop starting at j = 2 leaves it.
   !
   ! These keep the dim1/dim2 naming of the 010 kernels rather than the
-  ! physical directions, so dim1 is the periodic R2C direction (Y here)
-  ! and dim2 is the non-periodic one (X here).
+  ! physical directions. dim1 is the periodic R2C direction and dim2 is
+  ! the non-periodic one. For 100 dim1 = y and dim2 = x, for 010
+  ! dim1 = x and dim2 = y, and dim3 = z in both.
   ! ------------------------------------------------------------------
 
-  attributes(global) subroutine process_spectral_100_fw( &
+  attributes(global) subroutine process_spectral_fw( &
     div_u, nx_spec, ny_spec, nx, ny, nz, ax, bx, az, bz &
     )
     !! Stage 1 (forward): normalisation followed by the dim3 and dim1
@@ -807,9 +809,9 @@ contains
       end do
     end if
 
-  end subroutine process_spectral_100_fw
+  end subroutine process_spectral_fw
 
-  attributes(global) subroutine process_spectral_100_pair_fw( &
+  attributes(global) subroutine process_spectral_pair_fw( &
     div_u, mirror, mirror_plane, waves, nx_spec, ny_spec, y_sp_st, &
     nx, nz, ay, by &
     )
@@ -870,9 +872,9 @@ contains
       end do
     end if
 
-  end subroutine process_spectral_100_pair_fw
+  end subroutine process_spectral_pair_fw
 
-  attributes(global) subroutine process_spectral_100_pair_bw( &
+  attributes(global) subroutine process_spectral_pair_bw( &
     div_u, mirror, mirror_plane, nx_spec, ny_spec, y_sp_st, &
     nx, nz, ax, bx, ay, by, az, bz &
     )
@@ -934,7 +936,7 @@ contains
       end do
     end if
 
-  end subroutine process_spectral_100_pair_bw
+  end subroutine process_spectral_pair_bw
 
   attributes(global) subroutine pack_spectral_plane( &
     plane, div_u, nx_spec, nz_spec &
@@ -1104,25 +1106,26 @@ contains
   end subroutine process_spectral_110_y_pair_fw
 
   attributes(global) subroutine process_spectral_110_poisson( &
-    div_u, waves, nz_h, nx, ny, nz, x_sp_st, nx_glob &
+    div_u, waves, nz_h, nx, ny &
     )
     !! Step 4: Poisson solve — divide by waves
-    !! nx is the local loop bound; the Nyquist test always needs nx_glob.
+    !! x and y are cosine transformed, so neither has a Nyquist mode and the
+    !! only singular entry is the mean, which the eps_wave test handles. The
+    !! x Nyquist zeroing of the 010 case must not be copied here: in this
+    !! layout x index nx/2 + 1 is the regular cosine mode N/2 (#465).
     implicit none
 
     complex(dp), device, intent(inout), dimension(:, :, :) :: div_u ! (nz/2+1, nx, ny)
     complex(dp), device, intent(in), dimension(:, :, :) :: waves    ! (nz/2+1, nx, ny)
-    integer, value, intent(in) :: nz_h, nx, ny, nz
-    integer, value, intent(in) :: x_sp_st, nx_glob
+    integer, value, intent(in) :: nz_h, nx, ny
 
-    integer :: i, j, k, ix
+    integer :: i, j, k
     real(dp) :: div_r, div_c, tmp_r, tmp_c
 
     i = threadIdx%x + (blockIdx%x - 1)*blockDim%x  ! X index
     k = blockIdx%y                                   ! Y index
 
     if (i <= nx .and. k <= ny) then
-      ix = i + x_sp_st
       do j = 1, nz_h
         div_r = real(div_u(j, i, k), kind=dp)
         div_c = aimag(div_u(j, i, k))
@@ -1141,8 +1144,6 @@ contains
         end if
 
         div_u(j, i, k) = cmplx(div_r, div_c, kind=dp)
-        ! Zero Nyquist modes
-        if (ix == nx_glob/2 + 1 .and. j == nz/2 + 1) div_u(j, i, k) = 0._dp
       end do
     end if
 

@@ -34,7 +34,7 @@ module m_omptgt_backend
 
   use m_omptgt_device_info, only: query_device_memory
   use m_omptgt_common, only: SZ, dev_alloc, dev_free, dev_upload, &
-                             dev_download, device_sync
+                             dev_clone, dev_download, device_sync
   use m_omptgt_exec_dist, only: exec_dist_transeq_3fused, &
                                 exec_dist_tds_compact
   use m_omptgt_exec_thom, only: exec_thom_tds_compact
@@ -55,10 +55,11 @@ module m_omptgt_backend
                                        field_set_abl_wall_stress, &
                                        field_set_x_face_from_field, &
                                        field_set_y_face_from_field, &
-                                       field_set_x_inlet_plane, &
                                        field_add_const_x_face, &
                                        field_add_x_face_from_field, &
                                        field_add_y_face_from_field, &
+                                       field_set_x_face_from_plane, &
+                                       field_set_y_face_from_plane, &
                                        field_plane_partial_sums, &
                                        field_plane_sums_reduce, &
                                        labelled_sums, labelled_axpy, &
@@ -113,8 +114,8 @@ module m_omptgt_backend
     procedure :: field_plane_sums => field_plane_sums_omptgt
     procedure :: field_set_abl_wall_stress => field_set_abl_wall_stress_omptgt
     procedure :: field_set_face_from_field => field_set_face_from_field_omptgt
-    procedure :: field_set_x_inlet_plane => field_set_x_inlet_plane_omptgt
     procedure :: field_add_const_x_face => field_add_const_x_face_omptgt
+    procedure :: set_field_face_data => set_field_face_data_omptgt
     procedure :: field_add_face_from_field => field_add_face_from_field_omptgt
     procedure :: compute_vorticity => compute_vorticity_omptgt
     procedure :: compute_qcriterion => compute_qcriterion_omptgt
@@ -1462,33 +1463,6 @@ contains
 
   end subroutine field_set_face_from_field_omptgt
 
-  subroutine field_set_x_inlet_plane_omptgt(self, f, plane)
-    !! [[m_base_backend(module):field_set_x_inlet_plane_base(subroutine)]]
-    implicit none
-
-    class(omptgt_backend_t) :: self
-    class(field_t), intent(inout) :: f
-    real(dp), dimension(:, :), intent(in) :: plane
-
-    real(dp), pointer, contiguous, dimension(:, :, :) :: f_d
-    integer :: dims(3)
-
-    if (f%dir /= DIR_X) &
-      call abort_run('field_set_x_inlet_plane: only supported for DIR_X &
-                     &fields.')
-    if (f%data_loc == NULL_LOC) &
-      call abort_run('field_set_x_inlet_plane: requires a valid data_loc.')
-
-    dims = self%mesh%get_dims(f%data_loc)
-    if (size(plane, 1) /= dims(2) .or. size(plane, 2) /= dims(3)) &
-      call abort_run('field_set_x_inlet_plane: plane must be (ny, nz).')
-
-    call resolve_field_t(f_d, f)
-    call field_set_x_inlet_plane(f_d, plane, size(f_d, 2), dims(2), &
-                                 dims(3), n_yb_pad(self))
-
-  end subroutine field_set_x_inlet_plane_omptgt
-
   subroutine field_add_const_x_face_omptgt(self, f, c, at_end)
     !! [[m_base_backend(module):field_add_const_x_face_base(subroutine)]]
     implicit none
@@ -1519,6 +1493,79 @@ contains
                                 dims(3), n_yb_pad(self))
 
   end subroutine field_add_const_x_face_omptgt
+
+  subroutine set_field_face_data_omptgt(self, f, data_start, data_end, face)
+    !! [[m_base_backend(module):set_field_face_data(subroutine)]]
+    !! The host planes are copied to small device arrays and one kernel
+    !! scatters them into the face planes of the device-resident field.
+    implicit none
+
+    class(omptgt_backend_t) :: self
+    class(field_t), intent(inout) :: f
+    real(dp), dimension(:, :), intent(in) :: data_start
+    real(dp), dimension(:, :), optional, intent(in) :: data_end
+    integer, intent(in) :: face
+
+    real(dp), pointer, contiguous, dimension(:, :, :) :: f_d
+    real(dp), pointer, contiguous, dimension(:, :) :: p_start_d, p_end_d
+    integer :: dims(3)
+    logical :: apply_end
+
+    if (f%dir /= DIR_X) &
+      call abort_run('set_field_face_data: only supported for DIR_X fields.')
+    if (f%data_loc == NULL_LOC) &
+      call abort_run('set_field_face_data: requires a valid data_loc.')
+
+    call resolve_field_t(f_d, f)
+    dims = self%mesh%get_dims(f%data_loc)
+    apply_end = present(data_end)
+
+    select case (face)
+    case (X_FACE)
+      if (size(data_start, 1) /= dims(2) .or. size(data_start, 2) /= dims(3)) &
+        call abort_run('set_field_face_data: X_FACE planes must be (ny, nz).')
+      if (present(data_end)) then
+        if (size(data_end, 1) /= dims(2) .or. size(data_end, 2) /= dims(3)) &
+          call abort_run('set_field_face_data: X_FACE planes must be &
+                         &(ny, nz).')
+      end if
+    case (Y_FACE)
+      if (size(data_start, 1) /= dims(1) .or. size(data_start, 2) /= dims(3)) &
+        call abort_run('set_field_face_data: Y_FACE planes must be (nx, nz).')
+      if (present(data_end)) then
+        if (size(data_end, 1) /= dims(1) .or. size(data_end, 2) /= dims(3)) &
+          call abort_run('set_field_face_data: Y_FACE planes must be &
+                         &(nx, nz).')
+      end if
+    case default
+      call abort_run('set_field_face_data: only X_FACE and Y_FACE supported.')
+    end select
+
+    call dev_clone(p_start_d, data_start)
+    ! When data_end is absent p_end_d only aliases p_start_d as a placeholder
+    ! argument, the kernel never reads it.
+    if (present(data_end)) then
+      call dev_clone(p_end_d, data_end)
+    else
+      p_end_d => p_start_d
+    end if
+
+    if (face == X_FACE) then
+      call field_set_x_face_from_plane(f_d, p_start_d, p_end_d, apply_end, &
+                                       size(f_d, 2), dims(1), dims(2), &
+                                       dims(3), n_yb_pad(self))
+    else
+      call field_set_y_face_from_plane(f_d, p_start_d, p_end_d, apply_end, &
+                                       size(f_d, 2), dims(1), dims(2), &
+                                       dims(3), n_yb_pad(self))
+    end if
+
+    ! The kernel may still be reading the plane arrays (see device_sync)
+    call device_sync()
+    call dev_free(p_start_d)
+    if (present(data_end)) call dev_free(p_end_d)
+
+  end subroutine set_field_face_data_omptgt
 
   subroutine field_add_face_from_field_omptgt(self, f, g, face, bc_start, &
                                               bc_end)
