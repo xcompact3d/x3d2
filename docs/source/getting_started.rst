@@ -256,6 +256,11 @@ Build options
    * - ``SINGLE_PREC``
      - ``OFF``
      - Build in single precision.
+   * - ``X3D2_FAST_MATH``
+     - ``OFF``
+     - Add ``-ffast-math`` to the GNU and Flang ``Release`` flags. This option
+       does not change the other compilers. Intel keeps ``-fp-model=fast``
+       and the NVHPC GPU backends keep ``-fast``.
    * - ``WITH_MPI``
      - ``ON``
      - Build against MPI. ``OFF`` builds a serial, single-rank executable.
