@@ -113,7 +113,7 @@ contains
     implicit none
     class(case_cylinder_t) :: self
 
-    class(field_t), pointer :: hu, hv, hw
+    real(dp), dimension(:, :), allocatable :: u_in, v_in, w_in
     integer :: j, k, dims(3)
     real(dp) :: noise(3), um, half_L
 
@@ -142,33 +142,32 @@ contains
       call self%bc_start_w_x%set_data_loc(VERT)
     end if
 
-    ! Build the inflow profile in DIR_C host buffers, then upload.
-    hu => self%solver%host_allocator%get_block(DIR_C)
-    hv => self%solver%host_allocator%get_block(DIR_C)
-    hw => self%solver%host_allocator%get_block(DIR_C)
+    ! Build the inflow profile as (ny, nz) host planes, then upload only
+    ! the inlet plane (i = 1), which is the only one read by the kernel.
+    allocate (u_in(dims(2), dims(3)))
+    allocate (v_in(dims(2), dims(3)))
+    allocate (w_in(dims(2), dims(3)))
 
     ! Fill the inlet plane with random numbers in [0, 1); the loop below
-    ! maps these onto noise in [-1, 1). Blocks returned by get_block are
-    ! uninitialised, so this must run before the read-modify-write below.
-    call random_number(hu%data(1, 1:dims(2), 1:dims(3)))
-    call random_number(hv%data(1, 1:dims(2), 1:dims(3)))
-    call random_number(hw%data(1, 1:dims(2), 1:dims(3)))
+    ! maps these onto noise in [-1, 1).
+    call random_number(u_in)
+    call random_number(v_in)
+    call random_number(w_in)
 
     do k = 1, dims(3)
       do j = 1, dims(2)
-        hu%data(1, j, k) = 1._dp + noise(1)*um*(2._dp*hu%data(1, j, k) - 1._dp)
-        hv%data(1, j, k) = noise(2)*um*(2._dp*hv%data(1, j, k) - 1._dp)
-        hw%data(1, j, k) = noise(3)*um*(2._dp*hw%data(1, j, k) - 1._dp)
+        u_in(j, k) = 1._dp + noise(1)*um*(2._dp*u_in(j, k) - 1._dp)
+        v_in(j, k) = noise(2)*um*(2._dp*v_in(j, k) - 1._dp)
+        w_in(j, k) = noise(3)*um*(2._dp*w_in(j, k) - 1._dp)
       end do
     end do
 
-    call self%solver%backend%set_field_data(self%bc_start_u_x, hu%data)
-    call self%solver%backend%set_field_data(self%bc_start_v_x, hv%data)
-    call self%solver%backend%set_field_data(self%bc_start_w_x, hw%data)
-
-    call self%solver%host_allocator%release_block(hu)
-    call self%solver%host_allocator%release_block(hv)
-    call self%solver%host_allocator%release_block(hw)
+    call self%solver%backend%set_field_face_data( &
+      self%bc_start_u_x, u_in, face=X_FACE)
+    call self%solver%backend%set_field_face_data( &
+      self%bc_start_v_x, v_in, face=X_FACE)
+    call self%solver%backend%set_field_face_data( &
+      self%bc_start_w_x, w_in, face=X_FACE)
   end subroutine define_BC_cylinder
 
   ! ==========================================================================
