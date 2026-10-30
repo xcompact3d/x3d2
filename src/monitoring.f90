@@ -1,0 +1,121 @@
+module m_monitoring
+  !! Computes and logs global scalar monitoring quantities to a file.
+  !!
+  !! Tracks the following quantities:
+  !!
+  !! - Kinetic energy: \( E_k = \frac{1}{2N} \sum |\mathbf{u}|^2 \)
+  !! - Enstrophy: \( \mathcal{E} = \frac{1}{2N} \sum |\nabla \times \mathbf{u}|^2 \)
+  !! - Divergence: \( \max |\nabla \cdot \mathbf{u}| \) and mean (divergence-free check)
+
+  use m_common, only: dp, DIR_X, DIR_Z, VERT
+  use m_field, only: field_t
+  use m_logger, only: log_info, str
+  use m_scalar_series, only: scalar_series_t
+  use m_solver, only: solver_t
+
+  implicit none
+
+  !> Whether a monitoring_t that init sees writes monitoring.csv. A tool that
+  !> builds a case and drives it, such as x3d2-memcheck, sets this to false
+  !> before the case constructor.
+  logical :: monitoring_default_enabled = .true.
+
+  type :: monitoring_t
+    logical, private :: enabled = .true.
+    logical, private :: is_root = .false.
+    type(scalar_series_t), private :: series
+  contains
+    procedure :: init
+    procedure :: write_step
+    procedure :: finalise
+  end type monitoring_t
+
+contains
+
+  subroutine init(self, solver, append)
+    class(monitoring_t), intent(inout) :: self
+    class(solver_t), intent(in) :: solver
+    logical, intent(in), optional :: append
+
+    logical :: append_output
+    character(len=16), parameter :: columns(4) = &
+                                    ['kinetic_energy ', &
+                                     'enstrophy      ', &
+                                     'div_u_max      ', &
+                                     'div_u_mean     ']
+
+    self%enabled = monitoring_default_enabled
+    if (.not. self%enabled) return
+
+    self%is_root = solver%mesh%par%is_root()
+    append_output = .false.
+    if (present(append)) append_output = append
+    call self%series%init('monitoring.csv', &
+                          columns, self%is_root, append_output)
+
+  end subroutine init
+
+  subroutine write_step(self, solver, t, u, v, w)
+    !! Computes and reports monitoring quantities, writing to both stdout
+    !! and the monitoring file.
+    class(monitoring_t), intent(inout) :: self
+    class(solver_t), intent(inout) :: solver
+    real(dp), intent(in) :: t
+    class(field_t), intent(in) :: u, v, w
+
+    class(field_t), pointer :: du, dv, dw, div_u
+    real(dp) :: kinetic_energy, enstrophy, div_u_max, div_u_mean
+
+    if (.not. self%enabled) return
+
+    !! Kinetic energy: \( E_k = \frac{1}{2N} \sum |\mathbf{u}|^2 \)
+    kinetic_energy = 0.5_dp*solver%backend%vector_norm_squared(u, v, w) &
+                     /solver%ngrid
+
+    !! Enstrophy: \( \mathcal{E} = \frac{1}{2N} \sum |\nabla \times \mathbf{u}|^2 \)
+    du => solver%backend%allocator%get_block(DIR_X, VERT)
+    dv => solver%backend%allocator%get_block(DIR_X, VERT)
+    dw => solver%backend%allocator%get_block(DIR_X, VERT)
+
+    call solver%curl(du, dv, dw, u, v, w)
+
+    enstrophy = 0.5_dp*solver%backend%vector_norm_squared(du, dv, dw) &
+                /solver%ngrid
+
+    call solver%backend%allocator%release_block(du)
+    call solver%backend%allocator%release_block(dv)
+    call solver%backend%allocator%release_block(dw)
+
+    !! Divergence: \( \nabla \cdot \mathbf{u} \) max and mean (should be ~0)
+    div_u => solver%backend%allocator%get_block(DIR_Z)
+
+    call solver%divergence_v2p(div_u, u, v, w)
+
+    call solver%backend%field_max_mean(div_u_max, div_u_mean, div_u)
+
+    call solver%backend%allocator%release_block(div_u)
+
+    ! Print to stdout and write to file (root only)
+    if (self%is_root) then
+      call log_info('kinetic energy: '//str(kinetic_energy))
+      call log_info('enstrophy: '//str(enstrophy))
+      call log_info('div u max mean: '//str(div_u_max)//' ' &
+                    //str(div_u_mean))
+
+      call self%series%write_step(t, &
+                                  [kinetic_energy, enstrophy, &
+                                   div_u_max, div_u_mean])
+    end if
+
+  end subroutine write_step
+
+  subroutine finalise(self)
+    class(monitoring_t), intent(inout) :: self
+
+    if (.not. self%enabled) return
+
+    call self%series%finalise()
+
+  end subroutine finalise
+
+end module m_monitoring
