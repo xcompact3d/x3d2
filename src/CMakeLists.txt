@@ -174,11 +174,14 @@ if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "GNU" OR
     # Flang assumes OpenMP 3.1, which rejects both `declare target` in a pure
     # procedure (4.5) and the `loop` construct (5.0) used by the sources.
     set(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} -fopenmp-version=51")
-    set(CMAKE_Fortran_FLAGS_RELEASE "-O3 -ffast-math -funroll-loops -march=native")
+    set(CMAKE_Fortran_FLAGS_RELEASE "-O3 -funroll-loops -march=native")
     set(CMAKE_Fortran_FLAGS_DEBUG "-g -Wall -Wno-ambiguous-structure-constructor -Werror")
   else()
-    set(CMAKE_Fortran_FLAGS_RELEASE "-O3 -ffast-math -funroll-loops -floop-optimize -march=native")
+    set(CMAKE_Fortran_FLAGS_RELEASE "-O3 -funroll-loops -floop-optimize -march=native")
     set(CMAKE_Fortran_FLAGS_DEBUG "-g -Og -Wall -Wpedantic -Werror -Wimplicit-interface -Wimplicit-procedure -Wno-unused-dummy-argument")
+  endif()
+  if(X3D2_FAST_MATH)
+    string(APPEND CMAKE_Fortran_FLAGS_RELEASE " -ffast-math")
   endif()
 elseif(${CMAKE_Fortran_COMPILER_ID} STREQUAL "IntelLLVM" OR
        ${CMAKE_Fortran_COMPILER_ID} STREQUAL "Intel")
@@ -190,7 +193,12 @@ elseif(${CMAKE_Fortran_COMPILER_ID} STREQUAL "IntelLLVM" OR
   # uninit is deliberately absent: ifx implements it with MemorySanitizer,
   # which needs the whole program instrumented and fails to link otherwise.
   set(CMAKE_Fortran_FLAGS "-fpp -stand f18")
-  set(CMAKE_Fortran_FLAGS_RELEASE "-O3 -xHost -fp-model=fast")
+  set(CMAKE_Fortran_FLAGS_RELEASE "-O3 -xHost")
+  if(X3D2_FAST_MATH)
+    string(APPEND CMAKE_Fortran_FLAGS_RELEASE " -fp-model=fast")
+  else()
+    string(APPEND CMAKE_Fortran_FLAGS_RELEASE " -fp-model=precise")
+  endif()
   set(CMAKE_Fortran_FLAGS_DEBUG "-g -O0 -traceback -check bounds,pointers -warn all,nounused")
 elseif(${CMAKE_Fortran_COMPILER_ID} STREQUAL "NVHPC" OR
        ${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI")
@@ -216,7 +224,12 @@ if (${ENABLE_BACKEND} STREQUAL "CUDA")
   if(CUDA_DEBUG_FP_TRAP)
     set(CMAKE_Fortran_FLAGS_DEBUG "${CMAKE_Fortran_FLAGS_DEBUG} -Ktrap=fp")
   endif()
-  set(CMAKE_Fortran_FLAGS_RELEASE "-O3 -fast")
+  # -fast adds -Mflushz (flush denormals to zero) and vectorisation that
+  # can reassociate reductions, so it is opt-in.  -O3 keeps the optimisation level.
+  set(CMAKE_Fortran_FLAGS_RELEASE "-O3")
+  if(X3D2_FAST_MATH)
+    string(APPEND CMAKE_Fortran_FLAGS_RELEASE " -fast")
+  endif()
   # The cuFFT/cuFFTMp code now lives in x3d2_poisson: link options move there.
   target_link_options(x3d2_poisson INTERFACE "-cuda" "${NVHPC_GPU_FLAG}")
   # cuFFTMp distributes a transform over MPI ranks and its nvfortran wrapper
@@ -280,7 +293,10 @@ elseif (${ENABLE_BACKEND} STREQUAL "OMP_TGT")
   # backend/omptgt/device_info.f90 opens the vendor runtime with dlopen
   target_link_libraries(x3d2_poisson PUBLIC ${CMAKE_DL_LIBS})
   if(CMAKE_Fortran_COMPILER_ID STREQUAL "NVHPC" OR CMAKE_Fortran_COMPILER_ID STREQUAL "PGI")
-    set(CMAKE_Fortran_FLAGS_RELEASE "-O3 -fast")
+    set(CMAKE_Fortran_FLAGS_RELEASE "-O3")
+    if(X3D2_FAST_MATH)
+      string(APPEND CMAKE_Fortran_FLAGS_RELEASE " -fast")
+    endif()
     add_definitions("-DOMP_TGT_NVIDIA")
     # NVHPC rejects has_device_addr; the OpenMP 4.5 form of is_device_ptr on
     # a dummy array says the same (see backend/omptgt/common.f90).

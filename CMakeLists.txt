@@ -54,6 +54,7 @@ set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS "Debug;Release")
 
 # Single precision option (default OFF)
 option(SINGLE_PREC "Enable single precision" OFF)
+option(X3D2_FAST_MATH "Use fast-math Release flags (GNU, Flang, Intel and NVHPC)" OFF)
 if(SINGLE_PREC)
   add_definitions("-DSINGLE_PREC")
 endif()
