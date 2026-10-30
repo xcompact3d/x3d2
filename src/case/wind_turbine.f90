@@ -2,9 +2,9 @@ module m_case_wind_turbine
   !! Case for wind-turbine simulations (the `two_turbines` setup):
   !! uniform inflow and convective outflow in x, periodic in y and z.
   !!
-  !! The case owns a polymorphic turbine forcing model (turbine_model_t) and is
-  !! the only place the `iturbine` switch appears (at allocation time). It drives
-  !! the model from its forcings()/postprocess() hooks.
+  !! The case owns a polymorphic turbine forcing model (turbine_model_t), set up
+  !! by m_case_turbine from the `iturbine` switch. It drives the model from its
+  !! forcings()/postprocess() hooks.
   !!
   !! The inflow/outflow boundary treatment mirrors m_case_cylinder. BCs are
   !! dirichlet/periodic/periodic for the same reason cylinder uses them: the FFT
@@ -15,9 +15,9 @@ module m_case_wind_turbine
                    MPI_Allreduce
 
   use m_allocator, only: allocator_t
-  use m_adm, only: adm_t
   use m_base_backend, only: base_backend_t
   use m_base_case, only: base_case_t
+  use m_case_turbine, only: init_turbine_model, finalise_turbine_model
   use m_common, only: dp, MPI_X3D2_DP, get_argument, DIR_C, DIR_X, &
                       VERT, X_FACE, BC_DIRICHLET
   use m_config, only: wind_turbine_config_t
@@ -25,7 +25,6 @@ module m_case_wind_turbine
   use m_mesh, only: mesh_t
   use m_solver, only: init
   use m_turbine_model, only: turbine_model_t
-  use m_turbine_dummy, only: turbine_dummy_t
   use m_logger, only: log_info, abort_run, str
 
   implicit none
@@ -78,40 +77,8 @@ contains
                   flow_case%solver%mesh%par%nproc, &
                   flow_case%solver%current_iter)
 
-    ! Select and initialise the turbine forcing model. This is the only place
-    ! the iturbine switch lives; downstream the case calls the polymorphic
-    ! turbine object with no branching.
-    select case (flow_case%wt_cfg%iturbine)
-    case (1)
-      ! Actuator line model - falls back to dummy until landed.
-      allocate (turbine_dummy_t :: flow_case%turbine)
-    case (2)
-      allocate (adm_t :: flow_case%turbine)
-      select type (turbine => flow_case%turbine)
-      type is (adm_t)
-        turbine%coords_file = flow_case%wt_cfg%adm_coords
-        turbine%rho_air = flow_case%wt_cfg%rho_air
-        turbine%T_relax = flow_case%wt_cfg%T_relax
-        turbine%stats_start = &
-          max(1, flow_case%io_mgr%stats_mgr%config%initstat)
-        turbine%stats_freq = &
-          max(1, flow_case%io_mgr%stats_mgr%config%istatfreq)
-      end select
-    case (0)
-      allocate (turbine_dummy_t :: flow_case%turbine)
-    case default
-      call abort_run('Unsupported wind turbine model selected.', &
-                     collective=.true.)
-    end select
-
-    call flow_case%turbine%init(flow_case%solver%backend, &
-                                flow_case%solver%mesh, &
-                                flow_case%solver%host_allocator, &
-                                flow_case%solver%dt)
-    call flow_case%io_mgr%register_checkpoint_state(flow_case%turbine)
-    call flow_case%turbine%setup_output( &
-      flow_case%solver%mesh%par%is_root(), flow_case%io_mgr%is_restart() &
-      )
+    call init_turbine_model(flow_case%turbine, flow_case%wt_cfg, &
+                            flow_case%solver, flow_case%io_mgr)
   end function case_wind_turbine_init
 
   subroutine seed_rng(nrank, nproc, iter)
@@ -331,9 +298,7 @@ contains
   subroutine finalise_wind_turbine(self)
     class(case_wind_turbine_t) :: self
 
-    call self%turbine%finalise()
-    call self%io_mgr%unregister_checkpoint_state()
-    deallocate (self%turbine)
+    call finalise_turbine_model(self%turbine, self%io_mgr)
   end subroutine finalise_wind_turbine
 
 end module m_case_wind_turbine

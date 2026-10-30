@@ -1,10 +1,10 @@
 module m_case_abl
   use m_allocator, only: allocator_t
   use m_abl, only: abl_t
-  use m_adm, only: adm_t
   use m_abl_diagnostics, only: abl_diagnostics_t
   use m_base_backend, only: base_backend_t
   use m_base_case, only: base_case_t
+  use m_case_turbine, only: init_turbine_model, finalise_turbine_model
   use m_common, only: dp, get_argument, MPI_X3D2_DP, DIR_X, VERT, &
                       X_FACE, Y_FACE, BC_DIRICHLET, BC_NEUMANN, BC_PERIODIC
   use m_config, only: abl_config_t, inflow_config_t, wind_turbine_config_t
@@ -45,7 +45,6 @@ module m_case_abl
     procedure :: post_step => post_step_abl
     procedure :: finalise_case_specific => finalise_abl
     procedure :: update_inflow_plane
-    procedure :: init_turbine
   end type case_abl_t
 
   interface case_abl_t
@@ -80,6 +79,10 @@ contains
                      &bc_start_* belong to the wind_turbine case; the ABL &
                      &takes its inflow from abl_nml and inflow_nml.', &
                      collective=.true.)
+    if (flow_case%turbine_cfg%iturbine /= 0 .and. &
+        flow_case%turbine_cfg%iturbine /= 2) &
+      call abort_run('ABL: wind_turbine_nml iturbine must be 0 (none) or 2 &
+                     &(actuator disc).', collective=.true.)
 
     ! apply_BC_abl and the wall model hard-code these boundaries, so the
     ! mesh must agree with them for the pressure solve and precorrect_walls.
@@ -133,40 +136,13 @@ contains
       flow_case%flow_rate_y_weights(dims(2)) = 0.5_dp
     end if
 
-    if (flow_case%turbine_cfg%iturbine /= 0) call flow_case%init_turbine()
+    ! Turbines in the boundary layer, typically in a successor driven by a
+    ! precursor's inflow (Incompact3d iturbine with an ABL itype)
+    if (flow_case%turbine_cfg%iturbine /= 0) &
+      call init_turbine_model(flow_case%turbine, flow_case%turbine_cfg, &
+                              flow_case%solver, flow_case%io_mgr)
 
   end function case_abl_init
-
-  subroutine init_turbine(self)
-    !! Turbines in the boundary layer, typically in a successor driven by a
-    !! precursor's inflow (Incompact3d iturbine with an ABL itype). They are
-    !! set in wind_turbine_nml, as for the wind_turbine case.
-    implicit none
-
-    class(case_abl_t) :: self
-
-    select case (self%turbine_cfg%iturbine)
-    case (2)
-      allocate (adm_t :: self%turbine)
-      select type (turbine => self%turbine)
-      type is (adm_t)
-        turbine%coords_file = self%turbine_cfg%adm_coords
-        turbine%rho_air = self%turbine_cfg%rho_air
-        turbine%T_relax = self%turbine_cfg%T_relax
-        turbine%stats_start = max(1, self%io_mgr%stats_mgr%config%initstat)
-        turbine%stats_freq = max(1, self%io_mgr%stats_mgr%config%istatfreq)
-      end select
-    case default
-      call abort_run('ABL: wind_turbine_nml iturbine must be 0 (none) or 2 &
-                     &(actuator disc).', collective=.true.)
-    end select
-
-    call self%turbine%init(self%solver%backend, self%solver%mesh, &
-                           self%solver%host_allocator, self%solver%dt)
-    call self%io_mgr%register_checkpoint_state(self%turbine)
-    call self%turbine%setup_output(self%solver%mesh%par%is_root(), &
-                                   self%io_mgr%is_restart())
-  end subroutine init_turbine
 
   subroutine initial_conditions_abl(self)
     implicit none
@@ -373,10 +349,7 @@ contains
 
     class(case_abl_t) :: self
 
-    if (.not. associated(self%turbine)) return
-    call self%turbine%finalise()
-    call self%io_mgr%unregister_checkpoint_state()
-    deallocate (self%turbine)
+    call finalise_turbine_model(self%turbine, self%io_mgr)
   end subroutine finalise_abl
 
 end module m_case_abl
