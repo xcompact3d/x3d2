@@ -60,8 +60,7 @@ contains
 
     class(case_channel_t) :: self
 
-    real(dp), dimension(:, :), allocatable :: u_start, u_end, v_start, &
-                                              v_end, w_start, w_end
+    class(field_t), pointer :: hu, hv, hw
     real(dp) :: can, ub
     real(dp) :: noise(3)
     integer :: i, k, dims(3)
@@ -89,39 +88,43 @@ contains
       call self%bc_start_w_y%set_data_loc(VERT)
     end if
 
-    ! Build the wall BC values as (nx, nz) host planes, then upload only
-    ! the two y-wall planes (j = 1 and j = dims(2)), which are the only
-    ! ones read by the kernel.
-    allocate (u_start(dims(1), dims(3)), u_end(dims(1), dims(3)))
-    allocate (v_start(dims(1), dims(3)), v_end(dims(1), dims(3)))
-    allocate (w_start(dims(1), dims(3)), w_end(dims(1), dims(3)))
+    ! Build the wall BC values in DIR_C host buffers, then upload.
+    ! Only the two y-wall planes (j = 1 and j = dims(2)) are read by the
+    ! kernel; everything else in the buffer is unused.
+    hu => self%solver%host_allocator%get_block(DIR_C)
+    hv => self%solver%host_allocator%get_block(DIR_C)
+    hw => self%solver%host_allocator%get_block(DIR_C)
 
-    call random_number(u_start)
-    call random_number(u_end)
-    call random_number(v_start)
-    call random_number(v_end)
-    call random_number(w_start)
-    call random_number(w_end)
+    call random_number(hu%data(1:dims(1), 1, 1:dims(3)))
+    call random_number(hu%data(1:dims(1), dims(2), 1:dims(3)))
+    call random_number(hv%data(1:dims(1), 1, 1:dims(3)))
+    call random_number(hv%data(1:dims(1), dims(2), 1:dims(3)))
+    call random_number(hw%data(1:dims(1), 1, 1:dims(3)))
+    call random_number(hw%data(1:dims(1), dims(2), 1:dims(3)))
 
     ! Fill the two y-wall planes; the kernel reads no other j.
     do k = 1, dims(3)
       do i = 1, dims(1)
-        u_start(i, k) = noise(1)*(2._dp*u_start(i, k) - 1._dp)
-        v_start(i, k) = noise(2)*(2._dp*v_start(i, k) - 1._dp)
-        w_start(i, k) = noise(3)*(2._dp*w_start(i, k) - 1._dp)
+        hu%data(i, 1, k) = noise(1)*(2._dp*hu%data(i, 1, k) - 1._dp)
+        hv%data(i, 1, k) = noise(2)*(2._dp*hv%data(i, 1, k) - 1._dp)
+        hw%data(i, 1, k) = noise(3)*(2._dp*hw%data(i, 1, k) - 1._dp)
 
-        u_end(i, k) = noise(1)*(2._dp*u_end(i, k) - 1._dp)
-        v_end(i, k) = noise(2)*(2._dp*v_end(i, k) - 1._dp)
-        w_end(i, k) = noise(3)*(2._dp*w_end(i, k) - 1._dp)
+        hu%data(i, dims(2), k) = &
+          noise(1)*(2._dp*hu%data(i, dims(2), k) - 1._dp)
+        hv%data(i, dims(2), k) = &
+          noise(2)*(2._dp*hv%data(i, dims(2), k) - 1._dp)
+        hw%data(i, dims(2), k) = &
+          noise(3)*(2._dp*hw%data(i, dims(2), k) - 1._dp)
       end do
     end do
 
-    call self%solver%backend%set_field_face_data( &
-      self%bc_start_u_y, u_start, u_end, Y_FACE)
-    call self%solver%backend%set_field_face_data( &
-      self%bc_start_v_y, v_start, v_end, Y_FACE)
-    call self%solver%backend%set_field_face_data( &
-      self%bc_start_w_y, w_start, w_end, Y_FACE)
+    call self%solver%backend%set_field_data(self%bc_start_u_y, hu%data)
+    call self%solver%backend%set_field_data(self%bc_start_v_y, hv%data)
+    call self%solver%backend%set_field_data(self%bc_start_w_y, hw%data)
+
+    call self%solver%host_allocator%release_block(hu)
+    call self%solver%host_allocator%release_block(hv)
+    call self%solver%host_allocator%release_block(hw)
 
   end subroutine define_BC_channel
 

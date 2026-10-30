@@ -2,7 +2,7 @@ module m_base_backend
   use iso_c_binding, only: c_ptr
 
   use m_allocator, only: allocator_t
-  use m_common, only: dp, DIR_C, X_FACE, get_rdr_from_dirs
+  use m_common, only: dp, DIR_C, get_rdr_from_dirs
   use m_field, only: field_t
   use m_logger, only: abort_run
   use m_mesh, only: mesh_t
@@ -70,7 +70,6 @@ module m_base_backend
     procedure :: field_set_y_plane => field_set_y_plane_base
     procedure :: field_set_abl_wall_stress => field_set_abl_wall_stress_base
     procedure :: field_set_face_from_field => field_set_face_from_field_base
-    procedure :: set_field_face_data => set_field_face_data_base
     procedure :: field_add_face_from_field => field_add_face_from_field_base
     procedure :: field_add_const_x_face => field_add_const_x_face_base
     procedure :: field_set_x_inlet_plane => field_set_x_inlet_plane_base
@@ -641,25 +640,6 @@ contains
 
   end subroutine field_set_face_from_field_base
 
-  subroutine set_field_face_data_base(self, f, data_start, data_end, face)
-    !! Write host 2D planes into the face planes of a DIR_X field and
-    !! touch nothing else. For Y_FACE the planes are (nx, nz) and are
-    !! written to y = 1 (data_start) and y = ny (data_end). For X_FACE
-    !! the planes are (ny, nz) and are written to x = 1 (data_start)
-    !! and x = nx (data_end). data_end is optional, when absent only
-    !! the start face is written.
-    implicit none
-
-    class(base_backend_t) :: self
-    class(field_t), intent(inout) :: f
-    real(dp), dimension(:, :), intent(in) :: data_start
-    real(dp), dimension(:, :), optional, intent(in) :: data_end
-    integer, intent(in) :: face
-
-    call not_implemented('set_field_face_data')
-
-  end subroutine set_field_face_data_base
-
   subroutine field_add_face_from_field_base(self, f, g, face, bc_start, bc_end)
     !! Add the face planes of `g` onto those of `f`, on Dirichlet faces
     !! only. Both fields are DIR_X; X_FACE and Y_FACE are supported.
@@ -698,14 +678,13 @@ contains
     !! the host array `plane(ny, nz)`, in local VERT dims. Only the plane
     !! crosses to the device, so a time-varying inlet can be refreshed
     !! without uploading and reordering a full 3D field.
-    !! A thin wrapper on set_field_face_data with face = X_FACE.
     implicit none
 
     class(base_backend_t) :: self
     class(field_t), intent(inout) :: f
     real(dp), dimension(:, :), intent(in) :: plane
 
-    call self%set_field_face_data(f, plane, face=X_FACE)
+    call not_implemented('field_set_x_inlet_plane')
 
   end subroutine field_set_x_inlet_plane_base
 
