@@ -59,8 +59,8 @@ module m_omp_backend
     procedure :: field_plane_sums => field_plane_sums_omp
     procedure :: field_set_abl_wall_stress => field_set_abl_wall_stress_omp
     procedure :: field_set_face_from_field => field_set_face_from_field_omp
+    procedure :: set_field_face_data => set_field_face_data_omp
     procedure :: field_add_const_x_face => field_add_const_x_face_omp
-    procedure :: field_set_x_inlet_plane => field_set_x_inlet_plane_omp
     procedure :: field_add_face_from_field => field_add_face_from_field_omp
     procedure :: compute_vorticity => compute_vorticity_omp
     procedure :: compute_qcriterion => compute_qcriterion_omp
@@ -1556,6 +1556,77 @@ contains
 
   end subroutine field_set_face_from_field_omp
 
+  subroutine set_field_face_data_omp(self, f, data_start, data_end, face)
+    !! [[m_base_backend(module):set_field_face_data(subroutine)]]
+    implicit none
+    class(omp_backend_t) :: self
+    class(field_t), intent(inout) :: f
+    real(dp), dimension(:, :), intent(in) :: data_start
+    real(dp), dimension(:, :), optional, intent(in) :: data_end
+    integer, intent(in) :: face
+    integer :: dims(3), z, j, i, y_block, i_max, k, k_start, k_end, &
+               n_mod, n_y_blocks, y_stride
+
+    if (f%dir /= DIR_X) &
+      call abort_run('set_field_face_data: only supported for DIR_X fields.')
+    if (f%data_loc == NULL_LOC) &
+      call abort_run('set_field_face_data: requires a valid data_loc.')
+
+    dims = self%mesh%get_dims(f%data_loc)
+    n_mod = mod(dims(2) - 1, SZ) + 1
+    n_y_blocks = (dims(2) - 1)/SZ + 1
+    y_stride = y_group_stride(self)
+
+    select case (face)
+    case (X_FACE)
+      if (size(data_start, 1) /= dims(2) .or. size(data_start, 2) /= dims(3)) &
+        call abort_run('set_field_face_data: X_FACE planes must be (ny, nz).')
+      if (present(data_end)) then
+        if (size(data_end, 1) /= dims(2) .or. size(data_end, 2) /= dims(3)) &
+          call abort_run('set_field_face_data: X_FACE planes must be &
+                         &(ny, nz).')
+      end if
+      !$omp parallel do collapse(2) private(k, i, i_max)
+      do z = 1, dims(3)
+        do y_block = 1, n_y_blocks
+          ! OMP DIR_X ordering: k = y_stride*(z - 1) + y_block
+          k = y_stride*(z - 1) + y_block
+          i_max = SZ
+          if (y_block == n_y_blocks) i_max = n_mod
+          do i = 1, i_max
+            f%data(i, 1, k) = data_start((y_block - 1)*SZ + i, z)
+            if (present(data_end)) &
+              f%data(i, dims(1), k) = data_end((y_block - 1)*SZ + i, z)
+          end do
+        end do
+      end do
+      !$omp end parallel do
+
+    case (Y_FACE)
+      if (size(data_start, 1) /= dims(1) .or. size(data_start, 2) /= dims(3)) &
+        call abort_run('set_field_face_data: Y_FACE planes must be (nx, nz).')
+      if (present(data_end)) then
+        if (size(data_end, 1) /= dims(1) .or. size(data_end, 2) /= dims(3)) &
+          call abort_run('set_field_face_data: Y_FACE planes must be &
+                         &(nx, nz).')
+      end if
+      !$omp parallel do collapse(2) private(k_start, k_end)
+      do z = 1, dims(3)
+        do j = 1, dims(1)
+          k_start = 1 + (z - 1)*y_stride
+          k_end = (z - 1)*y_stride + n_y_blocks
+          f%data(1, j, k_start) = data_start(j, z)
+          if (present(data_end)) f%data(n_mod, j, k_end) = data_end(j, z)
+        end do
+      end do
+      !$omp end parallel do
+
+    case default
+      call abort_run('set_field_face_data: only X_FACE and Y_FACE supported.')
+    end select
+
+  end subroutine set_field_face_data_omp
+
   subroutine field_add_const_x_face_omp(self, f, c, at_end)
     !! [[m_base_backend(module):field_add_const_x_face_base(subroutine)]]
     implicit none
@@ -1601,46 +1672,6 @@ contains
     !$omp end parallel do
 
   end subroutine field_add_const_x_face_omp
-
-  subroutine field_set_x_inlet_plane_omp(self, f, plane)
-    !! [[m_base_backend(module):field_set_x_inlet_plane_base(subroutine)]]
-    implicit none
-    class(omp_backend_t) :: self
-    class(field_t), intent(inout) :: f
-    real(dp), dimension(:, :), intent(in) :: plane
-    integer :: dims(3), k, i, z, i_max, n_mod, n_y_blocks, y_block, y_stride
-
-    if (f%dir /= DIR_X) &
-      call abort_run('field_set_x_inlet_plane: only supported for DIR_X &
-                     &fields.')
-    if (f%data_loc == NULL_LOC) &
-      call abort_run('field_set_x_inlet_plane: requires a valid data_loc.')
-
-    dims = self%mesh%get_dims(f%data_loc)
-    if (size(plane, 1) /= dims(2) .or. size(plane, 2) /= dims(3)) &
-      call abort_run('field_set_x_inlet_plane: plane must be (ny, nz).')
-    n_mod = mod(dims(2) - 1, SZ) + 1
-    n_y_blocks = (dims(2) - 1)/SZ + 1
-    y_stride = y_group_stride(self)
-
-    !$omp parallel do collapse(2) private(k, i, i_max)
-    do z = 1, dims(3)
-      do y_block = 1, n_y_blocks
-        ! y-block is the fast-varying component of the group index
-        k = y_stride*(z - 1) + y_block
-        if (y_block == n_y_blocks) then
-          i_max = n_mod
-        else
-          i_max = SZ
-        end if
-        do i = 1, i_max
-          f%data(i, 1, k) = plane((y_block - 1)*SZ + i, z)
-        end do
-      end do
-    end do
-    !$omp end parallel do
-
-  end subroutine field_set_x_inlet_plane_omp
 
   subroutine field_add_face_from_field_omp(self, f, g, face, bc_start, bc_end)
     !! [[m_base_backend(module):field_add_face_from_field(subroutine)]]

@@ -91,6 +91,32 @@ The tool skips the real build, and prints no ``CHECK`` line, in these cases:
 
 The estimate then stands.
 
+The tool completes the real build but keeps the estimate in these cases:
+
+* Another process on the same card changes its GPU memory by more than 128 MiB
+  between the start and a later sample. The tool logs
+  ``CHECK skipped: card shared`` with the change and the process counts.
+* NVML cannot attribute GPU memory to the processes at the start or a later
+  sample. The tool logs ``CHECK skipped: GPU process attribution unavailable``.
+  This includes containers where NVML reports host PIDs that differ from the
+  PID of the tool.
+
+The tool prints no measured table or accuracy ``CHECK`` line in these cases.
+The tests that require accurate memory measurements report a skip.
+Tests of the decomposition, report format and case output remain active.
+The tool samples memory at discrete points. It cannot detect memory changes
+that occur and reverse between samples.
+
+The report shows ``Other GPU processes at start``: the number of other
+processes on the card and the memory they hold, from NVML. The line reads
+``not checked (NVML gave no usable process list)`` when an NVML call fails
+or the list does not hold the PID of the tool.
+
+The ``ctest`` label ``memcheck-accuracy`` selects strict copies of these
+tests, named ``<test>_accuracy``. They fail on a skipped ``CHECK`` line. Run
+them by hand on an exclusive GPU. The labels ``unit`` and ``verification``
+do not select them.
+
 The real build writes no case output files. It switches off ``monitoring.csv``,
 the turbine ``disc<t>.adm`` files and the ABL profile file.
 

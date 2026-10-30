@@ -48,7 +48,7 @@ module m_io_session
   use m_field, only: field_t
   use m_base_backend, only: base_backend_t
   use m_io_base, only: io_reader_t, io_writer_t, io_file_t, &
-                       io_mode_read, io_mode_write
+                       io_mode_read, io_mode_write, io_mode_append
   use m_io_backend, only: allocate_io_reader, allocate_io_writer
   use m_logger, only: abort_run
 
@@ -213,16 +213,25 @@ contains
   end subroutine read_data_array_3d
 
   ! Writer session procedures
-  subroutine writer_session_open(self, filename, comm)
+  subroutine writer_session_open(self, filename, comm, append_after_steps)
+    !! Open a file for writing. With `append_after_steps`, keep that many
+    !! steps of an existing file and append after them.
     class(writer_session_t), intent(inout) :: self
     character(len=*), intent(in) :: filename
     integer, intent(in) :: comm
+    integer, intent(in), optional :: append_after_steps
 
     if (self%is_open) call abort_run("IO session already open")
 
     call allocate_io_writer(self%writer)
     call self%writer%init(comm, "session_writer")
-    self%file = self%writer%open(filename, io_mode_write, comm)
+    if (present(append_after_steps)) then
+      self%file = self%writer%open( &
+                  filename, io_mode_append, comm, append_after_steps &
+                  )
+    else
+      self%file = self%writer%open(filename, io_mode_write, comm)
+    end if
     call self%file%begin_step()
 
     ! check if backend is functional
