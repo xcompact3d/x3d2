@@ -38,6 +38,7 @@ module m_case_wind_turbine
     procedure :: forcings => forcings_wind_turbine
     procedure :: apply_BC => apply_BC_wind_turbine
     procedure :: postprocess => postprocess_wind_turbine
+    procedure :: post_step => post_step_wind_turbine
     procedure :: finalise_case_specific => finalise_wind_turbine
   end type case_wind_turbine_t
 
@@ -277,18 +278,26 @@ contains
                                      self%solver%w)
   end subroutine forcings_wind_turbine
 
-  ! Post-processing: turbine diagnostics + flow diagnostics.
-  subroutine postprocess_wind_turbine(self, iter, t)
+  ! Turbine diagnostics every iturboutput steps, independent of n_output.
+  subroutine post_step_wind_turbine(self, iter, t)
     implicit none
     class(case_wind_turbine_t) :: self
     integer, intent(in) :: iter
     real(dp), intent(in) :: t
 
     if (self%wt_cfg%iturboutput > 0) then
-      if (iter > 0 .and. mod(iter, self%wt_cfg%iturboutput) == 0) then
+      if (mod(iter, self%wt_cfg%iturboutput) == 0) then
         call self%turbine%write_output(iter, self%solver%mesh%par%is_root())
       end if
     end if
+  end subroutine post_step_wind_turbine
+
+  ! Post-processing: flow diagnostics.
+  subroutine postprocess_wind_turbine(self, iter, t)
+    implicit none
+    class(case_wind_turbine_t) :: self
+    integer, intent(in) :: iter
+    real(dp), intent(in) :: t
 
     call log_info('time = '//str(t)//' iteration = '//str(iter))
     call self%monitoring%write_step( &

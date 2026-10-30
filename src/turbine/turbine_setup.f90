@@ -4,6 +4,7 @@ module m_turbine_setup
   !! appears (at allocation time); downstream a case calls the polymorphic
   !! turbine object with no branching.
   use m_adm, only: adm_t
+  use m_alm, only: alm_t
   use m_config, only: wind_turbine_config_t
   use m_io_manager, only: io_manager_t
   use m_logger, only: abort_run
@@ -30,8 +31,17 @@ contains
 
     select case (cfg%iturbine)
     case (1)
-      ! Actuator line model - falls back to dummy until landed.
-      allocate (turbine_dummy_t :: turbine)
+      allocate (alm_t :: turbine)
+      select type (turbine)
+      type is (alm_t)
+        turbine%turbine_files = cfg%alm_turbines
+        turbine%rho_air = cfg%rho_air
+        turbine%eps_factor = cfg%eps_factor
+        turbine%nu = solver%nu
+        turbine%u_inflow = cfg%bc_start_u
+        turbine%stats_start = max(1, io_mgr%stats_mgr%config%initstat)
+        turbine%stats_freq = max(1, io_mgr%stats_mgr%config%istatfreq)
+      end select
     case (2)
       allocate (adm_t :: turbine)
       select type (turbine)

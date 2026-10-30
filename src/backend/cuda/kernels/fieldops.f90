@@ -877,4 +877,136 @@ contains
 
   end subroutine volume_integral
 
+  attributes(global) subroutine sample_points( &
+    vals, points, a, b, c, n_points, dx, dy, dz, nx, ny, nz, gx, gy, gz, &
+    ox, oy, oz, px, py, pz, n_i_pad &
+    )
+    !! vals(1:3, p) = this rank's part of the trilinear interpolation of a, b
+    !! and c at points(:, p), one thread per point; see field_sample_points.
+    !! (dx, dy, dz) is the grid spacing, (nx, ny, nz) and (gx, gy, gz) the
+    !! local and global VERT dims, (ox, oy, oz) the rank offsets and
+    !! (px, py, pz) flag periodic directions.
+    implicit none
+
+    real(dp), device, intent(inout) :: vals(3, n_points)
+    real(dp), device, intent(in) :: points(3, n_points)
+    real(dp), device, intent(in), dimension(:, :, :) :: a, b, c
+    integer, value, intent(in) :: n_points, nx, ny, nz, gx, gy, gz, &
+                                  ox, oy, oz, n_i_pad
+    real(dp), value, intent(in) :: dx, dy, dz
+    logical, value, intent(in) :: px, py, pz
+
+    real(dp) :: fx, fy, fz, w, sa, sb, sc
+    integer :: p, o1, o2, o3, x0, y0, z0, lx, ly, lz, i, pencil
+
+    p = threadIdx%x + (blockIdx%x - 1)*blockDim%x
+    if (p > n_points) return
+
+    fx = points(1, p)/dx
+    fy = points(2, p)/dy
+    fz = points(3, p)/dz
+    x0 = floor(fx)
+    y0 = floor(fy)
+    z0 = floor(fz)
+    fx = fx - x0
+    fy = fy - y0
+    fz = fz - z0
+
+    sa = 0._dp
+    sb = 0._dp
+    sc = 0._dp
+    do o3 = 0, 1
+      lz = local_index(z0 + o3, gz, oz, nz, pz)
+      if (lz < 1) cycle
+      do o2 = 0, 1
+        ly = local_index(y0 + o2, gy, oy, ny, py)
+        if (ly < 1) cycle
+        do o1 = 0, 1
+          lx = local_index(x0 + o1, gx, ox, nx, px)
+          if (lx < 1) cycle
+          w = merge(fx, 1._dp - fx, o1 == 1)*merge(fy, 1._dp - fy, o2 == 1) &
+              *merge(fz, 1._dp - fz, o3 == 1)
+          ! DIR_X storage: x along j, y split into SZ-blocks, z fastest
+          i = mod(ly - 1, SZ) + 1
+          pencil = lz + ((ly - 1)/SZ)*n_i_pad
+          sa = sa + w*a(i, lx, pencil)
+          sb = sb + w*b(i, lx, pencil)
+          sc = sc + w*c(i, lx, pencil)
+        end do
+      end do
+    end do
+    vals(1, p) = sa
+    vals(2, p) = sb
+    vals(3, p) = sc
+  end subroutine sample_points
+
+  attributes(device) integer function local_index(g, n_glob, offset, &
+                                                  n_loc, periodic)
+    !! Local one-based index of the zero-based global index g, wrapped when
+    !! periodic; 0 when it is off this rank or outside the domain.
+    implicit none
+
+    integer, value, intent(in) :: g, n_glob, offset, n_loc
+    logical, value, intent(in) :: periodic
+
+    integer :: gw
+
+    gw = g
+    if (periodic) gw = modulo(g, n_glob)
+    local_index = gw - offset + 1
+    if (gw < 0 .or. gw >= n_glob .or. local_index < 1 &
+        .or. local_index > n_loc) local_index = 0
+  end function local_index
+
+  attributes(global) subroutine add_gaussian_sources( &
+    a, b, c, src, box, n_src, inv_eps2, r_cut2, dx, dy, dz, nx, ny, nz, &
+    gx, gy, gz, ox, oy, oz, px, py, pz, n_i_pad &
+    )
+    !! a, b, c += src(4:6, s)*exp(-dist^2/eps^2) within r_cut of the point
+    !! src(1:3, s), over the global index box box(1:3, s)..box(4:6, s); see
+    !! source_index_boxes. Box indices are wrapped across periodic
+    !! boundaries and skipped where this rank does not own them. Launch
+    !! with blocks (n_src, box extent in z) and threads striding y within
+    !! the box; sources overlap, so the adds are atomic.
+    implicit none
+
+    real(dp), device, intent(inout), dimension(:, :, :) :: a, b, c
+    real(dp), device, intent(in) :: src(6, n_src)
+    integer, device, intent(in) :: box(6, n_src)
+    integer, value, intent(in) :: n_src, nx, ny, nz, gx, gy, gz, &
+                                  ox, oy, oz, n_i_pad
+    real(dp), value, intent(in) :: inv_eps2, r_cut2, dx, dy, dz
+    logical, value, intent(in) :: px, py, pz
+
+    real(dp) :: dz2, dyz2, dist2, kern, ierr
+    integer :: s, g_x, g_y, g_z, x, y, z, i, pencil
+
+    s = blockIdx%x
+    g_z = box(3, s) + blockIdx%y - 1
+    if (g_z > box(6, s)) return
+    z = local_index(g_z, gz, oz, nz, pz)
+    if (z < 1) return
+
+    dz2 = (src(3, s) - g_z*dz)**2
+    if (dz2 > r_cut2) return
+    do g_y = box(2, s) + threadIdx%x - 1, box(5, s), blockDim%x
+      y = local_index(g_y, gy, oy, ny, py)
+      if (y < 1) cycle
+      dyz2 = dz2 + (src(2, s) - g_y*dy)**2
+      if (dyz2 > r_cut2) cycle
+      i = mod(y - 1, SZ) + 1
+      pencil = z + ((y - 1)/SZ)*n_i_pad
+      do g_x = box(1, s), box(4, s)
+        x = local_index(g_x, gx, ox, nx, px)
+        if (x < 1) cycle
+        dist2 = dyz2 + (src(1, s) - g_x*dx)**2
+        if (dist2 > r_cut2) cycle
+        kern = exp(-dist2*inv_eps2)
+        ierr = atomicadd(a(i, x, pencil), src(4, s)*kern)
+        ierr = atomicadd(b(i, x, pencil), src(5, s)*kern)
+        ierr = atomicadd(c(i, x, pencil), src(6, s)*kern)
+      end do
+    end do
+  end subroutine add_gaussian_sources
+
 end module m_cuda_kernels_fieldops

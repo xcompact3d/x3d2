@@ -6,8 +6,9 @@ module m_cuda_backend
                    MPI_Waitall
 
   use m_allocator, only: allocator_t
-  use m_base_backend, only: base_backend_t, abl_wall_upper_plane, &
-                            shifted_z_source
+  use m_base_backend, only: base_backend_t, source_index_boxes, &
+                            check_point_fields, check_labelled_fields, &
+                            abl_wall_upper_plane, shifted_z_source
   use m_common, only: dp, sp, MPI_X3D2_DP, move_data_loc, get_rdr_from_dirs, &
                       RDR_X2Y, RDR_X2Z, RDR_Y2X, RDR_Y2Z, RDR_Z2X, RDR_Z2Y, &
                       RDR_C2X, RDR_C2Y, RDR_C2Z, RDR_X2C, RDR_Y2C, RDR_Z2C, &
@@ -28,7 +29,8 @@ module m_cuda_backend
   use m_cuda_kernels_fieldops, only: axpby, buffer_copy, field_scale, &
                                      field_shift, scalar_product, &
                                      vector_norm_squared, labelled_sums, &
-                                     labelled_axpy, &
+                                     labelled_axpy, sample_points, &
+                                     add_gaussian_sources, &
                                      field_max_sum, field_set_y_face, &
                                      field_set_x_face, field_set_y_plane, &
                                      field_set_abl_wall_stress, &
@@ -88,6 +90,9 @@ module m_cuda_backend
     procedure :: vector_norm_squared => vector_norm_squared_cuda
     procedure :: field_labelled_sums => field_labelled_sums_cuda
     procedure :: field_labelled_axpy => field_labelled_axpy_cuda
+    procedure :: field_sample_points => field_sample_points_cuda
+    procedure :: field_add_gaussian_sources => &
+      field_add_gaussian_sources_cuda
     procedure :: field_max_mean => field_max_mean_cuda
     procedure :: slice_max_sum => slice_max_sum_cuda
     procedure :: x_slice_weighted_sum => x_slice_weighted_sum_cuda
@@ -1250,27 +1255,106 @@ contains
 
   end subroutine field_labelled_axpy_cuda
 
-  subroutine check_labelled_fields(g, label, a, b, c)
-    !! Checks the fields passed to the labelled field operations share a
-    !! valid data location and the DIR_X layout.
+  subroutine field_sample_points_cuda(self, vals, points, a, b, c)
+    !! [[m_base_backend(module):field_sample_points_base(subroutine)]]
     implicit none
 
-    class(field_t), intent(in) :: g, label, a, b, c
+    class(cuda_backend_t) :: self
+    real(dp), intent(out) :: vals(:, :)
+    real(dp), intent(in) :: points(:, :)
+    class(field_t), intent(in) :: a, b, c
 
-    if (g%data_loc == NULL_LOC .or. label%data_loc == NULL_LOC .or. &
-        a%data_loc == NULL_LOC .or. b%data_loc == NULL_LOC .or. &
-        c%data_loc == NULL_LOC) then
-      call abort_run('You must set data_loc before labelled field operations.')
-    end if
-    if (label%data_loc /= g%data_loc .or. a%data_loc /= g%data_loc .or. &
-        b%data_loc /= g%data_loc .or. c%data_loc /= g%data_loc) then
-      call abort_run('Labelled field operations need one data location.')
-    end if
-    if (g%dir /= DIR_X .or. label%dir /= DIR_X .or. a%dir /= DIR_X .or. &
-        b%dir /= DIR_X .or. c%dir /= DIR_X) then
-      call abort_run('Labelled field operations need DIR_X layout.')
-    end if
-  end subroutine check_labelled_fields
+    real(dp), device, pointer, dimension(:, :, :) :: a_d, b_d, c_d
+    real(dp), device, allocatable :: vals_d(:, :), points_d(:, :)
+    integer :: dims(3), gdims(3), offset(3), dims_padded(3), n
+    real(dp) :: d(3)
+    type(dim3) :: blocks, threads
+
+    call check_point_fields(a, b, c)
+
+    n = size(points, 2)
+    vals = 0._dp
+    if (n == 0) return
+
+    call resolve_field_t(a_d, a)
+    call resolve_field_t(b_d, b)
+    call resolve_field_t(c_d, c)
+
+    allocate (vals_d(3, n))
+    points_d = points
+    d = self%mesh%geo%d
+    dims = self%mesh%get_dims(VERT)
+    gdims = self%mesh%get_global_dims(VERT)
+    offset = self%mesh%par%n_offset
+    dims_padded = self%allocator%get_padded_dims(DIR_C)
+
+    threads = dim3(64, 1, 1)
+    blocks = dim3((n - 1)/64 + 1, 1, 1)
+    call sample_points<<<blocks, threads>>>( & !&
+      vals_d, points_d, a_d, b_d, c_d, n, d(1), d(2), d(3), &
+      dims(1), dims(2), dims(3), gdims(1), gdims(2), gdims(3), &
+      offset(1), offset(2), offset(3), self%mesh%grid%periodic_BC(1), &
+      self%mesh%grid%periodic_BC(2), self%mesh%grid%periodic_BC(3), &
+      dims_padded(3))
+
+    vals = vals_d
+
+  end subroutine field_sample_points_cuda
+
+  subroutine field_add_gaussian_sources_cuda(self, a, b, c, points, coeffs, &
+                                             eps, r_cut)
+    !! [[m_base_backend(module):field_add_gaussian_sources_base(subroutine)]]
+    implicit none
+
+    class(cuda_backend_t) :: self
+    class(field_t), intent(inout) :: a, b, c
+    real(dp), intent(in) :: points(:, :), coeffs(:, :)
+    real(dp), intent(in) :: eps, r_cut
+
+    real(dp), device, pointer, dimension(:, :, :) :: a_d, b_d, c_d
+    real(dp), device, allocatable :: src_d(:, :)
+    integer, device, allocatable :: box_d(:, :)
+    integer :: box(6, size(points, 2)), offset(3), dims_padded(3), n, nz_box
+    integer :: dims(3), gdims(3)
+    real(dp) :: src(6, size(points, 2)), d(3)
+    logical :: periodic(3)
+    type(dim3) :: blocks, threads
+
+    call check_point_fields(a, b, c)
+
+    n = size(points, 2)
+    if (n == 0) return
+    call source_index_boxes(self%mesh, points, r_cut, box(1:3, :), &
+                            box(4:6, :))
+    nz_box = maxval(box(6, :) - box(3, :) + 1)
+    if (nz_box < 1) return
+
+    call resolve_field_t(a_d, a)
+    call resolve_field_t(b_d, b)
+    call resolve_field_t(c_d, c)
+
+    ! One copy each for the sources and their boxes
+    allocate (src_d(6, n), box_d(6, n))
+    src(1:3, :) = points
+    src(4:6, :) = coeffs
+    src_d = src
+    box_d = box
+    d = self%mesh%geo%d
+    dims = self%mesh%get_dims(VERT)
+    gdims = self%mesh%get_global_dims(VERT)
+    offset = self%mesh%par%n_offset
+    periodic = self%mesh%grid%periodic_BC
+    dims_padded = self%allocator%get_padded_dims(DIR_C)
+
+    threads = dim3(64, 1, 1)
+    blocks = dim3(n, nz_box, 1)
+    call add_gaussian_sources<<<blocks, threads>>>( & !&
+      a_d, b_d, c_d, src_d, box_d, n, 1._dp/eps**2, r_cut**2, &
+      d(1), d(2), d(3), dims(1), dims(2), dims(3), &
+      gdims(1), gdims(2), gdims(3), offset(1), offset(2), offset(3), &
+      periodic(1), periodic(2), periodic(3), dims_padded(3))
+
+  end subroutine field_add_gaussian_sources_cuda
 
   subroutine copy_into_buffers(u_send_s_dev, u_send_e_dev, u_dev, n)
     implicit none

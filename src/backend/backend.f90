@@ -2,7 +2,8 @@ module m_base_backend
   use iso_c_binding, only: c_ptr
 
   use m_allocator, only: allocator_t
-  use m_common, only: dp, DIR_C, VERT, X_FACE, MPI_X3D2_DP, get_rdr_from_dirs
+  use m_common, only: dp, DIR_C, DIR_X, VERT, NULL_LOC, X_FACE, MPI_X3D2_DP, &
+                      get_rdr_from_dirs
   use m_field, only: field_t
   use m_logger, only: abort_run
   use m_mesh, only: mesh_t
@@ -61,6 +62,9 @@ module m_base_backend
     procedure :: vector_norm_squared => vector_norm_squared_base
     procedure :: field_labelled_sums => field_labelled_sums_base
     procedure :: field_labelled_axpy => field_labelled_axpy_base
+    procedure :: field_sample_points => field_sample_points_base
+    procedure :: field_add_gaussian_sources => &
+      field_add_gaussian_sources_base
     procedure :: field_max_mean => field_max_mean_base
     procedure :: slice_max_sum => slice_max_sum_base
     procedure :: x_slice_weighted_sum => x_slice_weighted_sum_base
@@ -481,6 +485,116 @@ contains
     call not_implemented('field_labelled_axpy')
 
   end subroutine field_labelled_axpy_base
+
+  subroutine field_sample_points_base(self, vals, points, a, b, c)
+    !! Computes this rank's part of the trilinear interpolation of the DIR_X
+    !! VERT fields a, b and c at `points(1:3, p)`: vals(1:3, p) sums the
+    !! interpolation weight times a, b and c over the corners of the cell
+    !! holding point p that this rank owns. Every grid point is owned by one
+    !! rank, so an MPI sum over ranks gives the full interpolation without a
+    !! halo exchange. Corners beyond a periodic boundary wrap around; corners
+    !! outside a non-periodic boundary are skipped. Needs a uniform grid.
+    !! No MPI reduction is done, so the caller can reduce once for all points.
+    implicit none
+
+    class(base_backend_t) :: self
+    real(dp), intent(out) :: vals(:, :)
+    real(dp), intent(in) :: points(:, :)
+    class(field_t), intent(in) :: a, b, c
+
+    vals = 0._dp
+    call not_implemented('field_sample_points')
+
+  end subroutine field_sample_points_base
+
+  subroutine field_add_gaussian_sources_base(self, a, b, c, points, coeffs, &
+                                             eps, r_cut)
+    !! Adds isotropic Gaussian sources to the DIR_X VERT fields a, b and c:
+    !! at every grid point x within distance r_cut of points(1:3, s),
+    !! a += coeffs(1, s)*exp(-|x - points(:, s)|^2/eps^2), and likewise b
+    !! and c with coeffs(2, s) and coeffs(3, s). The kernel wraps across
+    !! periodic boundaries, consistent with field_sample_points, and is cut
+    !! at non-periodic ones. Needs a uniform grid.
+    implicit none
+
+    class(base_backend_t) :: self
+    class(field_t), intent(inout) :: a, b, c
+    real(dp), intent(in) :: points(:, :), coeffs(:, :)
+    real(dp), intent(in) :: eps, r_cut
+
+    call not_implemented('field_add_gaussian_sources')
+
+  end subroutine field_add_gaussian_sources_base
+
+  subroutine source_index_boxes(mesh, points, r_cut, lo, hi)
+    !! Global zero-based VERT index box [lo, hi] of the grid points within
+    !! r_cut of each point, on a uniform grid. In a periodic direction the
+    !! box is left unclipped, so it may run past either end of the domain;
+    !! the projection wraps those indices onto the grid, which keeps the
+    !! whole kernel. In a non-periodic direction it is clipped to the domain,
+    !! so a kernel crossing an inflow, outflow or wall loses that part, as in
+    !! Incompact3d. Stops the run if a box is wider than a periodic
+    !! direction, as the wrapped kernel would then cover points twice.
+    implicit none
+
+    type(mesh_t), intent(in) :: mesh
+    real(dp), intent(in) :: points(:, :), r_cut
+    integer, intent(out) :: lo(:, :), hi(:, :)
+
+    integer :: gdims(3), dir, s
+
+    gdims = mesh%get_global_dims(VERT)
+    do s = 1, size(points, 2)
+      do dir = 1, 3
+        lo(dir, s) = ceiling((points(dir, s) - r_cut)/mesh%geo%d(dir))
+        hi(dir, s) = floor((points(dir, s) + r_cut)/mesh%geo%d(dir))
+        if (mesh%grid%periodic_BC(dir)) then
+          if (hi(dir, s) - lo(dir, s) + 1 > gdims(dir)) &
+            call abort_run('Gaussian source kernel wider than the periodic &
+                           &domain: reduce eps_factor or refine the grid.')
+        else
+          lo(dir, s) = max(lo(dir, s), 0)
+          hi(dir, s) = min(hi(dir, s), gdims(dir) - 1)
+        end if
+      end do
+    end do
+
+  end subroutine source_index_boxes
+
+  subroutine check_point_fields(a, b, c)
+    !! Checks the fields passed to the point sampling and source operations
+    !! are DIR_X VERT fields.
+    implicit none
+
+    class(field_t), intent(in) :: a, b, c
+
+    if (a%dir /= DIR_X .or. b%dir /= DIR_X .or. c%dir /= DIR_X) &
+      call abort_run('Point sampling and sources need DIR_X fields.')
+    if (a%data_loc /= VERT .or. b%data_loc /= VERT .or. c%data_loc /= VERT) &
+      call abort_run('Point sampling and sources need VERT fields.')
+  end subroutine check_point_fields
+
+  subroutine check_labelled_fields(g, label, a, b, c)
+    !! Checks the fields passed to the labelled field operations share a
+    !! valid data location and the DIR_X layout.
+    implicit none
+
+    class(field_t), intent(in) :: g, label, a, b, c
+
+    if (g%data_loc == NULL_LOC .or. label%data_loc == NULL_LOC .or. &
+        a%data_loc == NULL_LOC .or. b%data_loc == NULL_LOC .or. &
+        c%data_loc == NULL_LOC) then
+      call abort_run('You must set data_loc before labelled field operations.')
+    end if
+    if (label%data_loc /= g%data_loc .or. a%data_loc /= g%data_loc .or. &
+        b%data_loc /= g%data_loc .or. c%data_loc /= g%data_loc) then
+      call abort_run('Labelled field operations need one data location.')
+    end if
+    if (g%dir /= DIR_X .or. label%dir /= DIR_X .or. a%dir /= DIR_X .or. &
+        b%dir /= DIR_X .or. c%dir /= DIR_X) then
+      call abort_run('Labelled field operations need DIR_X layout.')
+    end if
+  end subroutine check_labelled_fields
 
   subroutine field_max_mean_base(self, max_val, mean_val, f, &
                                  enforced_data_loc)

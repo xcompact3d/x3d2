@@ -13,6 +13,9 @@ module m_config
   !! written snapshot fields.
   integer, parameter :: MAX_OUTPUT_FIELDS = 10
 
+  !! Maximum number of actuator-line turbine files in wind_turbine_nml
+  integer, parameter :: max_alm_turbines = 100
+
   type, abstract :: base_config_t
     !! All config types have a method read to initialise their data
   contains
@@ -87,6 +90,9 @@ module m_config
     character(len=256) :: adm_coords = '' !! actuator-disc (.ad) coords file
     real(dp) :: rho_air = 1._dp      !! air density used in thrust/power
     real(dp) :: T_relax = -1._dp     !! ADM velocity-filter time; < 0 disables
+    !! actuator-line turbine (.turb) files, one per turbine
+    character(len=256), allocatable :: alm_turbines(:)
+    real(dp) :: eps_factor = 2._dp   !! ALM kernel width in cell sizes
     !> When false, a missing wind_turbine_nml keeps the defaults (no
     !> turbines), for a case that carries turbines optionally (the ABL)
     logical :: required = .true.
@@ -456,10 +462,12 @@ contains
     character(len=256) :: adm_coords = ''
     real(dp) :: rho_air = 1._dp
     real(dp) :: T_relax = -1._dp
+    character(len=256) :: alm_turbines(max_alm_turbines) = ''
+    real(dp) :: eps_factor = 2._dp
 
     namelist /wind_turbine_nml/ init_noise, inlet_noise, bc_start_u, &
       bc_start_v, bc_start_w, iturbine, iturboutput, adm_coords, &
-      rho_air, T_relax
+      rho_air, T_relax, alm_turbines, eps_factor
 
     if (present(nml_file) .and. present(nml_string)) then
       call abort_run('Reading wind_turbine config failed! Provide only a file &
@@ -496,6 +504,8 @@ contains
     self%adm_coords = adm_coords
     self%rho_air = rho_air
     self%T_relax = T_relax
+    self%alm_turbines = pack(alm_turbines, len_trim(alm_turbines) > 0)
+    self%eps_factor = eps_factor
 
     if (self%iturboutput < 0) &
       call abort_run('wind_turbine_nml: iturboutput must be non-negative.', &

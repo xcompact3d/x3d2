@@ -17,6 +17,7 @@ module m_omptgt_kernels_fieldops
 
   private
   public :: copy, axpby, pwmul, field_scale, field_shift
+  public :: sample_points, add_gaussian_sources
   public :: vorticity_from_gradients, qcriterion_from_gradients, &
             smagorinsky_from_gradients, sgs_stress_from_gradients
   public :: buffer_copy
@@ -1145,5 +1146,140 @@ contains
     !$omp end target teams distribute parallel do
 
   end subroutine gather_c
+
+  subroutine sample_points(vals, points, a, b, c, n_points, n_f, n_k, d, &
+                           grid)
+    !! vals(1:3, p) = this rank's part of the trilinear interpolation of the
+    !! DIR_X VERT fields a, b and c at points(:, p), one thread per point;
+    !! see field_sample_points. grid holds the local VERT dims, global VERT
+    !! dims, rank offsets and periodic flags (1/0), three entries each, then
+    !! the padded y-block count of the DIR_X layout.
+    integer, intent(in) :: n_points, n_f, n_k
+    real(dp), intent(out) :: vals(3, n_points)
+    real(dp), intent(in) :: points(3, n_points), d(3)
+    integer, intent(in) :: grid(13)
+    real(dp), intent(in) :: a(SZ, n_f, n_k), b(SZ, n_f, n_k), c(SZ, n_f, n_k)
+
+    real(dp) :: fx, fy, fz, w, sa, sb, sc
+    integer :: p, o1, o2, o3, x0, y0, z0, lx, ly, lz, i, k
+
+    !$omp target teams distribute parallel do &
+    !$omp private(fx, fy, fz, w, sa, sb, sc, o1, o2, o3, x0, y0, z0, &
+    !$omp         lx, ly, lz, i, k) &
+    !$omp map(to: points, d, grid) map(from: vals) OMP_DEVICE_ADDR(a, b, c)
+    do p = 1, n_points
+      fx = points(1, p)/d(1)
+      fy = points(2, p)/d(2)
+      fz = points(3, p)/d(3)
+      x0 = floor(fx)
+      y0 = floor(fy)
+      z0 = floor(fz)
+      fx = fx - x0
+      fy = fy - y0
+      fz = fz - z0
+      sa = 0._dp
+      sb = 0._dp
+      sc = 0._dp
+      do o3 = 0, 1
+        lz = z0 + o3
+        if (grid(12) /= 0) lz = modulo(lz, grid(6))
+        if (lz < 0 .or. lz >= grid(6)) cycle
+        lz = lz - grid(9) + 1
+        if (lz < 1 .or. lz > grid(3)) cycle
+        do o2 = 0, 1
+          ly = y0 + o2
+          if (grid(11) /= 0) ly = modulo(ly, grid(5))
+          if (ly < 0 .or. ly >= grid(5)) cycle
+          ly = ly - grid(8) + 1
+          if (ly < 1 .or. ly > grid(2)) cycle
+          do o1 = 0, 1
+            lx = x0 + o1
+            if (grid(10) /= 0) lx = modulo(lx, grid(4))
+            if (lx < 0 .or. lx >= grid(4)) cycle
+            lx = lx - grid(7) + 1
+            if (lx < 1 .or. lx > grid(1)) cycle
+            w = merge(fx, 1._dp - fx, o1 == 1) &
+                *merge(fy, 1._dp - fy, o2 == 1) &
+                *merge(fz, 1._dp - fz, o3 == 1)
+            i = mod(ly - 1, SZ) + 1
+            k = (ly - 1)/SZ + 1 + (lz - 1)*grid(13)
+            sa = sa + w*a(i, lx, k)
+            sb = sb + w*b(i, lx, k)
+            sc = sc + w*c(i, lx, k)
+          end do
+        end do
+      end do
+      vals(1, p) = sa
+      vals(2, p) = sb
+      vals(3, p) = sc
+    end do
+    !$omp end target teams distribute parallel do
+
+  end subroutine sample_points
+
+  subroutine add_gaussian_sources(a, b, c, src, box, n_src, n_box_y, &
+                                  n_box_z, inv_eps2, r_cut, n_f, n_k, d, &
+                                  grid)
+    !! a, b, c += src(4:6, s)*exp(-dist^2/eps^2) within r_cut of the point
+    !! src(1:3, s), over the global index box box(1:3, s)..box(4:6, s); see
+    !! source_index_boxes. Box indices are wrapped across periodic
+    !! boundaries and skipped where this rank does not own them. One thread
+    !! per (source, z, y) of the box, each sweeping x; sources overlap, so
+    !! the adds are atomic. grid holds the local VERT dims, global VERT dims,
+    !! rank offsets and periodic flags (1/0), three entries each, then the
+    !! padded y-block count.
+    integer, intent(in) :: n_src, n_box_y, n_box_z, n_f, n_k
+    real(dp), intent(in) :: src(6, n_src), inv_eps2, r_cut, d(3)
+    integer, intent(in) :: box(6, n_src), grid(13)
+    real(dp), intent(inout) :: a(SZ, n_f, n_k), b(SZ, n_f, n_k), &
+                               c(SZ, n_f, n_k)
+
+    real(dp) :: dz2, dyz2, dist2, kern
+    integer :: s, ky, kz, g_x, g_y, g_z, x, y, z, i, k
+
+    !$omp target teams distribute parallel do collapse(3) &
+    !$omp private(dz2, dyz2, dist2, kern, g_x, g_y, g_z, x, y, z, i, k) &
+    !$omp map(to: src, box, d, grid) OMP_DEVICE_ADDR(a, b, c)
+    do s = 1, n_src
+      do kz = 0, n_box_z - 1
+        do ky = 0, n_box_y - 1
+          g_z = box(3, s) + kz
+          g_y = box(2, s) + ky
+          if (g_z > box(6, s) .or. g_y > box(5, s)) cycle
+          ! Wrap periodic indices; skip the ones this rank does not own
+          z = g_z
+          if (grid(12) /= 0) z = modulo(g_z, grid(6))
+          z = z - grid(9) + 1
+          if (z < 1 .or. z > grid(3)) cycle
+          y = g_y
+          if (grid(11) /= 0) y = modulo(g_y, grid(5))
+          y = y - grid(8) + 1
+          if (y < 1 .or. y > grid(2)) cycle
+          dz2 = (src(3, s) - g_z*d(3))**2
+          dyz2 = dz2 + (src(2, s) - g_y*d(2))**2
+          if (dyz2 > r_cut**2) cycle
+          i = mod(y - 1, SZ) + 1
+          k = (y - 1)/SZ + 1 + (z - 1)*grid(13)
+          do g_x = box(1, s), box(4, s)
+            x = g_x
+            if (grid(10) /= 0) x = modulo(g_x, grid(4))
+            x = x - grid(7) + 1
+            if (x < 1 .or. x > grid(1)) cycle
+            dist2 = dyz2 + (src(1, s) - g_x*d(1))**2
+            if (dist2 > r_cut**2) cycle
+            kern = exp(-dist2*inv_eps2)
+            !$omp atomic update
+            a(i, x, k) = a(i, x, k) + src(4, s)*kern
+            !$omp atomic update
+            b(i, x, k) = b(i, x, k) + src(5, s)*kern
+            !$omp atomic update
+            c(i, x, k) = c(i, x, k) + src(6, s)*kern
+          end do
+        end do
+      end do
+    end do
+    !$omp end target teams distribute parallel do
+
+  end subroutine add_gaussian_sources
 
 end module m_omptgt_kernels_fieldops

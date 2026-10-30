@@ -658,18 +658,24 @@ These parameters are specified in the ``wind_turbine_nml`` namelist block. The
 ``iturbine``: Selects the turbine forcing model.
 
   - ``0`` — no turbine forcing.
-  - ``1`` — actuator line model. Not yet implemented: selecting it runs the case with no turbine forcing (equivalent to ``0``).
+  - ``1`` — actuator line model (ALM); see below.
   - ``2`` — actuator disc model (ADM); see below.
 
   **Default:** ``0``
 
-``iturboutput``: Frequency (in timesteps) at which turbine diagnostics are written. Set to ``0`` to disable.
+``iturboutput``: Frequency (in timesteps) at which turbine diagnostics are written, independently of ``n_output``. Set to ``0`` to disable.
   **Default:** ``1``
 
 ``adm_coords``: Path to the actuator-disc coordinates file (``.ad``) read when ``iturbine = 2``. See `Actuator disc file`_.
   **Default:** ``""`` (empty)
 
-``rho_air``: Air density used in the ADM thrust and power diagnostics. The projected momentum force is divided by ``rho_air`` so it is a true acceleration; with ``rho_air = 1`` this matches the Incompact3d convention.
+``alm_turbines``: List of turbine files (``.turb``) read when ``iturbine = 1``, one per turbine. See `Actuator Line Model (ALM)`_.
+  **Default:** none
+
+``eps_factor``: Width of the ALM Gaussian smearing kernel in units of the cell size :math:`(\Delta x\Delta y\Delta z)^{1/3}`.
+  **Default:** ``2``
+
+``rho_air``: Air density used in the turbine thrust and power diagnostics. The projected momentum force is divided by ``rho_air`` so it is a true acceleration; with ``rho_air = 1`` this matches the Incompact3d convention.
   **Default:** ``1``
 
 ``T_relax``: Time constant of the ADM first-order low-pass filter applied to the disc-averaged velocity. A negative value disables the filter (the instantaneous disc velocity is used).
@@ -715,3 +721,50 @@ at most one disc, and the run stops at start-up if the smearing kernels of two
 discs overlap; this only happens for discs closer than about one rotor
 diameter.
 
+Actuator Line Model (ALM)
+^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+When ``iturbine = 1``, each blade (and optionally the tower) of every turbine
+is a line of actuator elements, ported from Incompact3d's actuator line model.
+Once per time step the velocity is interpolated trilinearly at every element
+centre :math:`\mathbf{x}_s`, the element force :math:`\mathbf{F}_s` follows
+from the static airfoil polars, and the forces are projected onto the grid as
+
+.. math::
+
+   \mathbf{f}(\mathbf{x}) = -\frac{1}{\rho_\text{air}} \sum_s
+   \frac{\mathbf{F}_s}{\epsilon^3 \pi^{3/2}}
+   \exp\left(-\frac{|\mathbf{x}-\mathbf{x}_s|^2}{\epsilon^2}\right),
+   \qquad \epsilon = \texttt{eps\_factor}\,(\Delta x\Delta y\Delta z)^{1/3},
+
+truncated at :math:`10\epsilon`. The rotors then advance by one step. As in
+Incompact3d, the same force field is added at every substage of the step. Only
+uniform grids are supported.
+
+The input files use the Incompact3d formats, so existing turbine set-ups can be
+reused unchanged:
+
+- ``.turb``: a ``&TurbineSpecs`` namelist with the rotor origin, blade count,
+  blade geometry file, airfoil files (``numfoil``, ``afname``), operating mode
+  and tower options.
+- ``.al``: blade or tower geometry: the length, the spanwise axis, the number
+  of stations, then one row per station of ``r/R  c/R  pitch[deg]  t/c``.
+- ``.air``: airfoil polars: thickness ratio, zero-lift angle and camber flag,
+  then one ``AOA CL CD CM25`` table per Reynolds number spanning
+  -180 to 180 degrees.
+
+Supported options: horizontal-axis rotors (``TypeFlag = 1``), clockwise or
+counterclockwise rotation, constant rotation (``OperFlag = 1``), the NREL 5 MW
+torque and pitch controller (``OperFlag = 2``), rotation from an upstream
+velocity probe (``OperFlag = 4``), the tower model, and Glauert or Shen et al.
+tip/root corrections (``EndEffectsFlag = 1, 2``). ``OperFlag = 1`` and ``4``
+need a positive ``uref``: it sets the initial rotor speed ``uref*tsr/R``,
+which with ``OperFlag = 4`` the upstream probe then updates. The list
+controller, dynamic stall, added mass, random-walk forcing, aeroelasticity and
+standalone actuator lines are not ported yet; selecting them stops the run.
+
+Rotor performance (revolutions, angular velocity, controller state, upstream
+velocity, thrust, torque, power, :math:`C_T`, :math:`C_P` and running means) is
+written to ``<turbine name>.perf``, and the element loads of each blade and
+tower to ``<line name>.load``, every ``iturboutput`` steps. The rotor and
+controller state is saved to and restored from checkpoints.

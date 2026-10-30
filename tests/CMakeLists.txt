@@ -419,6 +419,7 @@ function(define_backend_tests backend)
   endif()
   define_test(unit/test_precorrect_walls.f90 ${serial} ${backend})
   define_test(unit/test_adm.f90 ${serial} ${backend})
+  define_test(unit/test_alm.f90 ${np} ${backend})
   if(is_omp AND NOT np EQUAL serial)
     # Reordering is checked both without and with a decomposition.
     define_test(unit/test_reordering.f90 ${np} ${backend})
