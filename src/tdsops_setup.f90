@@ -114,7 +114,9 @@ contains
       else
         call log_warn('the low-pass filter is decomposed in direction ' &
                       //str(dir)//'; it does not exactly preserve the mean &
-                      &and its result depends on the decomposition.')
+                      &and its result depends on the decomposition. The &
+                      &entry the distributed solver disregards is ' &
+                      //str(dirps%lowpass%dist_sa(n_vert))//'.')
       end if
     end if
 

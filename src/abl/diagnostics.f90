@@ -11,7 +11,7 @@ module m_abl_diagnostics
   use m_config, only: abl_config_t
   use m_field, only: field_t
   use m_logger, only: abort_run
-  use m_les, only: neutral_drag_coefficient
+  use m_les, only: neutral_drag_coefficient, abl_wall_sample_location
   use m_mesh, only: mesh_t
 
   implicit none
@@ -86,7 +86,7 @@ contains
 
     class(field_t), pointer :: stress
     real(dp), allocatable :: profile(:, :), sums(:)
-    real(dp) :: wall_stress(2), sampling_height, drag_coeff
+    real(dp) :: wall_stress(2), sampling_height, sample_weight, drag_coeff
     integer :: dims(3), plane_count, ierr, sample_plane
 
     if (self%cfg%profile_start_iter < 0) return
@@ -105,19 +105,20 @@ contains
     ! Apply the same pointwise drag law used by the SGS wall boundary, then
     ! average its stress over the horizontal plane. Averaging velocity first
     ! would underreport the nonlinear stress in a turbulent field.
-    sample_plane = nint(self%cfg%dsampling) + 1
-    sample_plane = min(max(sample_plane, 2), dims(2))
-    sampling_height = self%mesh%geo%vert_coords(sample_plane, 2) &
-                      - self%mesh%geo%vert_coords(1, 2)
+    call abl_wall_sample_location(self%mesh, self%cfg%dsampling, &
+                                  sample_plane, sample_weight, &
+                                  sampling_height)
     drag_coeff = neutral_drag_coefficient(self%cfg%kappa, self%cfg%z0, &
                                           sampling_height)
     stress => self%backend%allocator%get_block(DIR_X, VERT)
     call self%backend%field_set_abl_wall_stress( &
-      stress, u, w, sample_plane, sample_plane, drag_coeff, 1)
+      stress, u, w, sample_plane, sample_weight, sample_plane, drag_coeff, &
+      1)
     call self%backend%field_plane_sums(sums, stress)
     wall_stress(1) = sums(sample_plane)
     call self%backend%field_set_abl_wall_stress( &
-      stress, u, w, sample_plane, sample_plane, drag_coeff, 3)
+      stress, u, w, sample_plane, sample_weight, sample_plane, drag_coeff, &
+      3)
     call self%backend%field_plane_sums(sums, stress)
     wall_stress(2) = sums(sample_plane)
     call self%backend%allocator%release_block(stress)

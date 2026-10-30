@@ -2,10 +2,12 @@ module m_base_backend
   use iso_c_binding, only: c_ptr
 
   use m_allocator, only: allocator_t
-  use m_common, only: dp, DIR_C, X_FACE, get_rdr_from_dirs
+  use m_common, only: dp, DIR_C, VERT, X_FACE, MPI_X3D2_DP, get_rdr_from_dirs
   use m_field, only: field_t
   use m_logger, only: abort_run
   use m_mesh, only: mesh_t
+  use m_mpi, only: MPI_COMM_WORLD, MPI_STATUSES_IGNORE, MPI_Irecv, &
+                   MPI_Isend, MPI_Waitall
   use m_poisson_fft, only: poisson_fft_t
   use m_tdsops, only: tdsops_t, dirps_t
 
@@ -69,6 +71,7 @@ module m_base_backend
     procedure :: field_set_face => field_set_face_base
     procedure :: field_set_y_plane => field_set_y_plane_base
     procedure :: field_set_abl_wall_stress => field_set_abl_wall_stress_base
+    procedure :: field_shift_blend_x_band => field_shift_blend_x_band_base
     procedure :: field_set_face_from_field => field_set_face_from_field_base
     procedure :: set_field_face_data => set_field_face_data_base
     procedure :: field_add_face_from_field => field_add_face_from_field_base
@@ -105,6 +108,25 @@ contains
     call abort_run(trim(operation)//': not implemented by the active backend')
 
   end subroutine not_implemented
+
+  function abl_wall_upper_plane(sample_plane, sample_weight, ny) &
+    result(upper_plane)
+    !! The y-vertex above the ABL wall-model sample plane, checked against
+    !! the interpolation weight. With a zero weight the upper plane is not
+    !! read, so the sample may then sit on the last vertex.
+    implicit none
+
+    integer, intent(in) :: sample_plane, ny
+    real(dp), intent(in) :: sample_weight
+    integer :: upper_plane
+
+    if (sample_weight < 0._dp .or. sample_weight >= 1._dp) &
+      call abort_run('ABL wall stress sample weight must be in [0, 1).')
+    upper_plane = min(sample_plane + 1, ny)
+    if (sample_weight > 0._dp .and. upper_plane == sample_plane) &
+      call abort_run('ABL wall stress interpolates above the domain.')
+
+  end function abl_wall_upper_plane
 
   subroutine base_init(self)
     implicit none
@@ -607,20 +629,139 @@ contains
   end subroutine field_set_y_plane_base
 
   subroutine field_set_abl_wall_stress_base(self, stress, u, w, &
-                                            sample_plane, stress_plane, &
-                                            drag_coeff, component)
+                                            sample_plane, sample_weight, &
+                                            stress_plane, drag_coeff, &
+                                            component)
     !! Replace one SGS stress plane using the local sampled velocity.
+    !! The velocity is interpolated linearly between y-vertices
+    !! sample_plane and sample_plane + 1, with weight sample_weight on the
+    !! upper one, as Incompact3d samples at a non-integer dsampling.
     implicit none
 
     class(base_backend_t) :: self
     class(field_t), intent(inout) :: stress
     class(field_t), intent(in) :: u, w
     integer, intent(in) :: sample_plane, stress_plane, component
+    real(dp), intent(in) :: sample_weight !! in [0, 1)
     real(dp), intent(in) :: drag_coeff
 
     call not_implemented('field_set_abl_wall_stress')
 
   end subroutine field_set_abl_wall_stress_base
+
+  subroutine field_shift_blend_x_band_base(self, f, lambda, i_start, &
+                                           i_offset, nshift, z_plane_rank)
+    !! Blend an x band of a DIR_X vertex field towards a spanwise-shifted
+    !! copy of an upstream band (the ABL shifted periodic fringe):
+    !! f(i + i_offset, j, k) = lambda*f(i, j, k - nshift)
+    !!                         + (1 - lambda)*f(i + i_offset, j, k)
+    !! for i = i_start, ..., i_start + size(lambda) - 1, with k circular over
+    !! the global z planes. x and y must not be decomposed; z_plane_rank(kg)
+    !! is the rank holding global z plane kg.
+    !!
+    !! This default works on the host through get_field_data and
+    !! set_field_data, so it suits a host backend; a device backend should
+    !! override it to keep the field on the device.
+    implicit none
+
+    class(base_backend_t) :: self
+    class(field_t), intent(inout) :: f
+    real(dp), intent(in) :: lambda(:)
+    integer, intent(in) :: i_start, i_offset, nshift
+    integer, intent(in) :: z_plane_rank(:)
+
+    real(dp), allocatable :: host(:, :, :), band(:, :, :), shifted(:, :, :)
+    integer, allocatable :: requests(:)
+    integer :: dims(3), padded(3), nband, z_offset, nz, rank, k, k_src
+    integer :: n_req, i, i_dst, j, ierr
+
+    dims = self%mesh%get_dims(VERT)
+    padded = self%allocator%get_padded_dims(DIR_C)
+    nband = size(lambda)
+    nz = size(z_plane_rank)
+    z_offset = self%mesh%par%n_offset(3)
+    rank = self%mesh%par%nrank
+
+    allocate (host(padded(1), padded(2), padded(3)))
+    call self%get_field_data(host, f)
+    band = host(i_start:i_start + nband - 1, 1:dims(2), 1:dims(3))
+    allocate (shifted(nband, dims(2), dims(3)))
+    allocate (requests(2*dims(3)))
+
+    n_req = 0
+    do k = 1, dims(3)
+      k_src = shifted_z_source(z_offset + k, nshift, nz)
+      if (z_plane_rank(k_src) == rank) then
+        shifted(:, :, k) = band(:, :, k_src - z_offset)
+      end if
+    end do
+    call post_z_shift_exchange(band, shifted, nband*dims(2), dims(3), &
+                               z_offset, nshift, z_plane_rank, rank, &
+                               requests, n_req)
+    if (n_req > 0) &
+      call MPI_Waitall(n_req, requests, MPI_STATUSES_IGNORE, ierr)
+
+    do k = 1, dims(3)
+      do j = 1, dims(2)
+        do i = 1, nband
+          i_dst = i_start + i - 1 + i_offset
+          host(i_dst, j, k) = lambda(i)*shifted(i, j, k) &
+                              + (1._dp - lambda(i))*host(i_dst, j, k)
+        end do
+      end do
+    end do
+
+    call self%set_field_data(f, host)
+
+  end subroutine field_shift_blend_x_band_base
+
+  subroutine post_z_shift_exchange(band, shifted, n_plane, nz_local, &
+                                   z_offset, nshift, z_plane_rank, rank, &
+                                   requests, n_req)
+    !! Post the sends and receives of a circular z shift by nshift planes
+    !! for the planes held by other ranks; band(:, :, k) and
+    !! shifted(:, :, k) are this rank's local plane k. The tag is the
+    !! receiving global plane.
+    implicit none
+
+    real(dp), intent(in) :: band(:, :, :)
+    real(dp), intent(inout) :: shifted(:, :, :)
+    integer, intent(in) :: n_plane, nz_local, z_offset, nshift, rank
+    integer, intent(in) :: z_plane_rank(:)
+    integer, intent(inout) :: requests(:)
+    integer, intent(out) :: n_req
+
+    integer :: k, kg, k_src, k_dst, nz, ierr
+
+    nz = size(z_plane_rank)
+    n_req = 0
+    do k = 1, nz_local
+      kg = z_offset + k
+      k_src = shifted_z_source(kg, nshift, nz)
+      if (z_plane_rank(k_src) /= rank) then
+        n_req = n_req + 1
+        call MPI_Irecv(shifted(1, 1, k), n_plane, MPI_X3D2_DP, &
+                       z_plane_rank(k_src), kg, MPI_COMM_WORLD, &
+                       requests(n_req), ierr)
+      end if
+      k_dst = shifted_z_source(kg, -nshift, nz)
+      if (z_plane_rank(k_dst) /= rank) then
+        n_req = n_req + 1
+        call MPI_Isend(band(1, 1, k), n_plane, MPI_X3D2_DP, &
+                       z_plane_rank(k_dst), k_dst, MPI_COMM_WORLD, &
+                       requests(n_req), ierr)
+      end if
+    end do
+
+  end subroutine post_z_shift_exchange
+
+  pure integer function shifted_z_source(kg, nshift, nz)
+    !! Global z plane that global plane kg takes its value from in a
+    !! circular shift by nshift planes
+    integer, intent(in) :: kg, nshift, nz
+
+    shifted_z_source = modulo(kg - 1 - nshift, nz) + 1
+  end function shifted_z_source
 
   subroutine field_set_face_from_field_base(self, f, f_start, c_end, face, &
                                             bc_start, bc_end, flow_rate_diff)

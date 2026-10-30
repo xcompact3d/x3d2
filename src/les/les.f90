@@ -18,7 +18,7 @@ module m_les
   private
   public :: les_t, smagorinsky_nut, strain_rate_magnitude, &
             filter_width, wall_damped_mixing_length, neutral_wall_stress, &
-            neutral_drag_coefficient
+            neutral_drag_coefficient, abl_wall_sample_location
 
   type :: les_t
     character(len=20) :: model = 'none'
@@ -32,8 +32,10 @@ module m_les
     real(dp) :: roughness_length = 0._dp
     logical :: abl_wall_boundary_enabled = .false.
     real(dp) :: abl_wall_sampling_height = 0._dp
-    !! y-vertex the wall model samples the velocity at (1 is the wall).
+    !! y-vertex the wall model samples the velocity at (1 is the wall), and
+    !! the weight of the vertex above it in the linear interpolation.
     integer :: abl_wall_sample_plane = 2
+    real(dp) :: abl_wall_sample_weight = 0._dp
     class(field_t), pointer :: nut => null()
     class(field_t), pointer :: mixing_length_sq => null()
   contains
@@ -177,10 +179,12 @@ contains
   end subroutine configure_wall_damping
 
   subroutine configure_abl_wall_boundary( &
-    self, kappa, roughness_length, sampling_height, sample_plane)
+    self, kappa, roughness_length, sampling_height, sample_plane, &
+    sample_weight)
     class(les_t), intent(inout) :: self
     real(dp), intent(in) :: kappa, roughness_length, sampling_height
     integer, intent(in) :: sample_plane
+    real(dp), intent(in) :: sample_weight
 
     if (trim(self%model) /= 'smagorinsky') &
       call abort_run('The neutral ABL wall model requires Smagorinsky LES.')
@@ -195,6 +199,7 @@ contains
     self%abl_wall_boundary_enabled = .true.
     self%abl_wall_sampling_height = sampling_height
     self%abl_wall_sample_plane = sample_plane
+    self%abl_wall_sample_weight = sample_weight
   end subroutine configure_abl_wall_boundary
 
   subroutine compute_nut(self, backend, mesh, u, v, w, &
@@ -294,7 +299,8 @@ contains
                        dudx, dudy, dudz, dvdx, dvdy, dvdz, &
                        dwdx, dwdy, dwdz, xdirps, ydirps, zdirps, &
                        self%abl_wall_boundary_enabled, u, w, &
-                       self%abl_wall_sample_plane, wall_drag_coeff)
+                       self%abl_wall_sample_plane, &
+                       self%abl_wall_sample_weight, wall_drag_coeff)
 
     call release_velocity_gradients( &
       backend, dudx, dudy, dudz, dvdx, dvdy, dvdz, dwdx, dwdy, dwdz)
@@ -304,7 +310,8 @@ contains
                            dudx, dudy, dudz, dvdx, dvdy, dvdz, &
                            dwdx, dwdy, dwdz, xdirps, ydirps, zdirps, &
                            abl_wall, wall_u, wall_w, &
-                           wall_sample_plane, wall_drag_coeff)
+                           wall_sample_plane, wall_sample_weight, &
+                           wall_drag_coeff)
     class(base_backend_t), intent(inout) :: backend
     class(field_t), intent(inout) :: du, dv, dw
     class(field_t), intent(in) :: nut
@@ -315,7 +322,7 @@ contains
     logical, intent(in) :: abl_wall
     class(field_t), intent(in) :: wall_u, wall_w
     integer, intent(in) :: wall_sample_plane
-    real(dp), intent(in) :: wall_drag_coeff
+    real(dp), intent(in) :: wall_sample_weight, wall_drag_coeff
 
     ! On the first plane above a no-slip floor the whole SGS stress tensor is
     ! replaced, as Incompact3d does in sgs_mom_conservative: tau_xy and tau_yz
@@ -327,13 +334,13 @@ contains
     call add_normal_stress(backend, dw, nut, dwdz, zdirps, abl_wall)
     call add_shear_stress(backend, du, ydirps, dv, xdirps, nut, dudy, dvdx, &
                           abl_wall, 1, wall_u, wall_w, wall_sample_plane, &
-                          wall_drag_coeff)
+                          wall_sample_weight, wall_drag_coeff)
     call add_shear_stress(backend, du, zdirps, dw, xdirps, nut, dudz, dwdx, &
                           abl_wall, 0, wall_u, wall_w, wall_sample_plane, &
-                          wall_drag_coeff)
+                          wall_sample_weight, wall_drag_coeff)
     call add_shear_stress(backend, dv, zdirps, dw, ydirps, nut, dvdz, dwdy, &
                           abl_wall, 3, wall_u, wall_w, wall_sample_plane, &
-                          wall_drag_coeff)
+                          wall_sample_weight, wall_drag_coeff)
   end subroutine add_sgs_terms
 
   pure subroutine neutral_wall_stress(u_sample, w_sample, kappa, &
@@ -363,6 +370,39 @@ contains
 
     drag_coeff = (kappa/log(sampling_height/roughness_length))**2
   end function neutral_drag_coefficient
+
+  subroutine abl_wall_sample_location(mesh, dsampling, sample_plane, &
+                                      sample_weight, sampling_height)
+    !! Where the ABL wall model samples the velocity, dsampling grid
+    !! spacings above the floor (vertex 1). As in Incompact3d's
+    !! wall_sgs_noslip, the sample is interpolated linearly between the
+    !! vertices below and above that height, so a non-integer dsampling is
+    !! honoured rather than rounded to a grid plane.
+    type(mesh_t), intent(in) :: mesh
+    real(dp), intent(in) :: dsampling
+    integer, intent(out) :: sample_plane
+    real(dp), intent(out) :: sample_weight, sampling_height
+
+    integer :: dims(3), ny
+
+    dims = mesh%get_dims(VERT)
+    ny = dims(2)
+    if (dsampling < 1._dp) &
+      call abort_run('ABL dsampling must be at least one grid spacing.')
+    sample_plane = floor(dsampling) + 1
+    sample_weight = dsampling - real(floor(dsampling), dp)
+    if (sample_plane > ny .or. &
+        (sample_weight > 0._dp .and. sample_plane + 1 > ny)) &
+      call abort_run('ABL dsampling puts the wall-model sample outside the &
+                     &domain.')
+
+    sampling_height = mesh%geo%vert_coords(sample_plane, 2) &
+                      - mesh%geo%vert_coords(1, 2)
+    if (sample_weight > 0._dp) &
+      sampling_height = sampling_height + sample_weight &
+                        *(mesh%geo%vert_coords(sample_plane + 1, 2) &
+                          - mesh%geo%vert_coords(sample_plane, 2))
+  end subroutine abl_wall_sample_location
 
   subroutine compute_velocity_gradients( &
     backend, u, v, w, xdirps, ydirps, zdirps, &
@@ -437,7 +477,7 @@ contains
     backend, rhs_a, direction_a, rhs_b, &
     direction_b, nut, gradient_a, gradient_b, &
     stamp_wall, wall_component, wall_u, wall_w, wall_sample_plane, &
-    wall_drag_coeff &
+    wall_sample_weight, wall_drag_coeff &
     )
     class(base_backend_t), intent(inout) :: backend
     class(field_t), intent(inout) :: rhs_a, rhs_b
@@ -451,7 +491,7 @@ contains
     !! wall_component: 1 for tau_xy, 3 for tau_yz (drag law from the local
     !! sampled velocity), 0 for tau_xz, which the wall does not carry
     class(field_t), intent(in) :: wall_u, wall_w
-    real(dp), intent(in) :: wall_drag_coeff
+    real(dp), intent(in) :: wall_sample_weight, wall_drag_coeff
 
     class(field_t), pointer :: stress
 
@@ -469,7 +509,7 @@ contains
         call backend%field_set_y_plane(stress, 0._dp, 2)
       else
         call backend%field_set_abl_wall_stress( &
-          stress, wall_u, wall_w, wall_sample_plane, 2, &
+          stress, wall_u, wall_w, wall_sample_plane, wall_sample_weight, 2, &
           wall_drag_coeff, wall_component)
       end if
     end if

@@ -141,6 +141,7 @@ are set in the ``abl_nml`` namelist block.
      mass_conserve = .false.
      u_bulk = 0.0
      damping = .false.
+     shifted_periodic = .false.
      profile_start_iter = -1
      profile_file = 'abl_profile.csv'
    /
@@ -200,6 +201,20 @@ the run is a successor driven by precursor inflow planes (see below).
 
   **Default:** ``.false.``
 
+``shifted_periodic``
+  Incompact3d's ``ishiftedper``, for a periodic-x precursor. At the start of
+  every substep the velocity over the last third of the domain is blended
+  towards the flow a third of the domain upstream, shifted spanwise by
+  :math:`L_z/8`, so streaks do not lock onto the periodic box. The blending
+  weight rises as :math:`\tfrac12\left(1-\cos\left(\tfrac{4\pi}{3}
+  (x - x_s)/d\right)\right)` from :math:`x_s = 5L_x/9` and is one over the
+  last quarter of :math:`d = L_x/9`, measured on the upstream copy.
+  Requires periodic x, an undecomposed x direction and at least 8 z points.
+  The source band is shifted on the host, so each substep copies ``u``,
+  ``v`` and ``w`` to the host and back.
+
+  **Default:** ``.false.``
+
 Physical parameters
 ^^^^^^^^^^^^^^^^^^^
 
@@ -240,9 +255,10 @@ replaces the SGS shear stress on the first grid plane above the wall, so the
 wall flux passes through the same operator as the SGS stress in the interior.
 
 ``dsampling``
-  Sampling height :math:`h` in grid spacings above the floor,
-  rounded to the nearest grid plane. The sample must lie inside the domain and
-  above ``z0``.
+  Sampling height :math:`h` in grid spacings above the floor, at least one.
+  A non-integer value is interpolated linearly between the two grid planes
+  around :math:`h`, as in Incompact3d. The sample must lie inside the domain
+  and above ``z0``.
 
   **Default:** ``3.0``
 
@@ -459,6 +475,32 @@ All files must hold the same number of planes at the same spacing.
 Set ``start_iter`` in the precursor after its turbulence has developed, so the
 planes carry turbulence rather than the decaying initial noise.
 
+Turbines in the boundary layer
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+An ``abl`` run can carry wind turbines, typically a successor driven by a
+precursor's inflow (Incompact3d ``iturbine`` with an ABL ``itype``). They are
+set in the same ``wind_turbine_nml`` block as for the ``wind_turbine`` case,
+with its turbine keys only (``iturbine``, ``iturboutput``, ``adm_coords``,
+``rho_air`` and ``T_relax``; see `Wind Turbine Parameters`_). The block is
+optional here: without it the run has no turbines. Only ``iturbine = 0`` or
+``2`` (actuator disc) is supported, and the uniform-inflow keys
+(``init_noise``, ``inlet_noise``, ``bc_start_*``) must not be set, since the
+ABL takes its inflow from ``abl_nml`` and ``inflow_nml``.
+
+.. code-block:: fortran
+
+   &wind_turbine_nml
+     iturbine = 2
+     iturboutput = 250
+     adm_coords = 'adm.ad'
+     rho_air = 1.2
+     T_relax = 1.1291
+   /
+
+The disc statistics start at ``initstat`` of ``stats_params``, as in the
+``wind_turbine`` case.
+
 Checkpoint Parameters
 ~~~~~~~~~~~~~~~~~~~~~
 
@@ -586,8 +628,8 @@ Wind Turbine Parameters
 
 The wind turbine parameters configure the ``wind_turbine`` flow case: a uniform
 inflow / convective outflow domain with an optional turbine forcing model.
-These parameters are specified in the ``wind_turbine_nml`` namelist block and are
-only read when ``flow_case_name = 'wind_turbine'``.
+These parameters are specified in the ``wind_turbine_nml`` namelist block. The
+``abl`` case reads its turbine keys too (see `Turbines in the boundary layer`_).
 
 .. code-block:: fortran
 
