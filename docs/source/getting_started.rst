@@ -258,9 +258,11 @@ Build options
      - Build in single precision.
    * - ``X3D2_FAST_MATH``
      - ``OFF``
-     - Add ``-ffast-math`` to the GNU and Flang ``Release`` flags. This option
-       does not change the other compilers. Intel keeps ``-fp-model=fast``
-       and the NVHPC GPU backends keep ``-fast``.
+     - Select the floating-point flags of the ``Release`` build. ``ON`` adds
+       ``-ffast-math`` for GNU and Flang, uses ``-fp-model=fast`` for Intel and
+       adds ``-fast`` for the NVHPC GPU backends. ``OFF`` adds no fast-math flag
+       for GNU and Flang, uses ``-fp-model=precise`` for Intel and builds the
+       NVHPC GPU backends with ``-O3`` only.
    * - ``WITH_MPI``
      - ``ON``
      - Build against MPI. ``OFF`` builds a serial, single-rank executable.
