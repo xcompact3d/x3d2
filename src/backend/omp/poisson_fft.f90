@@ -124,7 +124,7 @@ module m_omp_poisson_fft
   end type omp_poisson_110_t
 
   private :: init_omp, init_buffers, init_buffers_010, init_buffers_100, &
-             init_buffers_110, fold_index
+             init_buffers_110, fold_index, fold_destinations
 
 contains
 
@@ -417,7 +417,7 @@ contains
     class(field_t), intent(in) :: f_in
 
     integer :: i, j, k
-    integer, allocatable :: src_j(:)
+    integer, allocatable :: dst_j(:)
 
     if (self%mesh%par%nproc == 1) then
       !$omp parallel do collapse(2)
@@ -443,13 +443,14 @@ contains
       call transpose_x_to_y(self%r_xp, self%r_yp, self%dc)
 
       if (self%p_row > 1) then
-        src_j = fold_index([(j, j=1, self%ny_glob)], self%ny_glob)
+        ! Scatter, as in enforce_periodicity_y_omp
+        dst_j = fold_destinations(self%ny_glob)
 
         !$omp parallel do collapse(2)
         do k = 1, self%dc%ysz(3)
           do j = 1, self%ny_glob
             do i = 1, self%dc%ysz(1)
-              self%r_yp2(i, j, k) = self%r_yp(i, src_j(j), k)
+              self%r_yp2(i, dst_j(j), k) = self%r_yp(i, j, k)
             end do
           end do
         end do
@@ -796,15 +797,17 @@ contains
     class(field_t), intent(in) :: f_in
 
     integer :: i, j, k
-    integer, allocatable :: src_j(:)
+    integer, allocatable :: dst_j(:)
 
-    src_j = fold_index([(j, j=1, self%ny_glob)], self%ny_glob)
+    ! Scatter through the inverse map rather than gather through the
+    ! fold: the reads stay contiguous, which measured faster.
+    dst_j = fold_destinations(self%ny_glob)
 
     !$omp parallel do collapse(2)
     do k = 1, self%nz_loc
       do j = 1, self%ny_glob
         do i = 1, self%nx_loc
-          f_out%data(i, j, k) = f_in%data(i, src_j(j), k)
+          f_out%data(i, dst_j(j), k) = f_in%data(i, j, k)
         end do
       end do
     end do
@@ -853,26 +856,30 @@ contains
     class(field_t), intent(in) :: f_in
 
     integer :: i, j, k
-    integer, allocatable :: src_i(:), src_j(:)
+    integer, allocatable :: src_i(:), dst_i(:), dst_j(:)
 
-    ! The gather maps stay in global terms: they are a property of the
-    ! global line, and nx_loc == nx_glob always for the 110 case's x-pencil
+    ! The maps stay in global terms: they are a property of the global
+    ! line, and nx_loc == nx_glob always for the 110 case's x-pencil
     ! field, and ny_loc == ny_glob when p_row == 1 since y is not split.
-    src_i = fold_index([(i, i=1, self%nx_glob)], self%nx_glob)
-
     if (self%p_row == 1) then
-      src_j = fold_index([(j, j=1, self%ny_glob)], self%ny_glob)
+      ! Scatter through the inverse maps, as in enforce_periodicity_y_omp
+      dst_i = fold_destinations(self%nx_glob)
+      dst_j = fold_destinations(self%ny_glob)
 
       !$omp parallel do collapse(2)
       do k = 1, self%nz_loc
         do j = 1, self%ny_loc
           do i = 1, self%nx_loc
-            f_out%data(i, j, k) = f_in%data(src_i(i), src_j(j), k)
+            f_out%data(dst_i(i), dst_j(j), k) = f_in%data(i, j, k)
           end do
         end do
       end do
       !$omp end parallel do
     else
+      ! A fold in x alone is faster as a gather, as in
+      ! enforce_periodicity_x_omp
+      src_i = fold_index([(i, i=1, self%nx_glob)], self%nx_glob)
+
       !$omp parallel do collapse(2)
       do k = 1, self%nz_loc
         do j = 1, self%ny_loc
@@ -947,8 +954,10 @@ contains
     !! into a periodic one: the odd entries ascending, then the even
     !! entries descending, so that a plain FFT can stand in for the cosine
     !! transform. For an odd n the last entry lands at the centre, n/2 + 1.
-    !! The single definition of the fold: the enforce routines gather
-    !! through it and the undo routines scatter through it.
+    !! The single definition of the fold: the undo routines scatter
+    !! through it, and the enforce routines gather through it (x) or
+    !! scatter through its inverse, fold_destinations (y, xy). Each is the
+    !! form that measured fastest.
     implicit none
 
     integer, intent(in) :: i, n
@@ -962,4 +971,20 @@ contains
     end if
 
   end function fold_index
+
+  pure function fold_destinations(n) result(dst)
+    !! Where each entry of a non-periodic line of n points lands when it is
+    !! gathered by fold_index: the inverse permutation, built from
+    !! fold_index itself so the fold keeps a single definition.
+    implicit none
+
+    integer, intent(in) :: n
+    integer, allocatable :: dst(:)
+
+    integer :: i
+
+    allocate (dst(n))
+    dst(fold_index([(i, i=1, n)], n)) = [(i, i=1, n)]
+
+  end function fold_destinations
 end module m_omp_poisson_fft
