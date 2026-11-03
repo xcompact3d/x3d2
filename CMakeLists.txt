@@ -54,7 +54,7 @@ set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS "Debug;Release")
 
 # Single precision option (default OFF)
 option(SINGLE_PREC "Enable single precision" OFF)
-option(X3D2_FAST_MATH "Use fast-math Release flags (GNU, Flang and Intel)" OFF)
+option(X3D2_FAST_MATH "Use fast-math flags (GNU and Flang Release, Intel all build types)" OFF)
 mark_as_advanced(X3D2_FAST_MATH)
 
 # Intel Fortran defaults to -fp-model=fast, so x3d2, 2decomp-fft and the ADIOS2
