@@ -1,0 +1,547 @@
+module m_base_case
+  !! Provides the base case for running a simulation. New cases are
+  !! implemented by extending this to specify the initial and boundary
+  !! conditions, forcing terms and case-specific postprocessing and analysis.
+
+  use m_allocator, only: allocator_t
+  use m_base_backend, only: base_backend_t
+  use m_common, only: dp, DIR_X, DIR_C, VERT, MPI_X3D2_DP
+  use m_monitoring, only: monitoring_t
+  use m_field, only: field_t, flist_t
+  use m_mesh, only: mesh_t
+  use m_solver, only: solver_t, init
+  use m_postprocess, only: compute_derived_fields, compute_pressure_vert
+  use m_config, only: has_output_field, output_field_active
+  use m_io_manager, only: io_manager_t
+  use m_mpi, only: MPI_COMM_WORLD, MPI_Wtime, MPI_Reduce, MPI_MAX, &
+                   MPI_IN_PLACE, MPI_SUM, MPI_Allreduce
+  use m_logger, only: log_info, abort_run, str
+
+  implicit none
+
+  type, abstract :: base_case_t
+    class(solver_t), allocatable :: solver
+    type(io_manager_t) :: io_mgr
+    type(monitoring_t) :: monitoring
+    ! Persistent device BC fields (DIR_X, VERT), shared across all cases.
+    ! Allocated by the derived case on first use, refilled per substep,
+    ! released only at program end. A given case populates only the
+    ! face/end pairs it needs; the rest stay null().
+    class(field_t), pointer :: bc_start_u_x => null()
+    class(field_t), pointer :: bc_start_v_x => null()
+    class(field_t), pointer :: bc_start_w_x => null()
+    class(field_t), pointer :: bc_end_u_x => null()
+    class(field_t), pointer :: bc_end_v_x => null()
+    class(field_t), pointer :: bc_end_w_x => null()
+    class(field_t), pointer :: bc_start_u_y => null()
+    class(field_t), pointer :: bc_start_v_y => null()
+    class(field_t), pointer :: bc_start_w_y => null()
+    class(field_t), pointer :: bc_end_u_y => null()
+    class(field_t), pointer :: bc_end_v_y => null()
+    class(field_t), pointer :: bc_end_w_y => null()
+
+  contains
+    procedure(define_BC), deferred :: define_BC
+    procedure(initial_conditions), deferred :: initial_conditions
+    procedure(forcings), deferred :: forcings
+    procedure(apply_BC), deferred :: apply_BC
+    procedure(postprocess), deferred :: postprocess
+    procedure :: post_step
+    procedure :: compute_outflow_params
+    procedure :: outflow_flow_rate_correction
+    procedure :: case_init
+    procedure :: case_finalise
+    procedure :: finalise_case_specific => finalise_case_specific_default
+    procedure :: set_init
+    procedure :: substep
+    procedure :: set_curr_fields
+    procedure :: finish_step
+    procedure :: run
+  end type base_case_t
+
+  abstract interface
+    subroutine define_BC(self)
+      !! Applies case-specific boundary conditions
+      import :: base_case_t
+      implicit none
+
+      class(base_case_t) :: self
+    end subroutine define_BC
+
+    subroutine initial_conditions(self)
+      !! Sets case-specific initial conditions
+      import :: base_case_t
+      implicit none
+
+      class(base_case_t) :: self
+    end subroutine initial_conditions
+
+    subroutine forcings(self, du, dv, dw, iter)
+      !! Applies case-specific or model related forcings after transeq
+      import :: base_case_t
+      import :: field_t
+      implicit none
+
+      class(base_case_t) :: self
+      class(field_t), intent(inout) :: du, dv, dw
+      integer, intent(in) :: iter
+    end subroutine forcings
+
+    subroutine apply_BC(self, u, v, w)
+      !! Applies case-specific pre-correction to the velocity fields before
+      !! pressure correction
+      import :: base_case_t
+      import :: field_t
+      implicit none
+
+      class(base_case_t) :: self
+      class(field_t), intent(inout) :: u, v, w
+    end subroutine apply_BC
+
+    subroutine postprocess(self, iter, t)
+      !! Triggers case-specific postprocessings at user specified intervals
+      import :: base_case_t
+      import :: dp
+      implicit none
+
+      class(base_case_t) :: self
+      integer, intent(in) :: iter
+      real(dp), intent(in) :: t
+    end subroutine postprocess
+  end interface
+
+contains
+
+  subroutine case_init(self, backend, mesh, host_allocator)
+    implicit none
+
+    class(base_case_t) :: self
+    class(base_backend_t), target, intent(inout) :: backend
+    type(mesh_t), target, intent(inout) :: mesh
+    type(allocator_t), target, intent(inout) :: host_allocator
+
+    self%solver = init(backend, mesh, host_allocator)
+
+    call self%io_mgr%init(self%solver, MPI_COMM_WORLD)
+
+    ! Tell the solver to persist pressure if output is enabled
+    self%solver%keep_pressure = &
+      has_output_field(self%io_mgr%snapshot_mgr%config, 'pressure') &
+      .and. self%io_mgr%snapshot_mgr%config%snapshot_freq > 0
+
+    if (self%io_mgr%is_restart()) then
+      call self%io_mgr%handle_restart(self%solver, MPI_COMM_WORLD)
+    else
+      call self%initial_conditions()
+    end if
+
+    call self%monitoring%init(self%solver, append=self%io_mgr%is_restart())
+
+  end subroutine case_init
+
+  subroutine case_finalise(self)
+    class(base_case_t) :: self
+
+    call self%finalise_case_specific()
+    call log_info('run end')
+
+    ! release the persistent inflow-BC planes allocated by cases that use
+    ! them
+    if (associated(self%bc_start_u_x)) &
+      call self%solver%backend%allocator%release_block(self%bc_start_u_x)
+    if (associated(self%bc_start_v_x)) &
+      call self%solver%backend%allocator%release_block(self%bc_start_v_x)
+    if (associated(self%bc_start_w_x)) &
+      call self%solver%backend%allocator%release_block(self%bc_start_w_x)
+
+    call self%monitoring%finalise()
+    call self%io_mgr%finalise()
+    call self%solver%finalise()
+  end subroutine case_finalise
+
+  subroutine post_step(self, iter, t)
+    !! Called after every completed time step, unlike postprocess which runs
+    !! only every n_output steps. No-op unless a case overrides it.
+    implicit none
+
+    class(base_case_t) :: self
+    integer, intent(in) :: iter
+    real(dp), intent(in) :: t
+  end subroutine post_step
+
+  subroutine compute_outflow_params(self, out_vel, flow_rate_diff)
+    !! Convective outflow number and inlet/outlet flow-rate imbalance for a
+    !! case with an x inflow and a convective x outflow (the X_FACE form of
+    !! field_set_face_from_field). Three slice reductions on the device and
+    !! two batched MPI_Allreduces; no D2H copy of the full field. Assumes x
+    !! is not decomposed, as the FFT Poisson solver requires. Without
+    !! flow_rate_diff only the outflow number is computed.
+    implicit none
+    class(base_case_t) :: self
+    real(dp), intent(out) :: out_vel
+    real(dp), optional, intent(out) :: flow_rate_diff
+
+    integer :: dims(3), dims_glob(3), nx, ierr
+    real(dp) :: uxmax, uxmax_discard
+    real(dp) :: flow_rate_in, flow_rate_out
+    real(dp) :: flow_rate_in_max_discard, flow_rate_out_max_discard
+    real(dp) :: fl_sums(2), ny_nz
+    real(dp) :: dx, gdt
+
+    dims = self%solver%mesh%get_dims(VERT)
+    nx = dims(1)
+    dx = self%solver%mesh%geo%d(1)
+    ! The slice sums are rank local and the Allreduce below adds them up
+    ! across the whole y-z plane, so the divisor is the global vertex count
+    ! in y and z rather than this rank's share of it.
+    dims_glob = self%solver%mesh%get_global_dims(VERT)
+    ny_nz = real(dims_glob(2)*dims_glob(3), dp)
+    gdt = self%solver%time_integrator%gdt
+
+    call self%solver%backend%slice_max_sum( &
+      uxmax, uxmax_discard, self%solver%u, nx - 1)
+    call MPI_Allreduce(MPI_IN_PLACE, uxmax, 1, MPI_X3D2_DP, &
+                       MPI_MAX, MPI_COMM_WORLD, ierr)
+    out_vel = uxmax*gdt/dx
+    if (.not. present(flow_rate_diff)) return
+
+    call self%solver%backend%slice_max_sum( &
+      flow_rate_in_max_discard, flow_rate_in, self%solver%u, 1)
+    call self%solver%backend%slice_max_sum( &
+      flow_rate_out_max_discard, flow_rate_out, self%solver%u, nx)
+
+    fl_sums(1) = flow_rate_in
+    fl_sums(2) = flow_rate_out
+    call MPI_Allreduce(MPI_IN_PLACE, fl_sums, 2, MPI_X3D2_DP, MPI_SUM, &
+                       MPI_COMM_WORLD, ierr)
+    flow_rate_in = fl_sums(1)/ny_nz
+    flow_rate_out = fl_sums(2)/ny_nz
+
+    flow_rate_diff = flow_rate_in - flow_rate_out
+  end subroutine compute_outflow_params
+
+  function outflow_flow_rate_correction(self, u, out_vel, y_weights) &
+    result(flow_rate_diff)
+    !! The flow_rate_diff for the X_FACE stamp of field_set_face_from_field
+    !! that makes the flow rate out equal the flow rate in exactly, as the
+    !! pressure projection sees them. The x staggered derivative sums to
+    !! (u(nx) - u(1))/dx over the cells, so only the two face planes enter,
+    !! each weighted over y by y_weights: the case passes the weights of the
+    !! y interpolation (1/2 on a non-periodic boundary plane, 1 elsewhere),
+    !! with 0 on any plane it overwrites with the same value on both faces
+    !! after the stamp. The stamp is linear in u,
+    !! u(nx) <- (1 - c)*u(nx) + c*u(nx - 1) + flow_rate_diff, so the sums of
+    !! the planes before it give the outlet flow rate after it. Call it with
+    !! u as it is about to be stamped, once bc_start_u_x holds this substep's
+    !! inlet plane. Assumes x is not decomposed, as compute_outflow_params
+    !! does.
+    implicit none
+    class(base_case_t) :: self
+    class(field_t), intent(in) :: u
+    real(dp), intent(in) :: out_vel
+    real(dp), intent(in) :: y_weights(:)
+    real(dp) :: flow_rate_diff
+
+    integer :: dims(3), nx, ierr
+    real(dp) :: sums(4)
+
+    dims = self%solver%mesh%get_dims(VERT)
+    nx = dims(1)
+    call self%solver%backend%x_slice_weighted_sum( &
+      sums(1), self%bc_start_u_x, 1, y_weights)
+    call self%solver%backend%x_slice_weighted_sum(sums(2), u, nx, y_weights)
+    call self%solver%backend%x_slice_weighted_sum( &
+      sums(3), u, nx - 1, y_weights)
+    ! The correction is added to every point of the outlet plane, so it
+    ! moves the weighted flow rate by the total weight of the plane
+    sums(4) = sum(y_weights)*real(dims(3), dp)
+    call MPI_Allreduce(MPI_IN_PLACE, sums, 4, MPI_X3D2_DP, MPI_SUM, &
+                       MPI_COMM_WORLD, ierr)
+
+    flow_rate_diff = (sums(1) - (1._dp - out_vel)*sums(2) &
+                      - out_vel*sums(3))/sums(4)
+  end function outflow_flow_rate_correction
+
+  subroutine finalise_case_specific_default(self)
+    class(base_case_t) :: self
+  end subroutine finalise_case_specific_default
+
+  subroutine set_init(self, field, field_func)
+    implicit none
+
+    class(base_case_t) :: self
+    class(field_t), intent(inout) :: field
+
+    interface
+      pure function field_func(coords) result(r)
+        import dp
+        implicit none
+
+        real(dp), intent(in) :: coords(3)
+        real(dp) :: r
+      end function field_func
+    end interface
+
+    class(field_t), pointer :: field_init
+
+    integer :: i, j, k, dims(3)
+    real(dp) :: coords(3)
+
+    dims = self%solver%mesh%get_dims(VERT)
+    field_init => self%solver%host_allocator%get_block(DIR_C)
+
+    do k = 1, dims(3)
+      do j = 1, dims(2)
+        do i = 1, dims(1)
+          coords = self%solver%mesh%get_coordinates(i, j, k)
+          field_init%data(i, j, k) = field_func(coords)
+        end do
+      end do
+    end do
+
+    call self%solver%backend%set_field_data(field, field_init%data)
+
+    call self%solver%host_allocator%release_block(field_init)
+
+  end subroutine set_init
+
+  subroutine substep(self, curr, deriv, iter)
+    !! One time-integrator sub-stage: case-specific BCs, transeq, forcings,
+    !! time integration, case BC re-application, IBM body force, and
+    !! pressure correction. Extracted from run()'s per-sub-stage loop body
+    !! so the same allocation path can be driven directly (e.g. by the
+    !! memory-estimate probe) without going through the full time loop,
+    !! I/O cadence, or diagnostics.
+    implicit none
+
+    class(base_case_t), intent(inout) :: self
+    type(flist_t), intent(inout) :: curr(:), deriv(:)
+    integer, intent(in) :: iter
+
+    integer :: i
+
+    ! first apply case-specific BCs
+    call self%define_BC()
+
+    do i = 1, self%solver%nvars
+      deriv(i)%ptr => self%solver%backend%allocator%get_block(DIR_X)
+    end do
+
+    call self%solver%transeq(deriv, curr)
+
+    ! models that introduce source terms handled here
+    call self%forcings(deriv(1)%ptr, deriv(2)%ptr, deriv(3)%ptr, iter)
+
+    ! time integration
+    call self%solver%time_integrator%step(curr, deriv, self%solver%dt)
+
+    do i = 1, self%solver%nvars
+      call self%solver%backend%allocator%release_block(deriv(i)%ptr)
+    end do
+
+    call self%apply_BC(self%solver%u, self%solver%v, self%solver%w)
+    call self%solver%precorrect_walls(self%solver%u, self%solver%v, &
+                                      self%solver%w)
+    if (self%solver%ibm_on) then
+      call self%solver%ibm%body(self%solver%u, self%solver%v, &
+                                self%solver%w)
+    end if
+
+    call self%solver%pressure_correction(self%solver%u, self%solver%v, &
+                                         self%solver%w)
+  end subroutine substep
+
+  subroutine set_curr_fields(self, curr, deriv)
+    !! Allocates the time integrator field lists and points curr at the
+    !! solver velocity and species fields. Shared by run() and x3d2-memcheck.
+    implicit none
+
+    class(base_case_t), intent(inout) :: self
+    type(flist_t), allocatable, intent(out) :: curr(:)
+    type(flist_t), allocatable, intent(out) :: deriv(:)
+
+    integer :: i
+
+    allocate (curr(self%solver%time_integrator%nvars))
+    allocate (deriv(self%solver%time_integrator%nvars))
+
+    curr(1)%ptr => self%solver%u
+    curr(2)%ptr => self%solver%v
+    curr(3)%ptr => self%solver%w
+    do i = 1, self%solver%nspecies
+      curr(3 + i)%ptr => self%solver%species(i)%ptr
+    end do
+  end subroutine set_curr_fields
+
+  subroutine finish_step(self, iter, output_vorticity, output_qcriterion)
+    !! The per-iteration work after the substeps: sets current_iter and
+    !! computes the pressure and the derived fields. Shared by run() and
+    !! x3d2-memcheck.
+    implicit none
+
+    class(base_case_t), intent(inout) :: self
+    integer, intent(in) :: iter
+    logical, intent(in) :: output_vorticity, output_qcriterion
+
+    self%solver%current_iter = iter
+
+    ! Compute pressure on VERT grid if output_pressure is enabled
+    if (self%solver%keep_pressure) then
+      call compute_pressure_vert(self%solver)
+    end if
+
+    ! Compute postprocess fields (vorticity magnitude, Q-criterion)
+    if (output_vorticity .or. output_qcriterion) then
+      call compute_derived_fields(self%solver, &
+                                  output_vorticity, &
+                                  output_qcriterion)
+    end if
+  end subroutine finish_step
+
+  subroutine run(self)
+    !! Runs the solver forwards in time from t=t_0 to t=T, performing
+    !! postprocessing/IO and reporting diagnostics.
+    implicit none
+
+    class(base_case_t), intent(inout) :: self
+
+    type(flist_t), allocatable :: curr(:)
+    type(flist_t), allocatable :: deriv(:)
+
+    real(dp) :: t
+    integer :: iter, sub_iter, start_iter
+    logical :: output_vorticity, output_qcriterion
+    ! t_start/t_end/t_step0/t_step1 hold raw MPI_Wtime readings, which
+    ! are double precision; subtract in double, then convert
+    ! it to the working precision.
+    double precision :: t_start, t_end, t_step0, t_step1
+    real(dp) :: t_total_local, t_total, t_step_local, t_step
+    logical :: do_timing_report
+    integer :: ierr
+
+    ! Error: ‘t_step0’ may be used uninitialized in this function [-Werror=maybe-uninitialized]
+    t_step0 = 0.0_dp
+
+    output_vorticity = output_field_active( &
+                       self%io_mgr%snapshot_mgr%config, 'vorticity')
+    output_qcriterion = output_field_active( &
+                        self%io_mgr%snapshot_mgr%config, 'qcriterion')
+
+    if (self%io_mgr%is_restart()) then
+      t = self%solver%current_iter*self%solver%dt
+      ! for restarts current_iter is read from the checkpoint file
+      call log_info('Continuing from iteration: ' &
+                    //str(self%solver%current_iter)//' at time '//str(t))
+      if (self%solver%n_iters <= self%solver%current_iter) then
+        call abort_run( &
+          'Restart requires n_iters greater than the restart iteration.', &
+          collective=.true.)
+      end if
+    else
+      self%solver%current_iter = 0
+      call log_info('initial conditions')
+      t = 0._dp
+    end if
+
+    call self%postprocess(self%solver%current_iter, t)
+    start_iter = self%solver%current_iter + 1
+
+    ! Write the initial conditions as step 0 of the snapshot file. Restarts
+    ! skip this: their starting state belongs to the previous run.
+    if (.not. self%io_mgr%is_restart() &
+        .and. self%io_mgr%snapshot_mgr%config%snapshot_freq > 0) then
+      ! No pressure solve has happened yet, so output a zero pressure field
+      if (self%solver%keep_pressure) then
+        if (.not. associated(self%solver%pressure_vert)) then
+          self%solver%pressure_vert => &
+            self%solver%backend%allocator%get_block(DIR_X, VERT)
+        end if
+        call self%solver%pressure_vert%fill(0._dp)
+      end if
+
+      if (output_vorticity .or. output_qcriterion) then
+        call compute_derived_fields(self%solver, &
+                                    output_vorticity, &
+                                    output_qcriterion)
+      end if
+
+      call self%io_mgr%write_initial_snapshot(self%solver, MPI_COMM_WORLD)
+    end if
+
+    call log_info('start run')
+
+    call self%set_curr_fields(curr, deriv)
+
+    t_start = MPI_Wtime()
+
+    do iter = start_iter, self%solver%n_iters
+      ! Filter before the substeps, matching Incompact3d's placement.
+      call self%solver%apply_spatial_filter()
+      ! Report per-step timing on the final step and on every n_output-th
+      ! step. This is computed identically on every rank so that the
+      ! reduction below stays collective; the nested guard keeps mod()
+      ! from being evaluated when n_output is 0.
+      do_timing_report = (iter == self%solver%n_iters)
+      if (self%solver%n_output > 0) then
+        if (mod(iter, self%solver%n_output) == 0) do_timing_report = .true.
+      end if
+
+      ! Skip the first step: it carries one-off setup costs that would
+      ! make the per-step figure unrepresentative.
+      if (do_timing_report .and. iter > start_iter) then
+        t_step0 = MPI_Wtime()
+      end if
+      do sub_iter = 1, self%solver%time_integrator%nstage
+        call self%substep(curr, deriv, iter)
+      end do
+
+      ! All ranks measure and reduce; only root prints.
+      if (do_timing_report .and. iter > start_iter) then
+        t_step1 = MPI_Wtime()
+        t_step_local = real(t_step1 - t_step0, 4)
+
+        call MPI_Reduce(t_step_local, t_step, 1, MPI_X3D2_DP, MPI_MAX, &
+                        0, MPI_COMM_WORLD, ierr)
+
+        call log_info('Time for this time step (s): '//str(t_step))
+      end if
+
+      call self%finish_step(iter, output_vorticity, output_qcriterion)
+
+      call self%io_mgr%update_stats(self%solver, iter)
+
+      call self%post_step(iter, iter*self%solver%dt)
+
+      if (self%solver%n_output > 0) then
+        if (mod(iter, self%solver%n_output) == 0) then
+          t = iter*self%solver%dt
+
+          call self%postprocess(iter, t)
+        end if
+      end if
+      call self%io_mgr%handle_io_step(self%solver, &
+                                      iter, MPI_COMM_WORLD)
+    end do
+
+    ! total + averaged-per-step over the whole run
+    t_end = MPI_Wtime()
+    t_total_local = real(t_end - t_start, 4)
+
+    call MPI_Reduce(t_total_local, t_total, 1, MPI_X3D2_DP, MPI_MAX, &
+                    0, MPI_COMM_WORLD, ierr)
+
+    call log_info(repeat('=', 59))
+    call log_info('Averaged time per step (s): ' &
+                  //str(t_total/(self%solver%n_iters - (start_iter - 1))))
+    call log_info('Total wallclock (s): '//str(t_total))
+    call log_info('Total wallclock (m): '//str(t_total/60.0_dp))
+    call log_info('Total wallclock (h): '//str(t_total/3600.0_dp))
+    call self%case_finalise
+
+    ! deallocate memory
+    deallocate (curr)
+    deallocate (deriv)
+
+  end subroutine run
+
+end module m_base_case

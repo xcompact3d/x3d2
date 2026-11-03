@@ -1,0 +1,1080 @@
+<!-- -*- mode: jinja2 -*- -->
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+      <meta name="description" content="x3d2 is the current codename for what is to become Xcompact3d version 2.0.">
+    <meta name="author" content="Xcompact3d Team" >
+    <link rel="icon" href="../favicon.png">
+
+    <title>turbine_model.f90 &ndash; x3d2</title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+            integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <!-- Font Awesome -->
+    <link href="../css/fontawesome.min.css" rel="stylesheet">
+    <link href="../css/brands.min.css" rel="stylesheet">
+    <link href="../css/regular.min.css" rel="stylesheet">
+    <link href="../css/solid.min.css" rel="stylesheet">
+    <link href="../css/v4-font-face.min.css" rel="stylesheet">
+    <link href="../css/v4-shims.min.css" rel="stylesheet">
+    <!-- MathJax -->
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        TeX: { equationNumbers: { autoNumber: "AMS" } }
+      });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@2.7.9/MathJax.js?config=TeX-AMS-MML_HTMLorMML" async
+            integrity="sha256-DViIOMYdwlM/axqoGDPeUyf0urLoHMN4QACBKyB58Uw=" crossorigin="anonymous"></script>
+    <!-- Other scripts and stylesheets -->
+    <link href="../css/local.css" rel="stylesheet">
+    <link href="../css/pygments.css" rel="stylesheet">
+    <script src="../js/svg-pan-zoom.min.js"></script>
+  </head>
+
+  <body>
+
+    <!-- Fixed navbar -->
+    <div class="container-fluid mb-sm-4 mb-xl-2">
+      <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+        <div class="container">
+          <a class="navbar-brand" href="../index.html">x3d2 </a>
+          <button type="button" class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#navbar"
+                  aria-expanded="false" aria-controls="navbar" aria-label="Toggle navigation">
+                  <span class="navbar-toggler-icon">
+          </button>
+
+          <div id="navbar" class="navbar-collapse collapse">
+            <ul class="navbar-nav">
+                  <li class="nav-item">
+                    <a class="nav-link" href="../lists/files.html">Source Files</a>
+                  </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/modules.html">Modules</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/procedures.html">Procedures</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/absint.html">Abstract Interfaces</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/types.html">Derived Types</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/namelists.html">Namelists</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/programs.html">Programs</a>
+                </li>
+            </ul>
+              <div class="d-flex align-items-end flex-grow-1">
+                <form action="../search.html" role="search" class="ms-auto">
+                  <input type="text" class="form-control" aria-label="Search" placeholder="Search" name="q" id="tipue_search_input" autocomplete="off" required>
+                </form>
+              </div>
+          </div><!--/.nav-collapse -->
+        </div>
+      </nav>
+    </div>
+
+    <div class="container">
+  <div class="row">
+    <h1>turbine_model.f90
+      <small>Source File</small>
+      
+    </h1>
+      <div class="container p-2 mb-4 bg-light border rounded-3">
+    <div class="row align-items-center justify-content-between" id="info-bar">
+      <div class="col">
+        <ul class="list-inline" style="margin-bottom:0px;display:inline">
+
+            <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
+              <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
+                 title=" 0.2% of total for source files.">58 statements</a>
+            </li>
+
+            <li class="list-inline-item" id="source-file">
+              <i class="fa fa-code"></i>
+              <a href="../src/turbine_model.f90"> Source File</a>
+            </li>
+        </ul>
+      </div>
+      <div class="col">
+        <nav aria-label="breadcrumb">
+          <ol class="breadcrumb justify-content-end mb-0">
+            <li class="breadcrumb-item active" aria-current="page">turbine_model.f90</li>
+          </ol>
+        </nav>
+      </div>
+    </div>
+  </div>
+  <script>
+    // Enable Bootstrap tooltips
+    (function () {
+      const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+      const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+    })();
+  </script>
+
+  </div>
+  <div class="row">
+    <div class="col-md-3 hidden-xs hidden-sm visible-md visible-lg">
+        <div id="sidebar">
+      <h3>Contents</h3>
+  
+  
+  
+  
+  
+      <div class="card mb-4">
+      <a data-bs-toggle="collapse" href="#mods-0"
+         aria-expanded="false" aria-controls="mods-0">
+         <h4 class="card-header bg-primary text-white">Modules</h4>
+      </a>
+      <div id="mods-0" class="collapse">
+        <div class="list-group list-group-flush">
+            <a class="list-group-item" href="../module/m_turbine_model.html">m_turbine_model</a>
+        </div>
+      </div>
+    </div>
+
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+    <div class="card card-primary">
+      <div class="card-header text-left"><h3 class="card-title">Source Code</h3></div>
+      <div class="list-group">
+        <a class="list-group-item" href="../sourcefile/turbine_model.f90.html#src">turbine_model.f90</a>
+      </div>
+    </div>
+
+
+  </div>
+
+    </div>
+    <div class="col-md-9" id='text'>
+      
+      <br>
+        <div class="card">
+          <div class="card-header">
+            <h3 class="card-title">This file depends on</h3>
+          </div>
+          <div class="card-body">
+            <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: sourcefile~~turbine_model.f90~~EfferentGraph Pages: 1 -->
+<svg id="sourcefileturbine_modelf90EfferentGraph" width="641pt" height="210pt"
+ viewBox="0.00 0.00 641.00 210.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="sourcefile~~turbine_model.f90~~EfferentGraph" class="graph" transform="scale(0.43703 0.43703) rotate(0) translate(4 476.97)">
+<title>sourcefile~~turbine_model.f90~~EfferentGraph</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-476.97 1462.72,-476.97 1462.72,4 -4,4"/>
+<!-- sourcefile~turbine_model.f90 -->
+<g id="sourcefile~~turbine_model.f90~~EfferentGraph_node1" class="node">
+<title>sourcefile~turbine_model.f90</title>
+<polygon fill="none" stroke="black" points="1458.72,-167.13 1349.7,-167.13 1349.7,-142.87 1458.72,-142.87 1458.72,-167.13"/>
+<text xml:space="preserve" text-anchor="middle" x="1404.21" y="-151.4" font-family="Helvetica,sans-Serif" font-size="10.50">turbine_model.f90</text>
+</g>
+<!-- sourcefile~allocator.f90~3 -->
+<g id="sourcefile~~turbine_model.f90~~EfferentGraph_node2" class="node">
+<title>sourcefile~allocator.f90~3</title>
+<g id="a_sourcefile~~turbine_model.f90~~EfferentGraph_node2"><a xlink:href="../sourcefile/allocator.f90~3.html" xlink:title="allocator.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="716.74,-276.13 639.22,-276.13 639.22,-251.87 716.74,-251.87 716.74,-276.13"/>
+<text xml:space="preserve" text-anchor="middle" x="677.98" y="-260.4" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">allocator.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~turbine_model.f90&#45;&gt;sourcefile~allocator.f90~3 -->
+<g id="sourcefile~~turbine_model.f90~~EfferentGraph_edge1" class="edge">
+<title>sourcefile~turbine_model.f90&#45;&gt;sourcefile~allocator.f90~3</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1391.24,-167.35C1337.69,-221.08 1113.81,-429.55 909.02,-380"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M907.02,-380C829.57,-359.12 747.9,-309.97 706.52,-282.82"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="708.65,-280.04 698.39,-277.42 704.78,-285.87 708.65,-280.04"/>
+</g>
+<!-- sourcefile~backend.f90~2 -->
+<g id="sourcefile~~turbine_model.f90~~EfferentGraph_node3" class="node">
+<title>sourcefile~backend.f90~2</title>
+<g id="a_sourcefile~~turbine_model.f90~~EfferentGraph_node3"><a xlink:href="../sourcefile/backend.f90~2.html" xlink:title="backend.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="835.89,-163.13 758.37,-163.13 758.37,-138.87 835.89,-138.87 835.89,-163.13"/>
+<text xml:space="preserve" text-anchor="middle" x="797.13" y="-147.4" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">backend.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~turbine_model.f90&#45;&gt;sourcefile~backend.f90~2 -->
+<g id="sourcefile~~turbine_model.f90~~EfferentGraph_edge2" class="edge">
+<title>sourcefile~turbine_model.f90&#45;&gt;sourcefile~backend.f90~2</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1385.94,-142.48C1342.55,-112.3 1224.52,-38 1114.04,-38 1114.04,-38 1114.04,-38 1006.16,-38 945.54,-38 924.26,-31.47 871.89,-62 844.58,-77.92 822.95,-107.95 810.35,-128.7"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="807.37,-126.86 805.36,-137.27 813.42,-130.38 807.37,-126.86"/>
+</g>
+<!-- sourcefile~checkpoint_state.f90 -->
+<g id="sourcefile~~turbine_model.f90~~EfferentGraph_node4" class="node">
+<title>sourcefile~checkpoint_state.f90</title>
+<g id="a_sourcefile~~turbine_model.f90~~EfferentGraph_node4"><a xlink:href="../sourcefile/checkpoint_state.f90.html" xlink:title="checkpoint_state.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1313.7,-167.13 1191.93,-167.13 1191.93,-142.87 1313.7,-142.87 1313.7,-167.13"/>
+<text xml:space="preserve" text-anchor="middle" x="1252.81" y="-151.4" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">checkpoint_state.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~turbine_model.f90&#45;&gt;sourcefile~checkpoint_state.f90 -->
+<g id="sourcefile~~turbine_model.f90~~EfferentGraph_edge3" class="edge">
+<title>sourcefile~turbine_model.f90&#45;&gt;sourcefile~checkpoint_state.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1349.27,-155C1341.49,-155 1333.38,-155 1325.32,-155"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1325.51,-151.5 1315.51,-155 1325.51,-158.5 1325.51,-151.5"/>
+</g>
+<!-- sourcefile~common.f90~4 -->
+<g id="sourcefile~~turbine_model.f90~~EfferentGraph_node5" class="node">
+<title>sourcefile~common.f90~4</title>
+<g id="a_sourcefile~~turbine_model.f90~~EfferentGraph_node5"><a xlink:href="../sourcefile/common.f90~4.html" xlink:title="common.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="179.79,-204.13 100.77,-204.13 100.77,-179.87 179.79,-179.87 179.79,-204.13"/>
+<text xml:space="preserve" text-anchor="middle" x="140.28" y="-188.4" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">common.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~turbine_model.f90&#45;&gt;sourcefile~common.f90~4 -->
+<g id="sourcefile~~turbine_model.f90~~EfferentGraph_edge4" class="edge">
+<title>sourcefile~turbine_model.f90&#45;&gt;sourcefile~common.f90~4</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M676.98,-418C614.63,-410.92 596.26,-422.4 536.58,-403 484.88,-386.2 480.05,-364.5 430.57,-342"/>
+</g>
+<!-- sourcefile~field.f90 -->
+<g id="sourcefile~~turbine_model.f90~~EfferentGraph_node6" class="node">
+<title>sourcefile~field.f90</title>
+<g id="a_sourcefile~~turbine_model.f90~~EfferentGraph_node6"><a xlink:href="../sourcefile/field.f90.html" xlink:title="field.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="457.08,-204.13 402.06,-204.13 402.06,-179.87 457.08,-179.87 457.08,-204.13"/>
+<text xml:space="preserve" text-anchor="middle" x="429.57" y="-188.4" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">field.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~turbine_model.f90&#45;&gt;sourcefile~field.f90 -->
+<g id="sourcefile~~turbine_model.f90~~EfferentGraph_edge5" class="edge">
+<title>sourcefile~turbine_model.f90&#45;&gt;sourcefile~field.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M907.02,-380C805.08,-367.18 781.59,-423.38 678.98,-418"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M676.98,-418C607.37,-410.09 624.2,-345.96 568.09,-304"/>
+</g>
+<!-- sourcefile~mesh.f90 -->
+<g id="sourcefile~~turbine_model.f90~~EfferentGraph_node7" class="node">
+<title>sourcefile~mesh.f90</title>
+<g id="a_sourcefile~~turbine_model.f90~~EfferentGraph_node7"><a xlink:href="../sourcefile/mesh.f90.html" xlink:title="mesh.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="597.6,-394.13 536.58,-394.13 536.58,-369.87 597.6,-369.87 597.6,-394.13"/>
+<text xml:space="preserve" text-anchor="middle" x="567.09" y="-378.4" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">mesh.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~turbine_model.f90&#45;&gt;sourcefile~mesh.f90 -->
+<g id="sourcefile~~turbine_model.f90~~EfferentGraph_edge6" class="edge">
+<title>sourcefile~turbine_model.f90&#45;&gt;sourcefile~mesh.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M676.98,-418C651.59,-416.67 624.42,-407.7 603.58,-399.05"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="605.25,-395.96 594.69,-395.2 602.47,-402.39 605.25,-395.96"/>
+</g>
+<!-- sourcefile~allocator.f90~3&#45;&gt;sourcefile~common.f90~4 -->
+<g id="sourcefile~~turbine_model.f90~~EfferentGraph_edge7" class="edge">
+<title>sourcefile~allocator.f90~3&#45;&gt;sourcefile~common.f90~4</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M638.92,-261.86C617.89,-261.38 591.38,-261.96 568.09,-266"/>
+</g>
+<!-- sourcefile~allocator.f90~3&#45;&gt;sourcefile~field.f90 -->
+<g id="sourcefile~~turbine_model.f90~~EfferentGraph_edge8" class="edge">
+<title>sourcefile~allocator.f90~3&#45;&gt;sourcefile~field.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M645.6,-251.4C624.13,-243.34 594.83,-233.41 568.09,-228"/>
+</g>
+<!-- sourcefile~backend.f90~2&#45;&gt;sourcefile~allocator.f90~3 -->
+<g id="sourcefile~~turbine_model.f90~~EfferentGraph_edge9" class="edge">
+<title>sourcefile~backend.f90~2&#45;&gt;sourcefile~allocator.f90~3</title>
+<path fill="none" stroke="#ffff00" stroke-dasharray="5,2" d="M783.15,-163.52C763.09,-182.87 724.38,-220.22 700.21,-243.53"/>
+<polygon fill="#ffff00" stroke="#ffff00" points="697.88,-240.91 693.12,-250.37 702.74,-245.94 697.88,-240.91"/>
+</g>
+<!-- sourcefile~backend.f90~2&#45;&gt;sourcefile~common.f90~4 -->
+<g id="sourcefile~~turbine_model.f90~~EfferentGraph_edge10" class="edge">
+<title>sourcefile~backend.f90~2&#45;&gt;sourcefile~common.f90~4</title>
+<path fill="none" stroke="#ffff00" stroke-dasharray="5,2" d="M758.11,-162.67C713.1,-175.28 635.69,-193.18 568.09,-190"/>
+<path fill="none" stroke="#ffff00" stroke-dasharray="5,2" d="M566.09,-190C503.55,-188.82 492.66,-144.37 430.57,-152"/>
+</g>
+<!-- sourcefile~backend.f90~2&#45;&gt;sourcefile~field.f90 -->
+<g id="sourcefile~~turbine_model.f90~~EfferentGraph_edge11" class="edge">
+<title>sourcefile~backend.f90~2&#45;&gt;sourcefile~field.f90</title>
+<path fill="none" stroke="#ffff00" stroke-dasharray="5,2" d="M566.09,-190C533.23,-188.45 495.84,-189.19 468.67,-190.18"/>
+<polygon fill="#ffff00" stroke="#ffff00" points="468.69,-186.68 458.84,-190.57 468.97,-193.67 468.69,-186.68"/>
+</g>
+<!-- sourcefile~backend.f90~2&#45;&gt;sourcefile~mesh.f90 -->
+<g id="sourcefile~~turbine_model.f90~~EfferentGraph_edge13" class="edge">
+<title>sourcefile~backend.f90~2&#45;&gt;sourcefile~mesh.f90</title>
+<path fill="none" stroke="#ffff00" stroke-dasharray="5,2" d="M791.76,-163.39C782.35,-188.71 758.09,-247.14 722.37,-285 689.12,-320.24 640.43,-348.04 606.68,-364.68"/>
+<polygon fill="#ffff00" stroke="#ffff00" points="605.57,-361.33 598.08,-368.82 608.61,-367.63 605.57,-361.33"/>
+</g>
+<!-- sourcefile~logger.f90 -->
+<g id="sourcefile~~turbine_model.f90~~EfferentGraph_node10" class="node">
+<title>sourcefile~logger.f90</title>
+<g id="a_sourcefile~~turbine_model.f90~~EfferentGraph_node10"><a xlink:href="../sourcefile/logger.f90.html" xlink:title="logger.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="64.77,-204.13 0,-204.13 0,-179.87 64.77,-179.87 64.77,-204.13"/>
+<text xml:space="preserve" text-anchor="middle" x="32.38" y="-188.4" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">logger.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~backend.f90~2&#45;&gt;sourcefile~logger.f90 -->
+<g id="sourcefile~~turbine_model.f90~~EfferentGraph_edge12" class="edge">
+<title>sourcefile~backend.f90~2&#45;&gt;sourcefile~logger.f90</title>
+<path fill="none" stroke="#ffff00" stroke-dasharray="5,2" d="M775.77,-138.43C736.74,-115.68 648.13,-70.5 568.09,-76"/>
+<path fill="none" stroke="#ffff00" stroke-dasharray="5,2" d="M566.09,-76C505.87,-74.62 490.74,-78.77 430.57,-76"/>
+</g>
+<!-- sourcefile~poisson_fft.f90~2 -->
+<g id="sourcefile~~turbine_model.f90~~EfferentGraph_node12" class="node">
+<title>sourcefile~poisson_fft.f90~2</title>
+<g id="a_sourcefile~~turbine_model.f90~~EfferentGraph_node12"><a xlink:href="../sourcefile/poisson_fft.f90~2.html" xlink:title="poisson_fft.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="722.37,-158.13 633.6,-158.13 633.6,-133.87 722.37,-133.87 722.37,-158.13"/>
+<text xml:space="preserve" text-anchor="middle" x="677.98" y="-142.4" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">poisson_fft.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~backend.f90~2&#45;&gt;sourcefile~poisson_fft.f90~2 -->
+<g id="sourcefile~~turbine_model.f90~~EfferentGraph_edge14" class="edge">
+<title>sourcefile~backend.f90~2&#45;&gt;sourcefile~poisson_fft.f90~2</title>
+<path fill="none" stroke="#ffff00" stroke-dasharray="5,2" d="M758.1,-149.38C750.38,-149.05 742.11,-148.69 733.94,-148.35"/>
+<polygon fill="#ffff00" stroke="#ffff00" points="734.17,-144.85 724.03,-147.92 733.87,-151.85 734.17,-144.85"/>
+</g>
+<!-- sourcefile~tdsops.f90~2 -->
+<g id="sourcefile~~turbine_model.f90~~EfferentGraph_node13" class="node">
+<title>sourcefile~tdsops.f90~2</title>
+<g id="a_sourcefile~~turbine_model.f90~~EfferentGraph_node13"><a xlink:href="../sourcefile/tdsops.f90~2.html" xlink:title="tdsops.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="302.31,-128.13 236.04,-128.13 236.04,-103.86 302.31,-103.86 302.31,-128.13"/>
+<text xml:space="preserve" text-anchor="middle" x="269.17" y="-112.4" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">tdsops.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~backend.f90~2&#45;&gt;sourcefile~tdsops.f90~2 -->
+<g id="sourcefile~~turbine_model.f90~~EfferentGraph_edge15" class="edge">
+<title>sourcefile~backend.f90~2&#45;&gt;sourcefile~tdsops.f90~2</title>
+<path fill="none" stroke="#ffff00" stroke-dasharray="5,2" d="M566.09,-76C503.68,-80.29 493.12,-113.61 430.57,-114"/>
+<path fill="none" stroke="#ffff00" stroke-dasharray="5,2" d="M428.57,-114C389.75,-114.24 345.58,-114.83 313.76,-115.3"/>
+<polygon fill="#ffff00" stroke="#ffff00" points="314.09,-111.79 304.15,-115.45 314.2,-118.79 314.09,-111.79"/>
+</g>
+<!-- sourcefile~io_session.f90 -->
+<g id="sourcefile~~turbine_model.f90~~EfferentGraph_node9" class="node">
+<title>sourcefile~io_session.f90</title>
+<g id="a_sourcefile~~turbine_model.f90~~EfferentGraph_node9"><a xlink:href="../sourcefile/io_session.f90.html" xlink:title="io_session.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1155.93,-167.13 1070.16,-167.13 1070.16,-142.87 1155.93,-142.87 1155.93,-167.13"/>
+<text xml:space="preserve" text-anchor="middle" x="1113.04" y="-151.4" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">io_session.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~checkpoint_state.f90&#45;&gt;sourcefile~io_session.f90 -->
+<g id="sourcefile~~turbine_model.f90~~EfferentGraph_edge16" class="edge">
+<title>sourcefile~checkpoint_state.f90&#45;&gt;sourcefile~io_session.f90</title>
+<path fill="none" stroke="#00ff00" stroke-dasharray="5,2" d="M1191.79,-155C1183.7,-155 1175.45,-155 1167.48,-155"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="1167.59,-151.5 1157.59,-155 1167.59,-158.5 1167.59,-151.5"/>
+</g>
+<!-- sourcefile~common.f90~4&#45;&gt;sourcefile~logger.f90 -->
+<g id="sourcefile~~turbine_model.f90~~EfferentGraph_edge17" class="edge">
+<title>sourcefile~common.f90~4&#45;&gt;sourcefile~logger.f90</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M100.45,-192C92.68,-192 84.47,-192 76.56,-192"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="76.78,-188.5 66.78,-192 76.78,-195.5 76.78,-188.5"/>
+</g>
+<!-- sourcefile~field.f90&#45;&gt;sourcefile~common.f90~4 -->
+<g id="sourcefile~~turbine_model.f90~~EfferentGraph_edge18" class="edge">
+<title>sourcefile~field.f90&#45;&gt;sourcefile~common.f90~4</title>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M401.56,-193.84C369.95,-195.56 316.08,-197.18 270.17,-192"/>
+</g>
+<!-- sourcefile~mesh.f90&#45;&gt;sourcefile~common.f90~4 -->
+<g id="sourcefile~~turbine_model.f90~~EfferentGraph_edge19" class="edge">
+<title>sourcefile~mesh.f90&#45;&gt;sourcefile~common.f90~4</title>
+<path fill="none" stroke="#ff00ff" stroke-dasharray="5,2" d="M536.23,-375.53C508.24,-368.93 465.58,-357.46 430.57,-342"/>
+</g>
+<!-- sourcefile~mesh.f90&#45;&gt;sourcefile~field.f90 -->
+<g id="sourcefile~~turbine_model.f90~~EfferentGraph_edge21" class="edge">
+<title>sourcefile~mesh.f90&#45;&gt;sourcefile~field.f90</title>
+<path fill="none" stroke="#ff00ff" stroke-dasharray="5,2" d="M557.2,-369.53C534.55,-337.79 474.5,-253.59 446,-213.63"/>
+<polygon fill="#ff00ff" stroke="#ff00ff" points="448.85,-211.61 440.2,-205.5 443.15,-215.67 448.85,-211.61"/>
+</g>
+<!-- sourcefile~decomp_2decompfft.f90 -->
+<g id="sourcefile~~turbine_model.f90~~EfferentGraph_node8" class="node">
+<title>sourcefile~decomp_2decompfft.f90</title>
+<g id="a_sourcefile~~turbine_model.f90~~EfferentGraph_node8"><a xlink:href="../sourcefile/decomp_2decompfft.f90.html" xlink:title="decomp_2decompfft.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="500.58,-432.13 358.56,-432.13 358.56,-407.87 500.58,-407.87 500.58,-432.13"/>
+<text xml:space="preserve" text-anchor="middle" x="429.57" y="-416.4" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">decomp_2decompfft.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~mesh.f90&#45;&gt;sourcefile~decomp_2decompfft.f90 -->
+<g id="sourcefile~~turbine_model.f90~~EfferentGraph_edge20" class="edge">
+<title>sourcefile~mesh.f90&#45;&gt;sourcefile~decomp_2decompfft.f90</title>
+<path fill="none" stroke="#ff00ff" stroke-dasharray="5,2" d="M536.35,-390.34C521.71,-394.44 503.58,-399.53 486.48,-404.32"/>
+<polygon fill="#ff00ff" stroke="#ff00ff" points="485.58,-400.94 476.9,-407.01 487.47,-407.68 485.58,-400.94"/>
+</g>
+<!-- sourcefile~mesh.f90&#45;&gt;sourcefile~logger.f90 -->
+<g id="sourcefile~~turbine_model.f90~~EfferentGraph_edge22" class="edge">
+<title>sourcefile~mesh.f90&#45;&gt;sourcefile~logger.f90</title>
+<path fill="none" stroke="#ff00ff" stroke-dasharray="5,2" d="M556.56,-394.51C545.02,-408.58 524.19,-430.8 500.58,-441 406.25,-481.74 372.73,-453.63 270.17,-460"/>
+</g>
+<!-- sourcefile~mesh_content.f90 -->
+<g id="sourcefile~~turbine_model.f90~~EfferentGraph_node11" class="node">
+<title>sourcefile~mesh_content.f90</title>
+<g id="a_sourcefile~~turbine_model.f90~~EfferentGraph_node11"><a xlink:href="../sourcefile/mesh_content.f90.html" xlink:title="mesh_content.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="322.56,-412.13 215.79,-412.13 215.79,-387.87 322.56,-387.87 322.56,-412.13"/>
+<text xml:space="preserve" text-anchor="middle" x="269.17" y="-396.4" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">mesh_content.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~mesh.f90&#45;&gt;sourcefile~mesh_content.f90 -->
+<g id="sourcefile~~turbine_model.f90~~EfferentGraph_edge23" class="edge">
+<title>sourcefile~mesh.f90&#45;&gt;sourcefile~mesh_content.f90</title>
+<path fill="none" stroke="#ff00ff" stroke-dasharray="5,2" d="M536.09,-383.82C488.99,-386.69 396.64,-392.31 334.15,-396.11"/>
+<polygon fill="#ff00ff" stroke="#ff00ff" points="334.13,-392.6 324.36,-396.7 334.56,-399.59 334.13,-392.6"/>
+</g>
+<!-- sourcefile~decomp_2decompfft.f90&#45;&gt;sourcefile~logger.f90 -->
+<g id="sourcefile~~turbine_model.f90~~EfferentGraph_edge24" class="edge">
+<title>sourcefile~decomp_2decompfft.f90&#45;&gt;sourcefile~logger.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M394.24,-432.6C362.55,-443.28 313.91,-457.28 270.17,-460"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M268.17,-460C211.89,-463.5 191.31,-486.03 141.28,-460"/>
+</g>
+<!-- sourcefile~decomp_2decompfft.f90&#45;&gt;sourcefile~mesh_content.f90 -->
+<g id="sourcefile~~turbine_model.f90~~EfferentGraph_edge25" class="edge">
+<title>sourcefile~decomp_2decompfft.f90&#45;&gt;sourcefile~mesh_content.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M358.17,-411.11C350.18,-410.1 342.06,-409.08 334.16,-408.08"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="334.63,-404.61 324.27,-406.83 333.75,-411.56 334.63,-404.61"/>
+</g>
+<!-- sourcefile~io_session.f90&#45;&gt;sourcefile~backend.f90~2 -->
+<g id="sourcefile~~turbine_model.f90~~EfferentGraph_edge26" class="edge">
+<title>sourcefile~io_session.f90&#45;&gt;sourcefile~backend.f90~2</title>
+<path fill="none" stroke="#ffff00" stroke-dasharray="5,2" d="M1101.86,-167.4C1084.9,-186.83 1048.7,-223.35 1008.16,-234"/>
+<path fill="none" stroke="#ffff00" stroke-dasharray="5,2" d="M1006.16,-234C997.55,-236.26 894.83,-192.83 837.03,-167.91"/>
+<polygon fill="#ffff00" stroke="#ffff00" points="838.75,-164.84 828.19,-164.09 835.98,-171.26 838.75,-164.84"/>
+</g>
+<!-- sourcefile~io_session.f90&#45;&gt;sourcefile~common.f90~4 -->
+<g id="sourcefile~~turbine_model.f90~~EfferentGraph_edge27" class="edge">
+<title>sourcefile~io_session.f90&#45;&gt;sourcefile~common.f90~4</title>
+<path fill="none" stroke="#ffff00" stroke-dasharray="5,2" d="M676.98,-342C567.52,-338.62 530.75,-386.24 430.57,-342"/>
+</g>
+<!-- sourcefile~io_session.f90&#45;&gt;sourcefile~field.f90 -->
+<g id="sourcefile~~turbine_model.f90~~EfferentGraph_edge28" class="edge">
+<title>sourcefile~io_session.f90&#45;&gt;sourcefile~field.f90</title>
+<path fill="none" stroke="#ffff00" stroke-dasharray="5,2" d="M1006.16,-234C926.22,-261.02 916.38,-292.66 835.89,-318 768.6,-339.19 749.28,-347.98 678.98,-342"/>
+<path fill="none" stroke="#ffff00" stroke-dasharray="5,2" d="M676.98,-342C625.75,-340.42 609.14,-334.7 568.09,-304"/>
+<path fill="none" stroke="#ffff00" stroke-dasharray="5,2" d="M566.09,-304C525.2,-273.42 479.89,-234.98 453.39,-212.01"/>
+<polygon fill="#ffff00" stroke="#ffff00" points="455.82,-209.49 445.98,-205.57 451.22,-214.77 455.82,-209.49"/>
+</g>
+<!-- sourcefile~io_session.f90&#45;&gt;sourcefile~logger.f90 -->
+<g id="sourcefile~~turbine_model.f90~~EfferentGraph_edge31" class="edge">
+<title>sourcefile~io_session.f90&#45;&gt;sourcefile~logger.f90</title>
+<path fill="none" stroke="#ffff00" stroke-dasharray="5,2" d="M1104.28,-142.58C1080.2,-105.8 1002.81,0 909.02,0 909.02,0 909.02,0 796.13,0 693.38,0 668.37,-15.61 568.09,-38"/>
+<path fill="none" stroke="#ffff00" stroke-dasharray="5,2" d="M566.09,-38C504.67,-49.87 493.06,-78.87 430.57,-76"/>
+<path fill="none" stroke="#ffff00" stroke-dasharray="5,2" d="M428.57,-76C301.02,-70.14 261.92,-34.16 141.28,-76"/>
+<path fill="none" stroke="#ffff00" stroke-dasharray="5,2" d="M139.28,-76C94.78,-92.98 61.7,-140.8 45.18,-169.46"/>
+<polygon fill="#ffff00" stroke="#ffff00" points="42.19,-167.64 40.4,-178.08 48.31,-171.03 42.19,-167.64"/>
+</g>
+<!-- sourcefile~io.f90 -->
+<g id="sourcefile~~turbine_model.f90~~EfferentGraph_node14" class="node">
+<title>sourcefile~io.f90</title>
+<g id="a_sourcefile~~turbine_model.f90~~EfferentGraph_node14"><a xlink:href="../sourcefile/io.f90.html" xlink:title="io.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1034.16,-167.13 980.16,-167.13 980.16,-142.87 1034.16,-142.87 1034.16,-167.13"/>
+<text xml:space="preserve" text-anchor="middle" x="1007.16" y="-151.4" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">io.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~io_session.f90&#45;&gt;sourcefile~io.f90 -->
+<g id="sourcefile~~turbine_model.f90~~EfferentGraph_edge29" class="edge">
+<title>sourcefile~io_session.f90&#45;&gt;sourcefile~io.f90</title>
+<path fill="none" stroke="#ffff00" stroke-dasharray="5,2" d="M1069.79,-155C1061.88,-155 1053.66,-155 1045.9,-155"/>
+<polygon fill="#ffff00" stroke="#ffff00" points="1046.09,-151.5 1036.09,-155 1046.09,-158.5 1046.09,-151.5"/>
+</g>
+<!-- sourcefile~io_base.f90 -->
+<g id="sourcefile~~turbine_model.f90~~EfferentGraph_node15" class="node">
+<title>sourcefile~io_base.f90</title>
+<g id="a_sourcefile~~turbine_model.f90~~EfferentGraph_node15"><a xlink:href="../sourcefile/io_base.f90.html" xlink:title="io_base.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="944.16,-246.13 871.89,-246.13 871.89,-221.87 944.16,-221.87 944.16,-246.13"/>
+<text xml:space="preserve" text-anchor="middle" x="908.02" y="-230.4" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">io_base.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~io_session.f90&#45;&gt;sourcefile~io_base.f90 -->
+<g id="sourcefile~~turbine_model.f90~~EfferentGraph_edge30" class="edge">
+<title>sourcefile~io_session.f90&#45;&gt;sourcefile~io_base.f90</title>
+<path fill="none" stroke="#ffff00" stroke-dasharray="5,2" d="M1006.16,-234C990.15,-238.21 972.13,-239.19 956,-238.8"/>
+<polygon fill="#ffff00" stroke="#ffff00" points="956.31,-235.31 946.16,-238.36 956,-242.3 956.31,-235.31"/>
+</g>
+<!-- sourcefile~mesh_content.f90&#45;&gt;sourcefile~common.f90~4 -->
+<g id="sourcefile~~turbine_model.f90~~EfferentGraph_edge32" class="edge">
+<title>sourcefile~mesh_content.f90&#45;&gt;sourcefile~common.f90~4</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M260.62,-387.61C239.82,-353.52 181.5,-257.93 154.86,-214.27"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="157.94,-212.59 149.75,-205.88 151.97,-216.24 157.94,-212.59"/>
+</g>
+<!-- sourcefile~mesh_content.f90&#45;&gt;sourcefile~logger.f90 -->
+<g id="sourcefile~~turbine_model.f90~~EfferentGraph_edge33" class="edge">
+<title>sourcefile~mesh_content.f90&#45;&gt;sourcefile~logger.f90</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M250.85,-412.36C221.14,-432.86 161.71,-470.63 141.28,-460"/>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M139.28,-460C49.12,-413.1 35.37,-271.88 33.53,-215.56"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="37.04,-215.76 33.33,-205.83 30.04,-215.91 37.04,-215.76"/>
+</g>
+<!-- sourcefile~poisson_fft.f90~2&#45;&gt;sourcefile~common.f90~4 -->
+<g id="sourcefile~~turbine_model.f90~~EfferentGraph_edge34" class="edge">
+<title>sourcefile~poisson_fft.f90~2&#45;&gt;sourcefile~common.f90~4</title>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M566.09,-152C505.91,-149.6 490.35,-144.66 430.57,-152"/>
+</g>
+<!-- sourcefile~poisson_fft.f90~2&#45;&gt;sourcefile~field.f90 -->
+<g id="sourcefile~~turbine_model.f90~~EfferentGraph_edge35" class="edge">
+<title>sourcefile~poisson_fft.f90~2&#45;&gt;sourcefile~field.f90</title>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M566.09,-152C547.04,-151.24 501.17,-166.15 468.06,-177.98"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="467.02,-174.64 458.81,-181.33 469.4,-181.22 467.02,-174.64"/>
+</g>
+<!-- sourcefile~poisson_fft.f90~2&#45;&gt;sourcefile~mesh.f90 -->
+<g id="sourcefile~~turbine_model.f90~~EfferentGraph_edge37" class="edge">
+<title>sourcefile~poisson_fft.f90~2&#45;&gt;sourcefile~mesh.f90</title>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M671.28,-158.36C653.87,-196.1 601.17,-310.3 578.57,-359.29"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="575.51,-357.56 574.5,-368.11 581.87,-360.49 575.51,-357.56"/>
+</g>
+<!-- sourcefile~poisson_fft.f90~2&#45;&gt;sourcefile~logger.f90 -->
+<g id="sourcefile~~turbine_model.f90~~EfferentGraph_edge36" class="edge">
+<title>sourcefile~poisson_fft.f90~2&#45;&gt;sourcefile~logger.f90</title>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M633.29,-150.3C613.4,-151.77 589.56,-152.86 568.09,-152"/>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M566.09,-152C528.95,-150.52 533.19,-117.84 500.58,-100 471.72,-84.21 463.43,-77.51 430.57,-76"/>
+</g>
+<!-- sourcefile~poisson_fft.f90~2&#45;&gt;sourcefile~tdsops.f90~2 -->
+<g id="sourcefile~~turbine_model.f90~~EfferentGraph_edge38" class="edge">
+<title>sourcefile~poisson_fft.f90~2&#45;&gt;sourcefile~tdsops.f90~2</title>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M566.09,-152C503.59,-149.51 493.12,-113.61 430.57,-114"/>
+</g>
+<!-- sourcefile~tdsops.f90~2&#45;&gt;sourcefile~common.f90~4 -->
+<g id="sourcefile~~turbine_model.f90~~EfferentGraph_edge39" class="edge">
+<title>sourcefile~tdsops.f90~2&#45;&gt;sourcefile~common.f90~4</title>
+<path fill="none" stroke="#ff00ff" stroke-dasharray="5,2" d="M247.22,-128.55C226.74,-140.82 195.33,-159.63 172.02,-173.59"/>
+<polygon fill="#ff00ff" stroke="#ff00ff" points="170.34,-170.51 163.56,-178.65 173.94,-176.52 170.34,-170.51"/>
+</g>
+<!-- sourcefile~tdsops.f90~2&#45;&gt;sourcefile~logger.f90 -->
+<g id="sourcefile~~turbine_model.f90~~EfferentGraph_edge40" class="edge">
+<title>sourcefile~tdsops.f90~2&#45;&gt;sourcefile~logger.f90</title>
+<path fill="none" stroke="#ff00ff" stroke-dasharray="5,2" d="M241.39,-103.44C210,-89.43 159.88,-69.55 141.28,-76"/>
+</g>
+<!-- sourcefile~io.f90&#45;&gt;sourcefile~backend.f90~2 -->
+<g id="sourcefile~~turbine_model.f90~~EfferentGraph_edge41" class="edge">
+<title>sourcefile~io.f90&#45;&gt;sourcefile~backend.f90~2</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M907.02,-76C868.4,-67.66 832.48,-104.45 813.09,-129.45"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="810.32,-127.31 807.18,-137.43 815.95,-131.48 810.32,-127.31"/>
+</g>
+<!-- sourcefile~io.f90&#45;&gt;sourcefile~common.f90~4 -->
+<g id="sourcefile~~turbine_model.f90~~EfferentGraph_edge42" class="edge">
+<title>sourcefile~io.f90&#45;&gt;sourcefile~common.f90~4</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M676.98,-38C556.76,-48.36 550.34,-137.29 430.57,-152"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M428.57,-152C419.61,-153.42 279.19,-193.02 270.17,-192"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M268.17,-192C243.08,-189.17 215.02,-188.87 191.67,-189.41"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="191.69,-185.91 181.8,-189.7 191.89,-192.9 191.69,-185.91"/>
+</g>
+<!-- sourcefile~io.f90&#45;&gt;sourcefile~field.f90 -->
+<g id="sourcefile~~turbine_model.f90~~EfferentGraph_edge43" class="edge">
+<title>sourcefile~io.f90&#45;&gt;sourcefile~field.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M979.8,-166.4C932.47,-186.51 834.64,-226.32 798.13,-228"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M796.13,-228C694.88,-232.49 667.43,-248.1 568.09,-228"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M566.09,-228C532.87,-220.37 495.46,-210.32 468.37,-202.78"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="469.47,-199.45 458.89,-200.12 467.58,-206.19 469.47,-199.45"/>
+</g>
+<!-- sourcefile~io.f90&#45;&gt;sourcefile~logger.f90 -->
+<g id="sourcefile~~turbine_model.f90~~EfferentGraph_edge45" class="edge">
+<title>sourcefile~io.f90&#45;&gt;sourcefile~logger.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M997.21,-142.43C981.91,-122.37 948.54,-84.54 909.02,-76"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M907.02,-76C806.59,-54.3 781.7,-35.4 678.98,-38"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M676.98,-38C628.66,-40.7 615.33,-27.46 568.09,-38"/>
+</g>
+<!-- sourcefile~io.f90&#45;&gt;sourcefile~io_base.f90 -->
+<g id="sourcefile~~turbine_model.f90~~EfferentGraph_edge44" class="edge">
+<title>sourcefile~io.f90&#45;&gt;sourcefile~io_base.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M992.12,-167.5C979.7,-178.43 961,-194.6 944.16,-208 941.4,-210.2 938.48,-212.45 935.56,-214.68"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="933.49,-211.85 927.58,-220.64 937.68,-217.46 933.49,-211.85"/>
+</g>
+<!-- sourcefile~nvtx.f90 -->
+<g id="sourcefile~~turbine_model.f90~~EfferentGraph_node16" class="node">
+<title>sourcefile~nvtx.f90</title>
+<g id="a_sourcefile~~turbine_model.f90~~EfferentGraph_node16"><a xlink:href="../sourcefile/nvtx.f90.html" xlink:title="nvtx.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="935.16,-128.13 880.89,-128.13 880.89,-103.86 935.16,-103.86 935.16,-128.13"/>
+<text xml:space="preserve" text-anchor="middle" x="908.02" y="-112.4" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">nvtx.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~io.f90&#45;&gt;sourcefile~nvtx.f90 -->
+<g id="sourcefile~~turbine_model.f90~~EfferentGraph_edge46" class="edge">
+<title>sourcefile~io.f90&#45;&gt;sourcefile~nvtx.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M979.87,-144.45C969.4,-140.24 957.16,-135.33 945.83,-130.78"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="947.32,-127.6 936.74,-127.13 944.71,-134.1 947.32,-127.6"/>
+</g>
+<!-- sourcefile~io_base.f90&#45;&gt;sourcefile~backend.f90~2 -->
+<g id="sourcefile~~turbine_model.f90~~EfferentGraph_edge47" class="edge">
+<title>sourcefile~io_base.f90&#45;&gt;sourcefile~backend.f90~2</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M890.49,-221.39C872.71,-207.85 844.25,-186.15 823.61,-170.42"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="825.75,-167.65 815.67,-164.37 821.5,-173.22 825.75,-167.65"/>
+</g>
+<!-- sourcefile~io_base.f90&#45;&gt;sourcefile~common.f90~4 -->
+<g id="sourcefile~~turbine_model.f90~~EfferentGraph_edge48" class="edge">
+<title>sourcefile~io_base.f90&#45;&gt;sourcefile~common.f90~4</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M872.55,-246.53C835.89,-259.15 775.93,-277.74 722.37,-285 683.27,-290.3 672.66,-290.55 633.6,-285 603.59,-280.74 597.96,-260.81 568.09,-266"/>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M566.09,-266C498.55,-280.37 493.74,-369.9 430.57,-342"/>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M428.57,-342C339.88,-302.83 366.52,-202.87 270.17,-192"/>
+</g>
+<!-- sourcefile~io_base.f90&#45;&gt;sourcefile~field.f90 -->
+<g id="sourcefile~~turbine_model.f90~~EfferentGraph_edge49" class="edge">
+<title>sourcefile~io_base.f90&#45;&gt;sourcefile~field.f90</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M871.72,-230.25C850.42,-228.43 822.72,-226.87 798.13,-228"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var pansourcefileturbine_modelf90EfferentGraph = svgPanZoom('#sourcefileturbine_modelf90EfferentGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#EfferentGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="EfferentGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="200pt" height="32pt"
+ viewBox="0.00 0.00 200.00 32.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(4 28.27)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-28.27 195.52,-28.27 195.52,4 -4,4"/>
+<!-- Source File -->
+<g id="node1" class="node">
+<title>Source File</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="69.27,-24.27 0,-24.27 0,0 69.27,0 69.27,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="34.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Source File</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node2" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="191.52,-24.27 87.75,-24.27 87.75,0 191.52,0 191.52,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="139.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a file to a file which it depends on. A file
+is dependent upon another if the latter must be compiled before the former
+can be.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header">
+            <h3 class="card-title">Files dependent on this one</h3>
+          </div>
+          <div class="card-body">
+            <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: sourcefile~~turbine_model.f90~~AfferentGraph Pages: 1 -->
+<svg id="sourcefileturbine_modelf90AfferentGraph" width="641pt" height="117pt"
+ viewBox="0.00 0.00 641.00 117.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="sourcefile~~turbine_model.f90~~AfferentGraph" class="graph" transform="scale(0.693055 0.693055) rotate(0) translate(4 164.67)">
+<title>sourcefile~~turbine_model.f90~~AfferentGraph</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-164.67 920.89,-164.67 920.89,4 -4,4"/>
+<!-- sourcefile~turbine_model.f90 -->
+<g id="sourcefile~~turbine_model.f90~~AfferentGraph_node1" class="node">
+<title>sourcefile~turbine_model.f90</title>
+<polygon fill="none" stroke="black" points="109.02,-86.95 0,-86.95 0,-62.68 109.02,-62.68 109.02,-86.95"/>
+<text xml:space="preserve" text-anchor="middle" x="54.51" y="-71.21" font-family="Helvetica,sans-Serif" font-size="10.50">turbine_model.f90</text>
+</g>
+<!-- sourcefile~abl.f90~2 -->
+<g id="sourcefile~~turbine_model.f90~~AfferentGraph_node2" class="node">
+<title>sourcefile~abl.f90~2</title>
+<g id="a_sourcefile~~turbine_model.f90~~AfferentGraph_node2"><a xlink:href="../sourcefile/abl.f90~2.html" xlink:title="abl.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="512.82,-127.95 458.82,-127.95 458.82,-103.68 512.82,-103.68 512.82,-127.95"/>
+<text xml:space="preserve" text-anchor="middle" x="485.82" y="-112.21" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">abl.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~abl.f90~2&#45;&gt;sourcefile~turbine_model.f90 -->
+<g id="sourcefile~~turbine_model.f90~~AfferentGraph_edge1" class="edge">
+<title>sourcefile~abl.f90~2&#45;&gt;sourcefile~turbine_model.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M458.4,-124.88C408.5,-140.84 296.97,-171 203.15,-156.81"/>
+</g>
+<!-- sourcefile~turbine_setup.f90 -->
+<g id="sourcefile~~turbine_model.f90~~AfferentGraph_node6" class="node">
+<title>sourcefile~turbine_setup.f90</title>
+<g id="a_sourcefile~~turbine_model.f90~~AfferentGraph_node6"><a xlink:href="../sourcefile/turbine_setup.f90.html" xlink:title="turbine_setup.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="399.81,-107.95 295.29,-107.95 295.29,-83.68 399.81,-83.68 399.81,-107.95"/>
+<text xml:space="preserve" text-anchor="middle" x="347.55" y="-92.21" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">turbine_setup.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~abl.f90~2&#45;&gt;sourcefile~turbine_setup.f90 -->
+<g id="sourcefile~~turbine_model.f90~~AfferentGraph_edge12" class="edge">
+<title>sourcefile~abl.f90~2&#45;&gt;sourcefile~turbine_setup.f90</title>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M458.55,-111.95C445.1,-109.98 428.1,-107.49 411.51,-105.05"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="412.04,-101.59 401.64,-103.6 411.02,-108.52 412.04,-101.59"/>
+</g>
+<!-- sourcefile~adm.f90 -->
+<g id="sourcefile~~turbine_model.f90~~AfferentGraph_node3" class="node">
+<title>sourcefile~adm.f90</title>
+<g id="a_sourcefile~~turbine_model.f90~~AfferentGraph_node3"><a xlink:href="../sourcefile/adm.f90.html" xlink:title="adm.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="230.04,-128.95 174.27,-128.95 174.27,-104.68 230.04,-104.68 230.04,-128.95"/>
+<text xml:space="preserve" text-anchor="middle" x="202.15" y="-113.21" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">adm.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~adm.f90&#45;&gt;sourcefile~turbine_model.f90 -->
+<g id="sourcefile~~turbine_model.f90~~AfferentGraph_edge2" class="edge">
+<title>sourcefile~adm.f90&#45;&gt;sourcefile~turbine_model.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M174.1,-109.01C156.16,-103.83 131.97,-96.86 110.13,-90.56"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="111.33,-87.26 100.75,-87.86 109.39,-93.99 111.33,-87.26"/>
+</g>
+<!-- sourcefile~alm.f90 -->
+<g id="sourcefile~~turbine_model.f90~~AfferentGraph_node4" class="node">
+<title>sourcefile~alm.f90</title>
+<g id="a_sourcefile~~turbine_model.f90~~AfferentGraph_node4"><a xlink:href="../sourcefile/alm.f90.html" xlink:title="alm.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="229.15,-86.95 175.15,-86.95 175.15,-62.68 229.15,-62.68 229.15,-86.95"/>
+<text xml:space="preserve" text-anchor="middle" x="202.15" y="-71.21" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">alm.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~alm.f90&#45;&gt;sourcefile~turbine_model.f90 -->
+<g id="sourcefile~~turbine_model.f90~~AfferentGraph_edge3" class="edge">
+<title>sourcefile~alm.f90&#45;&gt;sourcefile~turbine_model.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M174.78,-74.81C159.64,-74.81 139.9,-74.81 120.85,-74.81"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="120.95,-71.31 110.95,-74.81 120.95,-78.31 120.95,-71.31"/>
+</g>
+<!-- sourcefile~turbine_dummy.f90 -->
+<g id="sourcefile~~turbine_model.f90~~AfferentGraph_node5" class="node">
+<title>sourcefile~turbine_dummy.f90</title>
+<g id="a_sourcefile~~turbine_model.f90~~AfferentGraph_node5"><a xlink:href="../sourcefile/turbine_dummy.f90.html" xlink:title="turbine_dummy.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="259.29,-44.95 145.02,-44.95 145.02,-20.68 259.29,-20.68 259.29,-44.95"/>
+<text xml:space="preserve" text-anchor="middle" x="202.15" y="-29.21" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">turbine_dummy.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~turbine_dummy.f90&#45;&gt;sourcefile~turbine_model.f90 -->
+<g id="sourcefile~~turbine_model.f90~~AfferentGraph_edge4" class="edge">
+<title>sourcefile~turbine_dummy.f90&#45;&gt;sourcefile~turbine_model.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M157.46,-45.41C142.48,-49.73 125.53,-54.62 109.82,-59.15"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="109.27,-55.67 100.63,-61.8 111.21,-62.39 109.27,-55.67"/>
+</g>
+<!-- sourcefile~turbine_setup.f90&#45;&gt;sourcefile~turbine_model.f90 -->
+<g id="sourcefile~~turbine_model.f90~~AfferentGraph_edge5" class="edge">
+<title>sourcefile~turbine_setup.f90&#45;&gt;sourcefile~turbine_model.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M331.82,-108.37C306.63,-128.34 253.18,-164.38 203.15,-156.81"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M201.15,-156.81C152.9,-149.51 105.19,-116.42 78.14,-94.57"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="80.56,-92.03 70.63,-88.33 76.09,-97.41 80.56,-92.03"/>
+</g>
+<!-- sourcefile~turbine_setup.f90&#45;&gt;sourcefile~adm.f90 -->
+<g id="sourcefile~~turbine_model.f90~~AfferentGraph_edge9" class="edge">
+<title>sourcefile~turbine_setup.f90&#45;&gt;sourcefile~adm.f90</title>
+<path fill="none" stroke="#ffff00" stroke-dasharray="5,2" d="M295.19,-103.33C277.6,-105.91 258.23,-108.75 241.81,-111.15"/>
+<polygon fill="#ffff00" stroke="#ffff00" points="241.34,-107.68 231.95,-112.59 242.35,-114.61 241.34,-107.68"/>
+</g>
+<!-- sourcefile~turbine_setup.f90&#45;&gt;sourcefile~alm.f90 -->
+<g id="sourcefile~~turbine_model.f90~~AfferentGraph_edge10" class="edge">
+<title>sourcefile~turbine_setup.f90&#45;&gt;sourcefile~alm.f90</title>
+<path fill="none" stroke="#00ff00" stroke-dasharray="5,2" d="M295.19,-88.29C277.16,-85.65 257.28,-82.74 240.61,-80.3"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="241.55,-76.9 231.15,-78.91 240.54,-83.82 241.55,-76.9"/>
+</g>
+<!-- sourcefile~turbine_setup.f90&#45;&gt;sourcefile~turbine_dummy.f90 -->
+<g id="sourcefile~~turbine_model.f90~~AfferentGraph_edge11" class="edge">
+<title>sourcefile~turbine_setup.f90&#45;&gt;sourcefile~turbine_dummy.f90</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M322,-83.26C304.66,-74.58 280.78,-62.98 259.29,-53.81 255.94,-52.38 252.46,-50.95 248.94,-49.55"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="250.38,-46.35 239.79,-45.98 247.84,-52.87 250.38,-46.35"/>
+</g>
+<!-- sourcefile~wind_turbine.f90 -->
+<g id="sourcefile~~turbine_model.f90~~AfferentGraph_node7" class="node">
+<title>sourcefile~wind_turbine.f90</title>
+<g id="a_sourcefile~~turbine_model.f90~~AfferentGraph_node7"><a xlink:href="../sourcefile/wind_turbine.f90.html" xlink:title="wind_turbine.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="535.83,-85.95 435.81,-85.95 435.81,-61.68 535.83,-61.68 535.83,-85.95"/>
+<text xml:space="preserve" text-anchor="middle" x="485.82" y="-70.21" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">wind_turbine.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~wind_turbine.f90&#45;&gt;sourcefile~turbine_model.f90 -->
+<g id="sourcefile~~turbine_model.f90~~AfferentGraph_edge6" class="edge">
+<title>sourcefile~wind_turbine.f90&#45;&gt;sourcefile~turbine_model.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M459.99,-61.21C403.16,-34.11 259.65,24.48 145.02,-11.81 118.33,-20.26 92.72,-39.85 75.78,-54.96"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="73.84,-51.99 68.86,-61.34 78.59,-57.13 73.84,-51.99"/>
+</g>
+<!-- sourcefile~wind_turbine.f90&#45;&gt;sourcefile~turbine_setup.f90 -->
+<g id="sourcefile~~turbine_model.f90~~AfferentGraph_edge13" class="edge">
+<title>sourcefile~wind_turbine.f90&#45;&gt;sourcefile~turbine_setup.f90</title>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M435.62,-81.75C427.66,-83.04 419.31,-84.39 411.08,-85.72"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="410.78,-82.22 401.46,-87.27 411.89,-89.13 410.78,-82.22"/>
+</g>
+<!-- sourcefile~build.f90 -->
+<g id="sourcefile~~turbine_model.f90~~AfferentGraph_node8" class="node">
+<title>sourcefile~build.f90</title>
+<g id="a_sourcefile~~turbine_model.f90~~AfferentGraph_node8"><a xlink:href="../sourcefile/build.f90.html" xlink:title="build.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="776.74,-127.95 718.72,-127.95 718.72,-103.68 776.74,-103.68 776.74,-127.95"/>
+<text xml:space="preserve" text-anchor="middle" x="747.73" y="-112.21" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">build.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~build.f90&#45;&gt;sourcefile~abl.f90~2 -->
+<g id="sourcefile~~turbine_model.f90~~AfferentGraph_edge7" class="edge">
+<title>sourcefile~build.f90&#45;&gt;sourcefile~abl.f90~2</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M718.42,-115.81C671.43,-115.81 577.29,-115.81 524.65,-115.81"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="524.66,-112.31 514.66,-115.81 524.66,-119.31 524.66,-112.31"/>
+</g>
+<!-- sourcefile~case_factory.f90 -->
+<g id="sourcefile~~turbine_model.f90~~AfferentGraph_node9" class="node">
+<title>sourcefile~case_factory.f90</title>
+<g id="a_sourcefile~~turbine_model.f90~~AfferentGraph_node9"><a xlink:href="../sourcefile/case_factory.f90.html" xlink:title="case_factory.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="669.6,-86.95 571.83,-86.95 571.83,-62.68 669.6,-62.68 669.6,-86.95"/>
+<text xml:space="preserve" text-anchor="middle" x="620.71" y="-71.21" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">case_factory.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~build.f90&#45;&gt;sourcefile~case_factory.f90 -->
+<g id="sourcefile~~turbine_model.f90~~AfferentGraph_edge16" class="edge">
+<title>sourcefile~build.f90&#45;&gt;sourcefile~case_factory.f90</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M718.37,-106.51C704.32,-101.9 686.95,-96.2 670.83,-90.92"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="671.96,-87.6 661.36,-87.81 669.78,-94.26 671.96,-87.6"/>
+</g>
+<!-- sourcefile~case_factory.f90&#45;&gt;sourcefile~abl.f90~2 -->
+<g id="sourcefile~~turbine_model.f90~~AfferentGraph_edge8" class="edge">
+<title>sourcefile~case_factory.f90&#45;&gt;sourcefile~abl.f90~2</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M579.12,-87.33C561.46,-92.78 540.92,-99.12 523.7,-104.43"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="522.9,-101.02 514.38,-107.31 524.97,-107.7 522.9,-101.02"/>
+</g>
+<!-- sourcefile~case_factory.f90&#45;&gt;sourcefile~wind_turbine.f90 -->
+<g id="sourcefile~~turbine_model.f90~~AfferentGraph_edge14" class="edge">
+<title>sourcefile~case_factory.f90&#45;&gt;sourcefile~wind_turbine.f90</title>
+<path fill="none" stroke="#ff00ff" stroke-dasharray="5,2" d="M571.36,-74.45C563.68,-74.39 555.65,-74.33 547.73,-74.27"/>
+<polygon fill="#ff00ff" stroke="#ff00ff" points="547.79,-70.77 537.77,-74.19 547.74,-77.77 547.79,-70.77"/>
+</g>
+<!-- sourcefile~memcheck.f90 -->
+<g id="sourcefile~~turbine_model.f90~~AfferentGraph_node10" class="node">
+<title>sourcefile~memcheck.f90</title>
+<g id="a_sourcefile~~turbine_model.f90~~AfferentGraph_node10"><a xlink:href="../sourcefile/memcheck.f90.html" xlink:title="memcheck.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="916.89,-127.95 825.87,-127.95 825.87,-103.68 916.89,-103.68 916.89,-127.95"/>
+<text xml:space="preserve" text-anchor="middle" x="871.38" y="-112.21" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">memcheck.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~memcheck.f90&#45;&gt;sourcefile~build.f90 -->
+<g id="sourcefile~~turbine_model.f90~~AfferentGraph_edge15" class="edge">
+<title>sourcefile~memcheck.f90&#45;&gt;sourcefile~build.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M825.43,-115.81C813.25,-115.81 800.15,-115.81 788.29,-115.81"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="788.43,-112.31 778.43,-115.81 788.43,-119.31 788.43,-112.31"/>
+</g>
+<!-- sourcefile~xcompact.f90 -->
+<g id="sourcefile~~turbine_model.f90~~AfferentGraph_node11" class="node">
+<title>sourcefile~xcompact.f90</title>
+<g id="a_sourcefile~~turbine_model.f90~~AfferentGraph_node11"><a xlink:href="../sourcefile/xcompact.f90.html" xlink:title="xcompact.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="789.87,-85.95 705.6,-85.95 705.6,-61.68 789.87,-61.68 789.87,-85.95"/>
+<text xml:space="preserve" text-anchor="middle" x="747.73" y="-70.21" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">xcompact.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~xcompact.f90&#45;&gt;sourcefile~case_factory.f90 -->
+<g id="sourcefile~~turbine_model.f90~~AfferentGraph_edge17" class="edge">
+<title>sourcefile~xcompact.f90&#45;&gt;sourcefile~case_factory.f90</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M705.11,-74.14C697.48,-74.2 689.38,-74.27 681.35,-74.33"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="681.57,-70.83 671.6,-74.41 681.63,-77.83 681.57,-70.83"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var pansourcefileturbine_modelf90AfferentGraph = svgPanZoom('#sourcefileturbine_modelf90AfferentGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#AfferentGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="AfferentGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="200pt" height="32pt"
+ viewBox="0.00 0.00 200.00 32.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(4 28.27)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-28.27 195.52,-28.27 195.52,4 -4,4"/>
+<!-- Source File -->
+<g id="node1" class="node">
+<title>Source File</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="69.27,-24.27 0,-24.27 0,0 69.27,0 69.27,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="34.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Source File</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node2" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="191.52,-24.27 87.75,-24.27 87.75,0 191.52,0 191.52,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="139.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a file to a file which it depends on. A file
+is dependent upon another if the latter must be compiled before the former
+can be.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+          </div>
+        </div>
+<br>
+      <section>
+        <h2><span class="anchor" id="src"></span>Source Code</h2>
+        <div class="hl codehilite"><pre><span></span><a id="ln-1" name="ln-1" href="#ln-1"></a><span class="k">module </span><span class="n">m_turbine_model</span>
+<a id="ln-2" name="ln-2" href="#ln-2"></a><span class="w">  </span><span class="c">!! Abstract interface for turbine forcing models (actuator disc, actuator</span>
+<a id="ln-3" name="ln-3" href="#ln-3"></a><span class="w">  </span><span class="c">!! line)</span>
+<a id="ln-4" name="ln-4" href="#ln-4"></a><span class="w">  </span><span class="c">!!</span>
+<a id="ln-5" name="ln-5" href="#ln-5"></a><span class="w">  </span><span class="c">!! A turbine model is a backend-agnostic physics object: it samples the flow</span>
+<a id="ln-6" name="ln-6" href="#ln-6"></a><span class="w">  </span><span class="c">!! at actuator points and accumulates a momentum source back onto the RHS</span>
+<a id="ln-7" name="ln-7" href="#ln-7"></a><span class="w">  </span><span class="c">!! fields (du, dv, dw). It is owned and driven entirely by the flow case</span>
+<a id="ln-8" name="ln-8" href="#ln-8"></a><span class="w">  </span><span class="c">!! (see m_case_wind_turbine) and therefore knows nothing about the solver,</span>
+<a id="ln-9" name="ln-9" href="#ln-9"></a><span class="w">  </span><span class="c">!! the case, or the `iturbine` switch - m_turbine_setup decides which</span>
+<a id="ln-10" name="ln-10" href="#ln-10"></a><span class="w">  </span><span class="c">!! concrete model to allocate and the case decides when to call it.</span>
+<a id="ln-11" name="ln-11" href="#ln-11"></a><span class="w">  </span><span class="c">!!</span>
+<a id="ln-12" name="ln-12" href="#ln-12"></a><span class="w">  </span><span class="c">!! Concrete implementations:</span>
+<a id="ln-13" name="ln-13" href="#ln-13"></a><span class="w">  </span><span class="c">!!   - turbine_dummy_t (m_turbine_dummy): no-op / iturbine=0, the fallback</span>
+<a id="ln-14" name="ln-14" href="#ln-14"></a><span class="w">  </span><span class="c">!!   - alm_t           (m_alm)          : actuator line model</span>
+<a id="ln-15" name="ln-15" href="#ln-15"></a><span class="w">  </span><span class="c">!!   - adm_t           (m_adm)          : actuator disc model</span>
+<a id="ln-16" name="ln-16" href="#ln-16"></a><span class="w">  </span><span class="k">use </span><span class="n">m_allocator</span><span class="p">,</span><span class="w"> </span><span class="k">only</span><span class="p">:</span><span class="w"> </span><span class="n">allocator_t</span>
+<a id="ln-17" name="ln-17" href="#ln-17"></a><span class="w">  </span><span class="k">use </span><span class="n">m_base_backend</span><span class="p">,</span><span class="w"> </span><span class="k">only</span><span class="p">:</span><span class="w"> </span><span class="n">base_backend_t</span>
+<a id="ln-18" name="ln-18" href="#ln-18"></a><span class="w">  </span><span class="k">use </span><span class="n">m_common</span><span class="p">,</span><span class="w"> </span><span class="k">only</span><span class="p">:</span><span class="w"> </span><span class="n">dp</span>
+<a id="ln-19" name="ln-19" href="#ln-19"></a><span class="w">  </span><span class="k">use </span><span class="n">m_checkpoint_state</span><span class="p">,</span><span class="w"> </span><span class="k">only</span><span class="p">:</span><span class="w"> </span><span class="n">checkpoint_state_t</span>
+<a id="ln-20" name="ln-20" href="#ln-20"></a><span class="w">  </span><span class="k">use </span><span class="n">m_field</span><span class="p">,</span><span class="w"> </span><span class="k">only</span><span class="p">:</span><span class="w"> </span><span class="n">field_t</span>
+<a id="ln-21" name="ln-21" href="#ln-21"></a><span class="w">  </span><span class="k">use </span><span class="n">m_mesh</span><span class="p">,</span><span class="w"> </span><span class="k">only</span><span class="p">:</span><span class="w"> </span><span class="n">mesh_t</span>
+<a id="ln-22" name="ln-22" href="#ln-22"></a>
+<a id="ln-23" name="ln-23" href="#ln-23"></a><span class="w">  </span><span class="k">implicit none</span>
+<a id="ln-24" name="ln-24" href="#ln-24"></a>
+<a id="ln-25" name="ln-25" href="#ln-25"></a><span class="k">  type</span><span class="p">,</span><span class="w"> </span><span class="k">abstract</span><span class="p">,</span><span class="w"> </span><span class="k">extends</span><span class="p">(</span><span class="n">checkpoint_state_t</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">turbine_model_t</span>
+<a id="ln-26" name="ln-26" href="#ln-26"></a><span class="w">  </span><span class="k">contains</span>
+<a id="ln-27" name="ln-27" href="#ln-27"></a><span class="k">    procedure</span><span class="p">(</span><span class="n">init_iface</span><span class="p">),</span><span class="w"> </span><span class="k">deferred</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">init</span>
+<a id="ln-28" name="ln-28" href="#ln-28"></a><span class="w">    </span><span class="k">procedure</span><span class="p">(</span><span class="n">update_iface</span><span class="p">),</span><span class="w"> </span><span class="k">deferred</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">update</span>
+<a id="ln-29" name="ln-29" href="#ln-29"></a><span class="w">    </span><span class="k">procedure</span><span class="p">(</span><span class="n">project_forces_iface</span><span class="p">),</span><span class="w"> </span><span class="k">deferred</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">project_forces</span>
+<a id="ln-30" name="ln-30" href="#ln-30"></a><span class="w">    </span><span class="k">procedure</span><span class="p">(</span><span class="n">write_output_iface</span><span class="p">),</span><span class="w"> </span><span class="k">deferred</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">write_output</span>
+<a id="ln-31" name="ln-31" href="#ln-31"></a><span class="w">    </span><span class="k">procedure</span><span class="p">(</span><span class="n">setup_output_iface</span><span class="p">),</span><span class="w"> </span><span class="k">deferred</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">setup_output</span>
+<a id="ln-32" name="ln-32" href="#ln-32"></a><span class="w">    </span><span class="k">procedure</span><span class="p">(</span><span class="n">finalise_iface</span><span class="p">),</span><span class="w"> </span><span class="k">deferred</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">finalise</span>
+<a id="ln-33" name="ln-33" href="#ln-33"></a><span class="w">  </span><span class="k">end type </span><span class="n">turbine_model_t</span>
+<a id="ln-34" name="ln-34" href="#ln-34"></a>
+<a id="ln-35" name="ln-35" href="#ln-35"></a><span class="w">  </span><span class="k">abstract interface</span>
+<a id="ln-36" name="ln-36" href="#ln-36"></a><span class="k">    subroutine </span><span class="n">init_iface</span><span class="p">(</span><span class="n">self</span><span class="p">,</span><span class="w"> </span><span class="n">backend</span><span class="p">,</span><span class="w"> </span><span class="n">mesh</span><span class="p">,</span><span class="w"> </span><span class="n">host_allocator</span><span class="p">,</span><span class="w"> </span><span class="n">dt</span><span class="p">)</span>
+<a id="ln-37" name="ln-37" href="#ln-37"></a><span class="w">      </span><span class="c">!! Set up turbine geometry/state (read config files, place actuator</span>
+<a id="ln-38" name="ln-38" href="#ln-38"></a><span class="w">      </span><span class="c">!! points, build smearing kernels, ...). Called once after the solver</span>
+<a id="ln-39" name="ln-39" href="#ln-39"></a><span class="w">      </span><span class="c">!! exists. The model caches whatever context it needs (backend, mesh,</span>
+<a id="ln-40" name="ln-40" href="#ln-40"></a><span class="w">      </span><span class="c">!! host_allocator) so the per-step hooks below take only fields.</span>
+<a id="ln-41" name="ln-41" href="#ln-41"></a><span class="w">      </span><span class="k">import</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">turbine_model_t</span><span class="p">,</span><span class="w"> </span><span class="n">base_backend_t</span><span class="p">,</span><span class="w"> </span><span class="n">mesh_t</span><span class="p">,</span><span class="w"> </span><span class="n">allocator_t</span><span class="p">,</span><span class="w"> </span><span class="n">dp</span>
+<a id="ln-42" name="ln-42" href="#ln-42"></a><span class="w">      </span><span class="k">implicit none</span>
+<a id="ln-43" name="ln-43" href="#ln-43"></a><span class="k">      class</span><span class="p">(</span><span class="n">turbine_model_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">self</span>
+<a id="ln-44" name="ln-44" href="#ln-44"></a><span class="w">      </span><span class="k">class</span><span class="p">(</span><span class="n">base_backend_t</span><span class="p">),</span><span class="w"> </span><span class="k">target</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">backend</span>
+<a id="ln-45" name="ln-45" href="#ln-45"></a><span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">mesh_t</span><span class="p">),</span><span class="w"> </span><span class="k">target</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">mesh</span>
+<a id="ln-46" name="ln-46" href="#ln-46"></a><span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">allocator_t</span><span class="p">),</span><span class="w"> </span><span class="k">target</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">host_allocator</span>
+<a id="ln-47" name="ln-47" href="#ln-47"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">dp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">dt</span>
+<a id="ln-48" name="ln-48" href="#ln-48"></a><span class="w">    </span><span class="k">end subroutine </span><span class="n">init_iface</span>
+<a id="ln-49" name="ln-49" href="#ln-49"></a>
+<a id="ln-50" name="ln-50" href="#ln-50"></a><span class="w">    </span><span class="k">subroutine </span><span class="n">update_iface</span><span class="p">(</span><span class="n">self</span><span class="p">,</span><span class="w"> </span><span class="n">t</span><span class="p">,</span><span class="w"> </span><span class="n">dt</span><span class="p">)</span>
+<a id="ln-51" name="ln-51" href="#ln-51"></a><span class="w">      </span><span class="c">!! Advance the turbine internal state (blade kinematics, rotor speed,</span>
+<a id="ln-52" name="ln-52" href="#ln-52"></a><span class="w">      </span><span class="c">!! velocity filtering) by one step. Called once per substep before</span>
+<a id="ln-53" name="ln-53" href="#ln-53"></a><span class="w">      </span><span class="c">!! project_forces.</span>
+<a id="ln-54" name="ln-54" href="#ln-54"></a><span class="w">      </span><span class="k">import</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">turbine_model_t</span><span class="p">,</span><span class="w"> </span><span class="n">dp</span>
+<a id="ln-55" name="ln-55" href="#ln-55"></a><span class="w">      </span><span class="k">implicit none</span>
+<a id="ln-56" name="ln-56" href="#ln-56"></a><span class="k">      class</span><span class="p">(</span><span class="n">turbine_model_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">self</span>
+<a id="ln-57" name="ln-57" href="#ln-57"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">dp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">t</span><span class="p">,</span><span class="w"> </span><span class="n">dt</span>
+<a id="ln-58" name="ln-58" href="#ln-58"></a><span class="w">    </span><span class="k">end subroutine </span><span class="n">update_iface</span>
+<a id="ln-59" name="ln-59" href="#ln-59"></a>
+<a id="ln-60" name="ln-60" href="#ln-60"></a><span class="w">    </span><span class="k">subroutine </span><span class="n">project_forces_iface</span><span class="p">(</span><span class="n">self</span><span class="p">,</span><span class="w"> </span><span class="n">du</span><span class="p">,</span><span class="w"> </span><span class="n">dv</span><span class="p">,</span><span class="w"> </span><span class="n">dw</span><span class="p">,</span><span class="w"> </span><span class="n">u</span><span class="p">,</span><span class="w"> </span><span class="n">v</span><span class="p">,</span><span class="w"> </span><span class="n">w</span><span class="p">)</span>
+<a id="ln-61" name="ln-61" href="#ln-61"></a><span class="w">      </span><span class="c">!! Sample the velocity field at the actuator points and accumulate the</span>
+<a id="ln-62" name="ln-62" href="#ln-62"></a><span class="w">      </span><span class="c">!! turbine momentum source into the RHS fields du, dv, dw. Uses the</span>
+<a id="ln-63" name="ln-63" href="#ln-63"></a><span class="w">      </span><span class="c">!! backend/mesh cached at init.</span>
+<a id="ln-64" name="ln-64" href="#ln-64"></a><span class="w">      </span><span class="k">import</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">turbine_model_t</span><span class="p">,</span><span class="w"> </span><span class="n">field_t</span>
+<a id="ln-65" name="ln-65" href="#ln-65"></a><span class="w">      </span><span class="k">implicit none</span>
+<a id="ln-66" name="ln-66" href="#ln-66"></a><span class="k">      class</span><span class="p">(</span><span class="n">turbine_model_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">self</span>
+<a id="ln-67" name="ln-67" href="#ln-67"></a><span class="w">      </span><span class="k">class</span><span class="p">(</span><span class="n">field_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">du</span><span class="p">,</span><span class="w"> </span><span class="n">dv</span><span class="p">,</span><span class="w"> </span><span class="n">dw</span>
+<a id="ln-68" name="ln-68" href="#ln-68"></a><span class="w">      </span><span class="k">class</span><span class="p">(</span><span class="n">field_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">u</span><span class="p">,</span><span class="w"> </span><span class="n">v</span><span class="p">,</span><span class="w"> </span><span class="n">w</span>
+<a id="ln-69" name="ln-69" href="#ln-69"></a><span class="w">    </span><span class="k">end subroutine </span><span class="n">project_forces_iface</span>
+<a id="ln-70" name="ln-70" href="#ln-70"></a>
+<a id="ln-71" name="ln-71" href="#ln-71"></a><span class="w">    </span><span class="k">subroutine </span><span class="n">write_output_iface</span><span class="p">(</span><span class="n">self</span><span class="p">,</span><span class="w"> </span><span class="n">iter</span><span class="p">,</span><span class="w"> </span><span class="n">is_root</span><span class="p">)</span>
+<a id="ln-72" name="ln-72" href="#ln-72"></a><span class="w">      </span><span class="c">!! Write per-turbine diagnostics (power, thrust, loads).</span>
+<a id="ln-73" name="ln-73" href="#ln-73"></a><span class="w">      </span><span class="k">import</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">turbine_model_t</span>
+<a id="ln-74" name="ln-74" href="#ln-74"></a><span class="w">      </span><span class="k">implicit none</span>
+<a id="ln-75" name="ln-75" href="#ln-75"></a><span class="k">      class</span><span class="p">(</span><span class="n">turbine_model_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">self</span>
+<a id="ln-76" name="ln-76" href="#ln-76"></a><span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">iter</span>
+<a id="ln-77" name="ln-77" href="#ln-77"></a><span class="w">      </span><span class="kt">logical</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">is_root</span>
+<a id="ln-78" name="ln-78" href="#ln-78"></a><span class="w">    </span><span class="k">end subroutine </span><span class="n">write_output_iface</span>
+<a id="ln-79" name="ln-79" href="#ln-79"></a>
+<a id="ln-80" name="ln-80" href="#ln-80"></a><span class="w">    </span><span class="k">subroutine </span><span class="n">setup_output_iface</span><span class="p">(</span><span class="n">self</span><span class="p">,</span><span class="w"> </span><span class="n">is_root</span><span class="p">,</span><span class="w"> </span><span class="n">append</span><span class="p">)</span>
+<a id="ln-81" name="ln-81" href="#ln-81"></a><span class="w">      </span><span class="k">import</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">turbine_model_t</span>
+<a id="ln-82" name="ln-82" href="#ln-82"></a><span class="w">      </span><span class="k">class</span><span class="p">(</span><span class="n">turbine_model_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">self</span>
+<a id="ln-83" name="ln-83" href="#ln-83"></a><span class="w">      </span><span class="kt">logical</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">is_root</span><span class="p">,</span><span class="w"> </span><span class="n">append</span>
+<a id="ln-84" name="ln-84" href="#ln-84"></a><span class="w">    </span><span class="k">end subroutine </span><span class="n">setup_output_iface</span>
+<a id="ln-85" name="ln-85" href="#ln-85"></a>
+<a id="ln-86" name="ln-86" href="#ln-86"></a><span class="w">    </span><span class="k">subroutine </span><span class="n">finalise_iface</span><span class="p">(</span><span class="n">self</span><span class="p">)</span>
+<a id="ln-87" name="ln-87" href="#ln-87"></a><span class="w">      </span><span class="k">import</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">turbine_model_t</span>
+<a id="ln-88" name="ln-88" href="#ln-88"></a><span class="w">      </span><span class="k">class</span><span class="p">(</span><span class="n">turbine_model_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">self</span>
+<a id="ln-89" name="ln-89" href="#ln-89"></a><span class="w">    </span><span class="k">end subroutine </span><span class="n">finalise_iface</span>
+<a id="ln-90" name="ln-90" href="#ln-90"></a><span class="w">  </span><span class="k">end interface</span>
+<a id="ln-91" name="ln-91" href="#ln-91"></a>
+<a id="ln-92" name="ln-92" href="#ln-92"></a><span class="k">end module </span><span class="n">m_turbine_model</span>
+</pre></div>
+
+      </section>
+    </div>
+  </div>
+
+      <hr>
+    </div> <!-- /container -->
+    <footer>
+      <div class="container">
+        <div class="row justify-content-between">
+          <div class="col">
+            <p>
+              x3d2
+ was developed by Xcompact3d Team<br>              &copy; 2026 
+</p>
+          </div>
+          <div class="col">
+            <p class="text-end">
+              Documentation generated by
+              <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
+            </p>
+          </div>
+        </div>
+        <br>
+      </div> <!-- /container -->
+    </footer>
+  </body>
+</html>

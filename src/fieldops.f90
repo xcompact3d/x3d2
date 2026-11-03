@@ -1,0 +1,1012 @@
+module m_cuda_kernels_fieldops
+  use cudafor
+
+  use m_common, only: dp
+  use m_cuda_common, only: SZ
+
+contains
+
+  attributes(global) subroutine copy(n, dst, src)
+    implicit none
+
+    integer, value, intent(in) :: n
+    real(dp), device, intent(out), dimension(:, :, :) :: dst
+    real(dp), device, intent(in), dimension(:, :, :) :: src
+
+    integer :: i, j, b
+
+    i = threadIdx%x
+    b = blockIdx%x
+
+    do j = 1, n
+      dst(i, j, b) = src(i, j, b)
+    end do
+
+  end subroutine copy
+
+  attributes(global) subroutine axpby(n, alpha, x, beta, y)
+    implicit none
+
+    integer, value, intent(in) :: n
+    real(dp), value, intent(in) :: alpha, beta
+    real(dp), device, intent(in), dimension(:, :, :) :: x
+    real(dp), device, intent(inout), dimension(:, :, :) :: y
+
+    integer :: i, j, b
+
+    i = threadIdx%x
+    b = blockIdx%x
+
+    do j = 1, n
+      y(i, j, b) = alpha*x(i, j, b) + beta*y(i, j, b)
+    end do
+
+  end subroutine axpby
+
+  attributes(global) subroutine pwmul(y, x, n)
+    implicit none
+
+    real(dp), device, intent(inout), dimension(:, :, :) :: y
+    real(dp), device, intent(in), dimension(:, :, :) :: x
+    integer, value, intent(in) :: n
+
+    integer :: i, j, b
+
+    i = threadIdx%x
+    b = blockIdx%x
+
+    do j = 1, n
+      y(i, j, b) = y(i, j, b)*x(i, j, b)
+    end do
+
+  end subroutine pwmul
+
+  attributes(global) subroutine buffer_copy(u_send_s, u_send_e, u, n, n_halo)
+    implicit none
+
+    real(dp), device, intent(inout), dimension(:, :, :) :: u_send_s, u_send_e
+    real(dp), device, intent(in), dimension(:, :, :) :: u
+    integer, value, intent(in) :: n, n_halo
+
+    integer :: i, j, b
+
+    i = threadIdx%x
+    b = blockIdx%x
+
+    do j = 1, n_halo
+      u_send_s(i, j, b) = u(i, j, b)
+      u_send_e(i, j, b) = u(i, n - n_halo + j, b)
+    end do
+
+  end subroutine buffer_copy
+
+  attributes(global) subroutine field_scale(f, alpha, n)
+    implicit none
+
+    real(dp), device, intent(inout), dimension(:, :, :) :: f
+    real(dp), value, intent(in) :: alpha
+    integer, value, intent(in) :: n
+
+    integer :: i, j, b
+
+    i = threadIdx%x
+    b = blockIdx%x
+
+    do j = 1, n
+      f(i, j, b) = alpha*f(i, j, b)
+    end do
+
+  end subroutine field_scale
+
+  attributes(global) subroutine field_shift(f, const, n)
+    implicit none
+
+    real(dp), device, intent(inout), dimension(:, :, :) :: f
+    real(dp), value, intent(in) :: const
+    integer, value, intent(in) :: n
+
+    integer :: i, j, b
+
+    i = threadIdx%x
+    b = blockIdx%x
+
+    do j = 1, n
+      f(i, j, b) = f(i, j, b) + const
+    end do
+
+  end subroutine field_shift
+
+  attributes(global) subroutine vorticity_from_gradients( &
+    vort, dudy, dudz, dvdx, dvdz, dwdx, dwdy, n)
+    implicit none
+
+    real(dp), device, intent(inout), dimension(:, :, :) :: vort
+    real(dp), device, intent(in), dimension(:, :, :) :: &
+      dudy, dudz, dvdx, dvdz, dwdx, dwdy
+    integer, value, intent(in) :: n
+
+    integer :: i, j, b
+    real(dp) :: wx, wy, wz
+
+    i = threadIdx%x
+    b = blockIdx%x
+
+    do j = 1, n
+      wx = dwdy(i, j, b) - dvdz(i, j, b)
+      wy = dudz(i, j, b) - dwdx(i, j, b)
+      wz = dvdx(i, j, b) - dudy(i, j, b)
+      vort(i, j, b) = sqrt(wx*wx + wy*wy + wz*wz)
+    end do
+
+  end subroutine vorticity_from_gradients
+
+  attributes(global) subroutine qcriterion_from_gradients( &
+    qcrit, dudx, dudy, dudz, dvdx, dvdy, dvdz, dwdx, dwdy, dwdz, n)
+    implicit none
+
+    real(dp), device, intent(inout), dimension(:, :, :) :: qcrit
+    real(dp), device, intent(in), dimension(:, :, :) :: dudx, dudy, dudz
+    real(dp), device, intent(in), dimension(:, :, :) :: dvdx, dvdy, dvdz
+    real(dp), device, intent(in), dimension(:, :, :) :: dwdx, dwdy, dwdz
+    integer, value, intent(in) :: n
+
+    integer :: i, j, b
+    real(dp) :: divu
+
+    i = threadIdx%x
+    b = blockIdx%x
+
+    do j = 1, n
+      divu = dudx(i, j, b) + dvdy(i, j, b) + dwdz(i, j, b)
+      qcrit(i, j, b) = 0.5_dp*divu*divu - &
+                       0.5_dp*(dudx(i, j, b)*dudx(i, j, b) + &
+                               dvdy(i, j, b)*dvdy(i, j, b) + &
+                               dwdz(i, j, b)*dwdz(i, j, b)) - &
+                       dudy(i, j, b)*dvdx(i, j, b) - &
+                       dudz(i, j, b)*dwdx(i, j, b) - &
+                       dvdz(i, j, b)*dwdy(i, j, b)
+    end do
+
+  end subroutine qcriterion_from_gradients
+
+  attributes(global) subroutine smagorinsky_from_gradients( &
+    nut, mixing_length_sq, dudx, dudy, dudz, dvdx, dvdy, dvdz, &
+    dwdx, dwdy, dwdz, n)
+    implicit none
+
+    real(dp), device, intent(out), dimension(:, :, :) :: nut
+    real(dp), device, intent(in), dimension(:, :, :) :: mixing_length_sq
+    real(dp), device, intent(in), dimension(:, :, :) :: dudx, dudy, dudz
+    real(dp), device, intent(in), dimension(:, :, :) :: dvdx, dvdy, dvdz
+    real(dp), device, intent(in), dimension(:, :, :) :: dwdx, dwdy, dwdz
+    integer, value, intent(in) :: n
+
+    real(dp) :: sij_sq
+    integer :: i, j, b
+
+    i = threadIdx%x
+    b = blockIdx%x
+
+    do j = 1, n
+      if (mixing_length_sq(i, j, b) > 0._dp) then
+        sij_sq = dudx(i, j, b)**2 + dvdy(i, j, b)**2 + &
+                 dwdz(i, j, b)**2 + &
+                 0.5_dp*(dudy(i, j, b) + dvdx(i, j, b))**2 + &
+                 0.5_dp*(dudz(i, j, b) + dwdx(i, j, b))**2 + &
+                 0.5_dp*(dvdz(i, j, b) + dwdy(i, j, b))**2
+        nut(i, j, b) = mixing_length_sq(i, j, b)*sqrt(2._dp*sij_sq)
+      else
+        nut(i, j, b) = 0._dp
+      end if
+    end do
+
+  end subroutine smagorinsky_from_gradients
+
+  attributes(global) subroutine sgs_stress_from_gradients( &
+    stress, nut, gradient_a, gradient_b, scale_a, scale_b, n)
+    implicit none
+
+    real(dp), device, intent(out), dimension(:, :, :) :: stress
+    real(dp), device, intent(in), dimension(:, :, :) :: &
+      nut, gradient_a, gradient_b
+    real(dp), value, intent(in) :: scale_a, scale_b
+    integer, value, intent(in) :: n
+
+    integer :: i, j, b
+
+    i = threadIdx%x
+    b = blockIdx%x
+
+    do j = 1, n
+      if (nut(i, j, b) > 0._dp) then
+        stress(i, j, b) = nut(i, j, b)* &
+                          (scale_a*gradient_a(i, j, b) &
+                           + scale_b*gradient_b(i, j, b))
+      else
+        stress(i, j, b) = 0._dp
+      end if
+    end do
+  end subroutine sgs_stress_from_gradients
+
+  attributes(global) subroutine scalar_product(s, x, y, n, n_i_pad, n_j)
+    implicit none
+
+    real(dp), device, intent(inout) :: s
+    real(dp), device, intent(in), dimension(:, :, :) :: x, y
+    integer, value, intent(in) :: n, n_i_pad, n_j
+
+    real(dp) :: s_pncl !! pencil sum
+    integer :: i, j, b, b_i, b_j, ierr
+
+    i = threadIdx%x
+    b_i = blockIdx%x
+    b_j = blockIdx%y
+
+    b = b_i + (b_j - 1)*n_i_pad
+    s_pncl = 0._dp
+    if (i + (b_j - 1)*blockDim%x <= n_j) then
+      do j = 1, n
+        s_pncl = s_pncl + x(i, j, b)*y(i, j, b)
+      end do
+    end if
+    ierr = atomicadd(s, s_pncl)
+
+  end subroutine scalar_product
+
+  attributes(global) subroutine vector_norm_squared(s, a, b, c, &
+                                                    n, n_i_pad, n_j)
+    implicit none
+
+    real(dp), device, intent(inout) :: s
+    real(dp), device, intent(in), dimension(:, :, :) :: a, b, c
+    integer, value, intent(in) :: n, n_i_pad, n_j
+
+    real(dp) :: pencil_sum
+    integer :: i, j, pencil, block_i, block_j, ierr
+
+    i = threadIdx%x
+    block_i = blockIdx%x
+    block_j = blockIdx%y
+    pencil = block_i + (block_j - 1)*n_i_pad
+
+    pencil_sum = 0._dp
+    if (i + (block_j - 1)*blockDim%x <= n_j) then
+      do j = 1, n
+        pencil_sum = pencil_sum + a(i, j, pencil)**2 + &
+                     b(i, j, pencil)**2 + c(i, j, pencil)**2
+      end do
+    end if
+    ierr = atomicadd(s, pencil_sum)
+  end subroutine vector_norm_squared
+
+  attributes(global) subroutine labelled_sums(s, g, label, a, b, c, &
+                                              n_label, n, n_i_pad, n_j)
+    !! s(1:3, l) += sums of g*a, g*b and g*c over the points labelled l;
+    !! launch as vector_norm_squared. Each thread accumulates runs of equal
+    !! labels along its pencil and flushes a run when the label changes, so
+    !! the atomics scale with the label changes rather than the points.
+    implicit none
+
+    real(dp), device, intent(inout) :: s(3, n_label)
+    real(dp), device, intent(in), dimension(:, :, :) :: g, label, a, b, c
+    integer, value, intent(in) :: n_label, n, n_i_pad, n_j
+
+    real(dp) :: sum_a, sum_b, sum_c
+    integer :: i, j, l, l_run, pencil, block_i, block_j, ierr
+
+    i = threadIdx%x
+    block_i = blockIdx%x
+    block_j = blockIdx%y
+    pencil = block_i + (block_j - 1)*n_i_pad
+
+    if (i + (block_j - 1)*blockDim%x > n_j) return
+
+    l_run = 0
+    sum_a = 0._dp
+    sum_b = 0._dp
+    sum_c = 0._dp
+    do j = 1, n
+      l = nint(label(i, j, pencil))
+      if (l < 1 .or. l > n_label) l = 0
+      if (l /= l_run) then
+        if (l_run /= 0) then
+          ierr = atomicadd(s(1, l_run), sum_a)
+          ierr = atomicadd(s(2, l_run), sum_b)
+          ierr = atomicadd(s(3, l_run), sum_c)
+        end if
+        l_run = l
+        sum_a = 0._dp
+        sum_b = 0._dp
+        sum_c = 0._dp
+      end if
+      if (l /= 0) then
+        sum_a = sum_a + g(i, j, pencil)*a(i, j, pencil)
+        sum_b = sum_b + g(i, j, pencil)*b(i, j, pencil)
+        sum_c = sum_c + g(i, j, pencil)*c(i, j, pencil)
+      end if
+    end do
+    if (l_run /= 0) then
+      ierr = atomicadd(s(1, l_run), sum_a)
+      ierr = atomicadd(s(2, l_run), sum_b)
+      ierr = atomicadd(s(3, l_run), sum_c)
+    end if
+  end subroutine labelled_sums
+
+  attributes(global) subroutine labelled_axpy(coeffs, g, label, a, b, c, &
+                                              n_label, n, n_i_pad, n_j)
+    !! a, b, c += coeffs(1:3, l)*g at the points labelled l; launch as
+    !! vector_norm_squared.
+    implicit none
+
+    real(dp), device, intent(in) :: coeffs(3, n_label)
+    real(dp), device, intent(in), dimension(:, :, :) :: g, label
+    real(dp), device, intent(inout), dimension(:, :, :) :: a, b, c
+    integer, value, intent(in) :: n_label, n, n_i_pad, n_j
+
+    integer :: i, j, l, pencil, block_i, block_j
+
+    i = threadIdx%x
+    block_i = blockIdx%x
+    block_j = blockIdx%y
+    pencil = block_i + (block_j - 1)*n_i_pad
+
+    if (i + (block_j - 1)*blockDim%x > n_j) return
+
+    do j = 1, n
+      l = nint(label(i, j, pencil))
+      if (l < 1 .or. l > n_label) cycle
+      a(i, j, pencil) = a(i, j, pencil) + coeffs(1, l)*g(i, j, pencil)
+      b(i, j, pencil) = b(i, j, pencil) + coeffs(2, l)*g(i, j, pencil)
+      c(i, j, pencil) = c(i, j, pencil) + coeffs(3, l)*g(i, j, pencil)
+    end do
+  end subroutine labelled_axpy
+
+  attributes(global) subroutine field_max_sum(max_f, sum_f, f, n, n_i_pad, n_j)
+    implicit none
+
+    real(dp), device, intent(inout) :: max_f, sum_f
+    real(dp), device, intent(in), dimension(:, :, :) :: f
+    integer, value, intent(in) :: n, n_i_pad, n_j
+
+    real(dp) :: max_pncl, sum_pncl, val
+    integer :: i, j, b, b_i, b_j, ierr
+
+    i = threadIdx%x
+    b_i = blockIdx%x
+    b_j = blockIdx%y
+
+    b = b_i + (b_j - 1)*n_i_pad
+    max_pncl = 0._dp
+    sum_pncl = 0._dp
+    if (i + (b_j - 1)*blockDim%x <= n_j) then
+      do j = 1, n
+        val = abs(f(i, j, b))
+        sum_pncl = sum_pncl + val
+        max_pncl = max(max_pncl, val)
+      end do
+    end if
+    ierr = atomicadd(sum_f, sum_pncl)
+    ierr = atomicmax(max_f, max_pncl)
+
+  end subroutine field_max_sum
+
+  attributes(global) subroutine field_set_y_face( &
+    f, c_start, c_end, set_start, set_end, flow_rate_diff, nx, ny, nz)
+  !! Set domain Y_FACE boundary values.
+  !! c_start: Dirichlet value applied at the bottom face (j = 1)
+  !! c_end:   Dirichlet value applied at the top face (j = ny)
+  !! set_start/set_end: whether that face carries a prescribed value at all,
+  !! so the two y-faces can differ (ABL: no-slip floor, free-slip lid).
+    implicit none
+
+    real(dp), device, intent(inout), dimension(:, :, :) :: f
+    real(dp), value, intent(in) :: c_start, c_end, flow_rate_diff
+    logical, value, intent(in) :: set_start, set_end
+    integer, value, intent(in) :: nx, ny, nz
+
+    integer :: i, j, b, n_mod, b_end
+
+    j = threadIdx%x + (blockIdx%x - 1)*blockDim%x ! from 1 to nx
+    b = blockIdx%y ! from 1 to nz
+
+    ! DIR_X groups are ordered z fastest: b = (y_block - 1)*nz + z, so the
+    ! bottom face lives in groups 1..nz and the top face nz*(n_y_blocks-1)+z.
+    n_mod = mod(ny - 1, SZ) + 1
+    b_end = b + (ny - 1)/SZ*nz
+
+    if (j <= nx) then
+      if (set_start) f(1, j, b) = c_start
+      if (set_end) f(n_mod, j, b_end) = c_end
+    end if
+
+  end subroutine field_set_y_face
+  attributes(global) subroutine field_plane_partial_sums( &
+    partial, f, nx, ny, nz)
+  !! First pass of field_plane_sums: partial(j, z) is the sum over x of
+  !! y index j at z. Launch with threads = dim3(SZ, 1, 1) and
+  !! blocks = dim3(n_y_blocks, nz, 1).
+    implicit none
+
+    real(dp), device, intent(out), dimension(:, :) :: partial
+    real(dp), device, intent(in), dimension(:, :, :) :: f
+    integer, value, intent(in) :: nx, ny, nz
+
+    integer :: i, j, k, b
+    real(dp) :: line_sum
+
+    i = threadIdx%x
+    j = i + (blockIdx%x - 1)*SZ
+    if (j > ny) return
+
+    ! DIR_X groups are ordered z fastest: b = (y_block - 1)*nz + z
+    b = (blockIdx%x - 1)*nz + blockIdx%y
+    line_sum = 0._dp
+    do k = 1, nx
+      line_sum = line_sum + f(i, k, b)
+    end do
+    partial(j, blockIdx%y) = line_sum
+
+  end subroutine field_plane_partial_sums
+
+  attributes(global) subroutine field_plane_sums_reduce(sums, partial, ny, nz)
+  !! Second pass of field_plane_sums: sums(j) = sum over z of partial(j, z),
+  !! in a fixed order. Launch with one thread per y index.
+    implicit none
+
+    real(dp), device, intent(out), dimension(:) :: sums
+    real(dp), device, intent(in), dimension(:, :) :: partial
+    integer, value, intent(in) :: ny, nz
+
+    integer :: j, z
+    real(dp) :: plane_sum
+
+    j = threadIdx%x + (blockIdx%x - 1)*blockDim%x
+    if (j > ny) return
+
+    plane_sum = 0._dp
+    do z = 1, nz
+      plane_sum = plane_sum + partial(j, z)
+    end do
+    sums(j) = plane_sum
+
+  end subroutine field_plane_sums_reduce
+
+  attributes(global) subroutine field_set_y_plane(f, c, i_in_block, &
+                                                  group_offset, nx)
+  !! Set one interior y-plane to a constant. The caller resolves the plane
+  !! into its position within a y-block and the group offset for that block,
+  !! so this kernel stays free of layout arithmetic.
+    implicit none
+
+    real(dp), device, intent(inout), dimension(:, :, :) :: f
+    real(dp), value, intent(in) :: c
+    integer, value, intent(in) :: i_in_block, group_offset, nx
+
+    integer :: j, b
+
+    j = threadIdx%x + (blockIdx%x - 1)*blockDim%x ! from 1 to nx
+    b = group_offset + blockIdx%y ! z fastest within the y-block
+
+    if (j <= nx) f(i_in_block, j, b) = c
+
+  end subroutine field_set_y_plane
+
+  attributes(global) subroutine field_set_abl_wall_stress( &
+    stress, u, w, drag_coeff, upper_weight, sample_i, upper_i, stress_i, &
+    sample_offset, upper_offset, stress_offset, nx, component)
+  !! Drag law tau = drag_coeff*u_c*|u_h| from each column's own sampled
+  !! velocity, written into one stress plane (component 1: x, 3: z). The
+  !! velocity is interpolated between the sample plane and the one above it.
+    implicit none
+    real(dp), device, intent(inout), dimension(:, :, :) :: stress
+    real(dp), device, intent(in), dimension(:, :, :) :: u, w
+    real(dp), value, intent(in) :: drag_coeff, upper_weight
+    integer, value, intent(in) :: sample_i, upper_i, stress_i
+    integer, value, intent(in) :: sample_offset, upper_offset
+    integer, value, intent(in) :: stress_offset, nx, component
+    integer :: i, sample_group, upper_group, stress_group
+    real(dp) :: us, ws, speed
+
+    i = threadIdx%x + (blockIdx%x - 1)*blockDim%x
+    sample_group = sample_offset + blockIdx%y
+    upper_group = upper_offset + blockIdx%y
+    stress_group = stress_offset + blockIdx%y
+    if (i > nx) return
+    us = (1._dp - upper_weight)*u(sample_i, i, sample_group) &
+         + upper_weight*u(upper_i, i, upper_group)
+    ws = (1._dp - upper_weight)*w(sample_i, i, sample_group) &
+         + upper_weight*w(upper_i, i, upper_group)
+    speed = sqrt(us**2 + ws**2)
+    if (component == 1) then
+      stress(stress_i, i, stress_group) = drag_coeff*us*speed
+    else
+      stress(stress_i, i, stress_group) = drag_coeff*ws*speed
+    end if
+  end subroutine field_set_abl_wall_stress
+
+  attributes(global) subroutine field_get_x_band(band, f, i_start, nz)
+  !! band(i, j, k) = f(i_start + i - 1, j, k) for a DIR_X vertex field;
+  !! one thread per i, one block per (j, k)
+    implicit none
+    real(dp), device, intent(out), dimension(:, :, :) :: band
+    real(dp), device, intent(in), dimension(:, :, :) :: f
+    integer, value, intent(in) :: i_start, nz
+    integer :: i, j, k
+
+    i = threadIdx%x + (blockIdx%x - 1)*blockDim%x
+    j = blockIdx%y
+    k = blockIdx%z
+    if (i > size(band, 1)) return
+    band(i, j, k) = f(mod(j - 1, SZ) + 1, i_start + i - 1, &
+                      ((j - 1)/SZ)*nz + k)
+  end subroutine field_get_x_band
+
+  attributes(global) subroutine field_blend_x_band(f, band, lambda, &
+                                                   i_start, nz)
+  !! f(i_start + i - 1, j, k) = lambda(i)*band(i, j, k)
+  !!                            + (1 - lambda(i))*f(i_start + i - 1, j, k)
+  !! for a DIR_X vertex field; one thread per i, one block per (j, k)
+    implicit none
+    real(dp), device, intent(inout), dimension(:, :, :) :: f
+    real(dp), device, intent(in), dimension(:, :, :) :: band
+    real(dp), device, intent(in), dimension(:) :: lambda
+    integer, value, intent(in) :: i_start, nz
+    integer :: i, j, k, jj, g
+
+    i = threadIdx%x + (blockIdx%x - 1)*blockDim%x
+    j = blockIdx%y
+    k = blockIdx%z
+    if (i > size(band, 1)) return
+    jj = mod(j - 1, SZ) + 1
+    g = ((j - 1)/SZ)*nz + k
+    f(jj, i_start + i - 1, g) = lambda(i)*band(i, j, k) &
+                                + (1._dp - lambda(i)) &
+                                *f(jj, i_start + i - 1, g)
+  end subroutine field_blend_x_band
+
+  attributes(global) subroutine field_set_y_face_from_field( &
+    f, f_start, nx, ny, nz)
+!! Set domain Y_FACE boundary values from another field.
+!! Both f and f_start are DIR_X VERT pencil-layout. Only the bottom
+!! (j = 1) and top (j = ny) y-pencil planes of f_start are read.
+!!
+!! Launch convention matches field_set_y_face exactly:
+!!   threads = dim3(64, 1, 1)
+!!   blocks  = dim3((nx-1)/64 + 1, nz, 1)
+    implicit none
+
+    real(dp), device, intent(inout), dimension(:, :, :) :: f
+    real(dp), device, intent(in), dimension(:, :, :) :: f_start
+    integer, value, intent(in) :: nx, ny, nz
+
+    integer :: j, b, n_mod, b_end
+
+    j = threadIdx%x + (blockIdx%x - 1)*blockDim%x ! from 1 to nx
+    b = blockIdx%y ! from 1 to nz
+
+    n_mod = mod(ny - 1, SZ) + 1
+    b_end = b + (ny - 1)/SZ*nz
+
+    if (j <= nx) then
+      f(1, j, b) = f_start(1, j, b)
+      f(n_mod, j, b_end) = f_start(n_mod, j, b_end)
+    end if
+
+  end subroutine field_set_y_face_from_field
+  attributes(global) subroutine field_set_x_face( &
+    f, c_start, c_end, bc_start, bc_end, flow_rate_diff, nx, ny, nz)
+  !! Set domain X_FACE boundary values.
+  !! c_start: Dirichlet value applied at the left face (i = 1)
+  !! c_end:   convective velocity Uc = uxmax * gdt / dx,
+  !!          used as multiplier in the outflow scheme du/dt + Uc*du/dx = 0
+    implicit none
+    real(dp), device, intent(inout), dimension(:, :, :) :: f
+    real(dp), value, intent(in) :: c_start, c_end, flow_rate_diff
+    integer, value, intent(in) :: bc_start, bc_end
+    integer, value, intent(in) :: nx, ny, nz
+    integer :: i, b, n_mod, n_y_blocks, y_block, i_max
+
+    i = threadIdx%x + (blockIdx%x - 1)*blockDim%x  ! 1..SZ
+    b = blockIdx%y                                 ! 1..n_y_blocks*nz
+
+    n_mod = mod(ny - 1, SZ) + 1
+    n_y_blocks = (ny - 1)/SZ + 1
+
+    ! Determine if this b is the last y-block (padding present)
+    ! With b = (y_block - 1)*nz + z, y_block = (b - 1)/nz + 1
+    y_block = (b - 1)/nz + 1
+    if (y_block == n_y_blocks) then
+      i_max = n_mod    ! last y-block: only i in [1, n_mod] are real
+    else
+      i_max = SZ       ! interior y-blocks: all i in [1, SZ] are real
+    end if
+
+    if (i <= i_max) then
+      ! --- Left face (j = 1) ---
+      select case (bc_start)
+      case (1) ! BC_NEUMANN
+        !this can be empty for now future TODO
+      case (2) ! BC_DIRICHLET
+        f(i, 1, b) = c_start
+      end select
+
+      ! --- Right face (j = nx) ---
+      select case (bc_end)
+      case (1) !BC_NEUMANN
+        !this can be empty for now future TODO
+      case (2) ! BC_DIRICHLET
+        f(i, nx, b) = f(i, nx, b) &
+                      - c_end*(f(i, nx, b) - f(i, nx - 1, b)) &
+                      + flow_rate_diff
+      end select
+    end if
+  end subroutine field_set_x_face
+
+  attributes(global) subroutine field_set_x_face_from_field( &
+    f, f_start, c_end, bc_start, bc_end, flow_rate_diff, nx, ny, nz)
+  !! Set domain X_FACE boundary values with a spatially-varying inlet.
+  !!
+  !! Both `f` and `f_start` are DIR_X VERT fields with shape
+  !! (SZ, nx, n_y_blocks*nz). The inlet plane is pencil index 1 of each,
+  !! so f(i, 1, b) <- f_start(i, 1, b) for every real (i, b). Only the
+  !! i = 1 pencil-index plane of f_start is read; the rest is ignored.
+  !!
+  !! Launch convention (matches field_set_x_face exactly):
+  !!   threads = dim3(64, 1, 1)
+  !!   blocks  = dim3((SZ-1)/64 + 1, n_y_blocks*nz, 1)
+  !! Threads beyond the real pencil width (SZ in interior y-blocks,
+  !! n_mod in the last y-block) are masked out by the i_max guard.
+  !!
+  !! c_end is the convective velocity Uc = uxmax * gdt / dx used in the
+  !! outflow scheme du/dt + Uc*du/dx = 0 at the right face.
+    implicit none
+    real(dp), device, intent(inout), dimension(:, :, :) :: f
+    real(dp), device, intent(in), dimension(:, :, :) :: f_start
+    real(dp), value, intent(in) :: c_end, flow_rate_diff
+    integer, value, intent(in) :: bc_start, bc_end
+    integer, value, intent(in) :: nx, ny, nz
+
+    integer :: i, b, n_mod, n_y_blocks, y_block, i_max
+
+    i = threadIdx%x + (blockIdx%x - 1)*blockDim%x  ! 1..SZ (or n_mod)
+    b = blockIdx%y                                 ! 1..n_y_blocks*nz
+
+    n_mod = mod(ny - 1, SZ) + 1
+    n_y_blocks = (ny - 1)/SZ + 1
+    y_block = (b - 1)/nz + 1
+
+    if (y_block == n_y_blocks) then
+      i_max = n_mod    ! last y-block: only i in [1, n_mod] are real
+    else
+      i_max = SZ       ! interior y-blocks: all i in [1, SZ] are real
+    end if
+
+    if (i <= i_max) then
+      ! --- Left face (pencil index 1, i.e. global x = 1) ---
+      select case (bc_start)
+      case (1) ! BC_NEUMANN
+        ! future TODO
+      case (2) ! BC_DIRICHLET
+        f(i, 1, b) = f_start(i, 1, b)
+      end select
+
+      ! --- Right face (pencil index nx, i.e. global x = nx) ---
+      select case (bc_end)
+      case (1) ! BC_NEUMANN
+        ! future TODO
+      case (2) ! BC_DIRICHLET
+        f(i, nx, b) = f(i, nx, b) &
+                      - c_end*(f(i, nx, b) - f(i, nx - 1, b)) &
+                      + flow_rate_diff
+      end select
+    end if
+  end subroutine field_set_x_face_from_field
+
+  attributes(global) subroutine field_set_y_face_from_plane( &
+    f, p_start, p_end, apply_end, nx, ny, nz)
+    !! Write two (nx, nz) planes into the y = 1 and y = ny planes of a
+    !! DIR_X field. p_end is read only when apply_end = 1.
+    !! Launch convention matches field_set_y_face_from_field.
+    implicit none
+
+    real(dp), device, intent(inout), dimension(:, :, :) :: f
+    real(dp), device, intent(in), dimension(:, :) :: p_start, p_end
+    integer, value, intent(in) :: apply_end, nx, ny, nz
+
+    integer :: j, b, n_mod, b_end
+
+    j = threadIdx%x + (blockIdx%x - 1)*blockDim%x ! from 1 to nx
+    b = blockIdx%y ! from 1 to nz
+
+    n_mod = mod(ny - 1, SZ) + 1
+    b_end = b + (ny - 1)/SZ*nz
+
+    if (j <= nx) then
+      f(1, j, b) = p_start(j, b)
+      if (apply_end == 1) f(n_mod, j, b_end) = p_end(j, b)
+    end if
+
+  end subroutine field_set_y_face_from_plane
+
+  attributes(global) subroutine field_set_x_face_from_plane( &
+    f, p_start, p_end, apply_end, nx, ny, nz)
+    !! Write two (ny, nz) planes into the x = 1 and x = nx planes of a
+    !! DIR_X field. p_end is read only when apply_end = 1.
+    !! Launch convention matches field_set_x_face_from_field.
+    implicit none
+
+    real(dp), device, intent(inout), dimension(:, :, :) :: f
+    real(dp), device, intent(in), dimension(:, :) :: p_start, p_end
+    integer, value, intent(in) :: apply_end, nx, ny, nz
+
+    integer :: i, b, n_mod, n_y_blocks, y_block, i_max, y, z
+
+    i = threadIdx%x + (blockIdx%x - 1)*blockDim%x  ! 1..SZ
+    b = blockIdx%y                                 ! 1..n_y_blocks*nz
+
+    n_mod = mod(ny - 1, SZ) + 1
+    n_y_blocks = (ny - 1)/SZ + 1
+    ! CUDA DIR_X ordering: b = (y_block - 1)*nz + z
+    y_block = (b - 1)/nz + 1
+    z = b - (y_block - 1)*nz
+    y = (y_block - 1)*SZ + i
+
+    if (y_block == n_y_blocks) then
+      i_max = n_mod
+    else
+      i_max = SZ
+    end if
+
+    if (i <= i_max) then
+      f(i, 1, b) = p_start(y, z)
+      if (apply_end == 1) f(i, nx, b) = p_end(y, z)
+    end if
+
+  end subroutine field_set_x_face_from_plane
+
+  attributes(global) subroutine add_scalar_x_face( &
+    f, c, i_plane, nx, ny, nz)
+  !! Adds a uniform constant `c` to a single x-normal plane (pencil index
+  !! i_plane) of a DIR_X VERT field, in place.
+  !!
+  !! Launch convention (matches field_set_x_face exactly):
+  !!   threads = dim3(64, 1, 1)
+  !!   blocks  = dim3((SZ-1)/64 + 1, n_y_blocks*nz, 1)
+  !! Threads beyond the real pencil width (SZ in interior y-blocks,
+  !! n_mod in the last y-block) are masked out by the i_max guard.
+    implicit none
+    real(dp), device, intent(inout), dimension(:, :, :) :: f
+    real(dp), value, intent(in) :: c
+    integer, value, intent(in) :: i_plane, nx, ny, nz
+
+    integer :: i, b, n_mod, n_y_blocks, y_block, i_max
+
+    i = threadIdx%x + (blockIdx%x - 1)*blockDim%x  ! 1..SZ (or n_mod)
+    b = blockIdx%y                                 ! 1..n_y_blocks*nz
+
+    n_mod = mod(ny - 1, SZ) + 1
+    n_y_blocks = (ny - 1)/SZ + 1
+    y_block = (b - 1)/nz + 1
+
+    if (y_block == n_y_blocks) then
+      i_max = n_mod    ! last y-block: only i in [1, n_mod] are real
+    else
+      i_max = SZ       ! interior y-blocks: all i in [1, SZ] are real
+    end if
+
+    if (i <= i_max) then
+      f(i, i_plane, b) = f(i, i_plane, b) + c
+    end if
+  end subroutine add_scalar_x_face
+
+  attributes(global) subroutine field_add_x_face_from_field( &
+    f, g, set_start, set_end, nx, ny, nz)
+  !! f += g on the x-faces (pencil index 1 and nx) flagged by
+  !! set_start/set_end. Launch as field_set_x_face_from_field.
+    implicit none
+    real(dp), device, intent(inout), dimension(:, :, :) :: f
+    real(dp), device, intent(in), dimension(:, :, :) :: g
+    logical, value, intent(in) :: set_start, set_end
+    integer, value, intent(in) :: nx, ny, nz
+
+    integer :: i, b, n_mod, i_max
+
+    i = threadIdx%x + (blockIdx%x - 1)*blockDim%x
+    b = blockIdx%y
+
+    ! Groups are z fast, so the last y-block is b > nz*(n_y_blocks - 1)
+    n_mod = mod(ny - 1, SZ) + 1
+    if ((b - 1)/nz + 1 == (ny - 1)/SZ + 1) then
+      i_max = n_mod
+    else
+      i_max = SZ
+    end if
+
+    if (i <= i_max) then
+      if (set_start) f(i, 1, b) = f(i, 1, b) + g(i, 1, b)
+      if (set_end) f(i, nx, b) = f(i, nx, b) + g(i, nx, b)
+    end if
+  end subroutine field_add_x_face_from_field
+
+  attributes(global) subroutine field_add_y_face_from_field( &
+    f, g, set_start, set_end, nx, ny, nz)
+  !! f += g on the y-faces (j = 1 and ny) flagged by set_start/set_end.
+  !! Launch as field_set_y_face.
+    implicit none
+    real(dp), device, intent(inout), dimension(:, :, :) :: f
+    real(dp), device, intent(in), dimension(:, :, :) :: g
+    logical, value, intent(in) :: set_start, set_end
+    integer, value, intent(in) :: nx, ny, nz
+
+    integer :: j, b, n_mod, b_end
+
+    j = threadIdx%x + (blockIdx%x - 1)*blockDim%x
+    b = blockIdx%y
+
+    n_mod = mod(ny - 1, SZ) + 1
+    b_end = b + (ny - 1)/SZ*nz
+
+    if (j <= nx) then
+      if (set_start) f(1, j, b) = f(1, j, b) + g(1, j, b)
+      if (set_end) f(n_mod, j, b_end) = f(n_mod, j, b_end) + g(n_mod, j, b_end)
+    end if
+  end subroutine field_add_y_face_from_field
+
+  attributes(global) subroutine volume_integral(s, f, n, n_i_pad, n_j)
+    implicit none
+
+    real(dp), device, intent(inout) :: s
+    real(dp), device, intent(in), dimension(:, :, :) :: f
+    integer, value, intent(in) :: n, n_i_pad, n_j
+
+    real(dp) :: s_pncl !! pencil sum
+    integer :: i, j, b, b_i, b_j, ierr
+
+    i = threadIdx%x
+    b_i = blockIdx%x
+    b_j = blockIdx%y
+
+    b = b_i + (b_j - 1)*n_i_pad
+    s_pncl = 0._dp
+    if (i + (b_j - 1)*blockDim%x <= n_j) then
+      do j = 1, n
+        s_pncl = s_pncl + f(i, j, b)
+      end do
+    end if
+    ierr = atomicadd(s, s_pncl)
+
+  end subroutine volume_integral
+
+  attributes(global) subroutine sample_points( &
+    vals, points, a, b, c, n_points, dx, dy, dz, nx, ny, nz, gx, gy, gz, &
+    ox, oy, oz, px, py, pz, n_i_pad &
+    )
+    !! vals(1:3, p) = this rank's part of the trilinear interpolation of a, b
+    !! and c at points(:, p), one thread per point; see field_sample_points.
+    !! (dx, dy, dz) is the grid spacing, (nx, ny, nz) and (gx, gy, gz) the
+    !! local and global VERT dims, (ox, oy, oz) the rank offsets and
+    !! (px, py, pz) flag periodic directions.
+    implicit none
+
+    real(dp), device, intent(inout) :: vals(3, n_points)
+    real(dp), device, intent(in) :: points(3, n_points)
+    real(dp), device, intent(in), dimension(:, :, :) :: a, b, c
+    integer, value, intent(in) :: n_points, nx, ny, nz, gx, gy, gz, &
+                                  ox, oy, oz, n_i_pad
+    real(dp), value, intent(in) :: dx, dy, dz
+    logical, value, intent(in) :: px, py, pz
+
+    real(dp) :: fx, fy, fz, w, sa, sb, sc
+    integer :: p, o1, o2, o3, x0, y0, z0, lx, ly, lz, i, pencil
+
+    p = threadIdx%x + (blockIdx%x - 1)*blockDim%x
+    if (p > n_points) return
+
+    fx = points(1, p)/dx
+    fy = points(2, p)/dy
+    fz = points(3, p)/dz
+    x0 = floor(fx)
+    y0 = floor(fy)
+    z0 = floor(fz)
+    fx = fx - x0
+    fy = fy - y0
+    fz = fz - z0
+
+    sa = 0._dp
+    sb = 0._dp
+    sc = 0._dp
+    do o3 = 0, 1
+      lz = local_index(z0 + o3, gz, oz, nz, pz)
+      if (lz < 1) cycle
+      do o2 = 0, 1
+        ly = local_index(y0 + o2, gy, oy, ny, py)
+        if (ly < 1) cycle
+        do o1 = 0, 1
+          lx = local_index(x0 + o1, gx, ox, nx, px)
+          if (lx < 1) cycle
+          w = merge(fx, 1._dp - fx, o1 == 1)*merge(fy, 1._dp - fy, o2 == 1) &
+              *merge(fz, 1._dp - fz, o3 == 1)
+          ! DIR_X storage: x along j, y split into SZ-blocks, z fastest
+          i = mod(ly - 1, SZ) + 1
+          pencil = lz + ((ly - 1)/SZ)*n_i_pad
+          sa = sa + w*a(i, lx, pencil)
+          sb = sb + w*b(i, lx, pencil)
+          sc = sc + w*c(i, lx, pencil)
+        end do
+      end do
+    end do
+    vals(1, p) = sa
+    vals(2, p) = sb
+    vals(3, p) = sc
+  end subroutine sample_points
+
+  attributes(device) integer function local_index(g, n_glob, offset, &
+                                                  n_loc, periodic)
+    !! Local one-based index of the zero-based global index g, wrapped when
+    !! periodic; 0 when it is off this rank or outside the domain.
+    implicit none
+
+    integer, value, intent(in) :: g, n_glob, offset, n_loc
+    logical, value, intent(in) :: periodic
+
+    integer :: gw
+
+    gw = g
+    if (periodic) gw = modulo(g, n_glob)
+    local_index = gw - offset + 1
+    if (gw < 0 .or. gw >= n_glob .or. local_index < 1 &
+        .or. local_index > n_loc) local_index = 0
+  end function local_index
+
+  attributes(global) subroutine add_gaussian_sources( &
+    a, b, c, src, box, n_src, inv_eps2, r_cut2, dx, dy, dz, nx, ny, nz, &
+    gx, gy, gz, ox, oy, oz, px, py, pz, n_i_pad &
+    )
+    !! a, b, c += src(4:6, s)*exp(-dist^2/eps^2) within r_cut of the point
+    !! src(1:3, s), over the global index box box(1:3, s)..box(4:6, s); see
+    !! source_index_boxes. Box indices are wrapped across periodic
+    !! boundaries and skipped where this rank does not own them. Launch
+    !! with blocks (n_src, box extent in z) and threads striding y within
+    !! the box; sources overlap, so the adds are atomic.
+    implicit none
+
+    real(dp), device, intent(inout), dimension(:, :, :) :: a, b, c
+    real(dp), device, intent(in) :: src(6, n_src)
+    integer, device, intent(in) :: box(6, n_src)
+    integer, value, intent(in) :: n_src, nx, ny, nz, gx, gy, gz, &
+                                  ox, oy, oz, n_i_pad
+    real(dp), value, intent(in) :: inv_eps2, r_cut2, dx, dy, dz
+    logical, value, intent(in) :: px, py, pz
+
+    real(dp) :: dz2, dyz2, dist2, kern, ierr
+    integer :: s, g_x, g_y, g_z, x, y, z, i, pencil
+
+    s = blockIdx%x
+    g_z = box(3, s) + blockIdx%y - 1
+    if (g_z > box(6, s)) return
+    z = local_index(g_z, gz, oz, nz, pz)
+    if (z < 1) return
+
+    dz2 = (src(3, s) - g_z*dz)**2
+    if (dz2 > r_cut2) return
+    do g_y = box(2, s) + threadIdx%x - 1, box(5, s), blockDim%x
+      y = local_index(g_y, gy, oy, ny, py)
+      if (y < 1) cycle
+      dyz2 = dz2 + (src(2, s) - g_y*dy)**2
+      if (dyz2 > r_cut2) cycle
+      i = mod(y - 1, SZ) + 1
+      pencil = z + ((y - 1)/SZ)*n_i_pad
+      do g_x = box(1, s), box(4, s)
+        x = local_index(g_x, gx, ox, nx, px)
+        if (x < 1) cycle
+        dist2 = dyz2 + (src(1, s) - g_x*dx)**2
+        if (dist2 > r_cut2) cycle
+        kern = exp(-dist2*inv_eps2)
+        ierr = atomicadd(a(i, x, pencil), src(4, s)*kern)
+        ierr = atomicadd(b(i, x, pencil), src(5, s)*kern)
+        ierr = atomicadd(c(i, x, pencil), src(6, s)*kern)
+      end do
+    end do
+  end subroutine add_gaussian_sources
+
+end module m_cuda_kernels_fieldops

@@ -1,0 +1,1632 @@
+<!-- -*- mode: jinja2 -*- -->
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+      <meta name="description" content="x3d2 is the current codename for what is to become Xcompact3d version 2.0.">
+    <meta name="author" content="Xcompact3d Team" >
+    <link rel="icon" href="../favicon.png">
+
+    <title>postprocess.f90 &ndash; x3d2</title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+            integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <!-- Font Awesome -->
+    <link href="../css/fontawesome.min.css" rel="stylesheet">
+    <link href="../css/brands.min.css" rel="stylesheet">
+    <link href="../css/regular.min.css" rel="stylesheet">
+    <link href="../css/solid.min.css" rel="stylesheet">
+    <link href="../css/v4-font-face.min.css" rel="stylesheet">
+    <link href="../css/v4-shims.min.css" rel="stylesheet">
+    <!-- MathJax -->
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        TeX: { equationNumbers: { autoNumber: "AMS" } }
+      });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@2.7.9/MathJax.js?config=TeX-AMS-MML_HTMLorMML" async
+            integrity="sha256-DViIOMYdwlM/axqoGDPeUyf0urLoHMN4QACBKyB58Uw=" crossorigin="anonymous"></script>
+    <!-- Other scripts and stylesheets -->
+    <link href="../css/local.css" rel="stylesheet">
+    <link href="../css/pygments.css" rel="stylesheet">
+    <script src="../js/svg-pan-zoom.min.js"></script>
+  </head>
+
+  <body>
+
+    <!-- Fixed navbar -->
+    <div class="container-fluid mb-sm-4 mb-xl-2">
+      <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+        <div class="container">
+          <a class="navbar-brand" href="../index.html">x3d2 </a>
+          <button type="button" class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#navbar"
+                  aria-expanded="false" aria-controls="navbar" aria-label="Toggle navigation">
+                  <span class="navbar-toggler-icon">
+          </button>
+
+          <div id="navbar" class="navbar-collapse collapse">
+            <ul class="navbar-nav">
+                  <li class="nav-item">
+                    <a class="nav-link" href="../lists/files.html">Source Files</a>
+                  </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/modules.html">Modules</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/procedures.html">Procedures</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/absint.html">Abstract Interfaces</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/types.html">Derived Types</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/namelists.html">Namelists</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/programs.html">Programs</a>
+                </li>
+            </ul>
+              <div class="d-flex align-items-end flex-grow-1">
+                <form action="../search.html" role="search" class="ms-auto">
+                  <input type="text" class="form-control" aria-label="Search" placeholder="Search" name="q" id="tipue_search_input" autocomplete="off" required>
+                </form>
+              </div>
+          </div><!--/.nav-collapse -->
+        </div>
+      </nav>
+    </div>
+
+    <div class="container">
+  <div class="row">
+    <h1>postprocess.f90
+      <small>Source File</small>
+      
+    </h1>
+      <div class="container p-2 mb-4 bg-light border rounded-3">
+    <div class="row align-items-center justify-content-between" id="info-bar">
+      <div class="col">
+        <ul class="list-inline" style="margin-bottom:0px;display:inline">
+
+            <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
+              <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
+                 title=" 0.4% of total for source files.">100 statements</a>
+            </li>
+
+            <li class="list-inline-item" id="source-file">
+              <i class="fa fa-code"></i>
+              <a href="../src/postprocess.f90"> Source File</a>
+            </li>
+        </ul>
+      </div>
+      <div class="col">
+        <nav aria-label="breadcrumb">
+          <ol class="breadcrumb justify-content-end mb-0">
+            <li class="breadcrumb-item active" aria-current="page">postprocess.f90</li>
+          </ol>
+        </nav>
+      </div>
+    </div>
+  </div>
+  <script>
+    // Enable Bootstrap tooltips
+    (function () {
+      const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+      const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+    })();
+  </script>
+
+  </div>
+  <div class="row">
+    <div class="col-md-3 hidden-xs hidden-sm visible-md visible-lg">
+        <div id="sidebar">
+      <h3>Contents</h3>
+  
+  
+  
+  
+  
+      <div class="card mb-4">
+      <a data-bs-toggle="collapse" href="#mods-0"
+         aria-expanded="false" aria-controls="mods-0">
+         <h4 class="card-header bg-primary text-white">Modules</h4>
+      </a>
+      <div id="mods-0" class="collapse">
+        <div class="list-group list-group-flush">
+            <a class="list-group-item" href="../module/m_postprocess.html">m_postprocess</a>
+        </div>
+      </div>
+    </div>
+
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+    <div class="card card-primary">
+      <div class="card-header text-left"><h3 class="card-title">Source Code</h3></div>
+      <div class="list-group">
+        <a class="list-group-item" href="../sourcefile/postprocess.f90.html#src">postprocess.f90</a>
+      </div>
+    </div>
+
+
+  </div>
+
+    </div>
+    <div class="col-md-9" id='text'>
+      
+      <br>
+        <div class="card">
+          <div class="card-header">
+            <h3 class="card-title">This file depends on</h3>
+          </div>
+          <div class="card-body">
+            <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: sourcefile~~postprocess.f90~~EfferentGraph Pages: 1 -->
+<svg id="sourcefilepostprocessf90EfferentGraph" width="641pt" height="572pt"
+ viewBox="0.00 0.00 641.00 572.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="sourcefile~~postprocess.f90~~EfferentGraph" class="graph" transform="scale(0.418826 0.418826) rotate(0) translate(4 1361.58)">
+<title>sourcefile~~postprocess.f90~~EfferentGraph</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-1361.58 1526.47,-1361.58 1526.47,4 -4,4"/>
+<!-- sourcefile~postprocess.f90 -->
+<g id="sourcefile~~postprocess.f90~~EfferentGraph_node1" class="node">
+<title>sourcefile~postprocess.f90</title>
+<polygon fill="none" stroke="black" points="1522.47,-647.82 1427.7,-647.82 1427.7,-623.55 1522.47,-623.55 1522.47,-647.82"/>
+<text xml:space="preserve" text-anchor="middle" x="1475.08" y="-632.09" font-family="Helvetica,sans-Serif" font-size="10.50">postprocess.f90</text>
+</g>
+<!-- sourcefile~common.f90~4 -->
+<g id="sourcefile~~postprocess.f90~~EfferentGraph_node2" class="node">
+<title>sourcefile~common.f90~4</title>
+<g id="a_sourcefile~~postprocess.f90~~EfferentGraph_node2"><a xlink:href="../sourcefile/common.f90~4.html" xlink:title="common.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="179.79,-1017.82 100.77,-1017.82 100.77,-993.55 179.79,-993.55 179.79,-1017.82"/>
+<text xml:space="preserve" text-anchor="middle" x="140.28" y="-1002.09" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">common.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~postprocess.f90&#45;&gt;sourcefile~common.f90~4 -->
+<g id="sourcefile~~postprocess.f90~~EfferentGraph_edge1" class="edge">
+<title>sourcefile~postprocess.f90&#45;&gt;sourcefile~common.f90~4</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1474.09,-648.1C1473.85,-732.63 1467.81,-1222.81 1361.44,-1312.69"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1359.44,-1312.69C1255.47,-1400.53 893.35,-1211.89 763.62,-1170.69 706.68,-1152.6 694.12,-1143.35 638.85,-1120.69 577.19,-1095.4 564.68,-1080.93 500.58,-1062.69 392.69,-1031.98 261.55,-1016.44 191.36,-1009.81"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="192.01,-1006.35 181.73,-1008.92 191.37,-1013.32 192.01,-1006.35"/>
+</g>
+<!-- sourcefile~field.f90 -->
+<g id="sourcefile~~postprocess.f90~~EfferentGraph_node3" class="node">
+<title>sourcefile~field.f90</title>
+<g id="a_sourcefile~~postprocess.f90~~EfferentGraph_node3"><a xlink:href="../sourcefile/field.f90.html" xlink:title="field.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="457.08,-577.82 402.06,-577.82 402.06,-553.55 457.08,-553.55 457.08,-577.82"/>
+<text xml:space="preserve" text-anchor="middle" x="429.57" y="-562.09" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">field.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~postprocess.f90&#45;&gt;sourcefile~field.f90 -->
+<g id="sourcefile~~postprocess.f90~~EfferentGraph_edge2" class="edge">
+<title>sourcefile~postprocess.f90&#45;&gt;sourcefile~field.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1472.78,-623.24C1463.24,-535.44 1400.81,-12.69 1267.18,-12.69 1267.18,-12.69 1267.18,-12.69 1053.41,-12.69 818.47,-12.69 780.19,-153.01 638.85,-340.69 590.87,-404.39 632.3,-456.02 570.71,-506.69"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M568.71,-506.69C538.32,-529.75 497.55,-545.73 468.18,-555.18"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="467.49,-551.73 458.98,-558.03 469.57,-558.41 467.49,-551.73"/>
+</g>
+<!-- sourcefile~logger.f90 -->
+<g id="sourcefile~~postprocess.f90~~EfferentGraph_node4" class="node">
+<title>sourcefile~logger.f90</title>
+<g id="a_sourcefile~~postprocess.f90~~EfferentGraph_node4"><a xlink:href="../sourcefile/logger.f90.html" xlink:title="logger.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="64.77,-1017.82 0,-1017.82 0,-993.55 64.77,-993.55 64.77,-1017.82"/>
+<text xml:space="preserve" text-anchor="middle" x="32.38" y="-1002.09" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">logger.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~postprocess.f90&#45;&gt;sourcefile~logger.f90 -->
+<g id="sourcefile~~postprocess.f90~~EfferentGraph_edge3" class="edge">
+<title>sourcefile~postprocess.f90&#45;&gt;sourcefile~logger.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1359.44,-1312.69C1300.6,-1380.35 1250.96,-1350.69 1161.29,-1350.69 1161.29,-1350.69 1161.29,-1350.69 933.27,-1350.69 857.12,-1350.69 838.83,-1338.63 763.62,-1326.69 728.24,-1321.06 720.06,-1313.29 684.23,-1312.69"/>
+</g>
+<!-- sourcefile~solver.f90 -->
+<g id="sourcefile~~postprocess.f90~~EfferentGraph_node5" class="node">
+<title>sourcefile~solver.f90</title>
+<g id="a_sourcefile~~postprocess.f90~~EfferentGraph_node5"><a xlink:href="../sourcefile/solver.f90.html" xlink:title="solver.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1391.7,-647.82 1329.18,-647.82 1329.18,-623.55 1391.7,-623.55 1391.7,-647.82"/>
+<text xml:space="preserve" text-anchor="middle" x="1360.44" y="-632.09" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">solver.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~postprocess.f90&#45;&gt;sourcefile~solver.f90 -->
+<g id="sourcefile~~postprocess.f90~~EfferentGraph_edge4" class="edge">
+<title>sourcefile~postprocess.f90&#45;&gt;sourcefile~solver.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1427.29,-635.69C1419.42,-635.69 1411.3,-635.69 1403.56,-635.69"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1403.7,-632.19 1393.7,-635.69 1403.7,-639.19 1403.7,-632.19"/>
+</g>
+<!-- sourcefile~common.f90~4&#45;&gt;sourcefile~logger.f90 -->
+<g id="sourcefile~~postprocess.f90~~EfferentGraph_edge5" class="edge">
+<title>sourcefile~common.f90~4&#45;&gt;sourcefile~logger.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M100.45,-1005.69C92.68,-1005.69 84.47,-1005.69 76.56,-1005.69"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="76.78,-1002.19 66.78,-1005.69 76.78,-1009.19 76.78,-1002.19"/>
+</g>
+<!-- sourcefile~field.f90&#45;&gt;sourcefile~common.f90~4 -->
+<g id="sourcefile~~postprocess.f90~~EfferentGraph_edge6" class="edge">
+<title>sourcefile~field.f90&#45;&gt;sourcefile~common.f90~4</title>
+<path fill="none" stroke="#7fff00" stroke-dasharray="5,2" d="M408.35,-553.09C369.81,-529.85 288.07,-484.55 270.17,-506.69"/>
+</g>
+<!-- sourcefile~solver.f90&#45;&gt;sourcefile~common.f90~4 -->
+<g id="sourcefile~~postprocess.f90~~EfferentGraph_edge9" class="edge">
+<title>sourcefile~solver.f90&#45;&gt;sourcefile~common.f90~4</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M933.27,-1122.69C745.77,-1254.83 659.88,-1011.9 430.57,-1005.69"/>
+</g>
+<!-- sourcefile~solver.f90&#45;&gt;sourcefile~field.f90 -->
+<g id="sourcefile~~postprocess.f90~~EfferentGraph_edge11" class="edge">
+<title>sourcefile~solver.f90&#45;&gt;sourcefile~field.f90</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M1159.29,-704.69C1090.36,-662.39 882.86,-613.71 803.38,-628.69"/>
+</g>
+<!-- sourcefile~solver.f90&#45;&gt;sourcefile~logger.f90 -->
+<g id="sourcefile~~postprocess.f90~~EfferentGraph_edge14" class="edge">
+<title>sourcefile~solver.f90&#45;&gt;sourcefile~logger.f90</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M801.38,-1312.69C749.52,-1308.09 736.29,-1313.57 684.23,-1312.69"/>
+</g>
+<!-- sourcefile~allocator.f90~3 -->
+<g id="sourcefile~~postprocess.f90~~EfferentGraph_node6" class="node">
+<title>sourcefile~allocator.f90~3</title>
+<g id="a_sourcefile~~postprocess.f90~~EfferentGraph_node6"><a xlink:href="../sourcefile/allocator.f90~3.html" xlink:title="allocator.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="721.99,-558.82 644.47,-558.82 644.47,-534.55 721.99,-534.55 721.99,-558.82"/>
+<text xml:space="preserve" text-anchor="middle" x="683.23" y="-543.09" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">allocator.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~solver.f90&#45;&gt;sourcefile~allocator.f90~3 -->
+<g id="sourcefile~~postprocess.f90~~EfferentGraph_edge7" class="edge">
+<title>sourcefile~solver.f90&#45;&gt;sourcefile~allocator.f90~3</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M1359.41,-623.24C1358.55,-554.02 1344.89,-219.69 1161.29,-219.69 1161.29,-219.69 1161.29,-219.69 1053.41,-219.69 970.36,-219.69 942.68,-230.69 877.14,-281.69 830.39,-318.06 842.74,-348.42 803.38,-392.69"/>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M801.38,-392.69C759.98,-436.19 719.27,-494.04 698.48,-524.98"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="695.69,-522.86 693.06,-533.12 701.51,-526.74 695.69,-522.86"/>
+</g>
+<!-- sourcefile~backend.f90~2 -->
+<g id="sourcefile~~postprocess.f90~~EfferentGraph_node7" class="node">
+<title>sourcefile~backend.f90~2</title>
+<g id="a_sourcefile~~postprocess.f90~~EfferentGraph_node7"><a xlink:href="../sourcefile/backend.f90~2.html" xlink:title="backend.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="841.14,-752.82 763.62,-752.82 763.62,-728.55 841.14,-728.55 841.14,-752.82"/>
+<text xml:space="preserve" text-anchor="middle" x="802.38" y="-737.09" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">backend.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~solver.f90&#45;&gt;sourcefile~backend.f90~2 -->
+<g id="sourcefile~~postprocess.f90~~EfferentGraph_edge8" class="edge">
+<title>sourcefile~solver.f90&#45;&gt;sourcefile~backend.f90~2</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M1265.18,-802.69C1217.37,-824.78 1213.81,-855.76 1161.29,-859.69"/>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M1159.29,-859.69C1047.08,-868.08 1047.51,-733.54 935.27,-741.69"/>
+</g>
+<!-- sourcefile~config.f90 -->
+<g id="sourcefile~~postprocess.f90~~EfferentGraph_node8" class="node">
+<title>sourcefile~config.f90</title>
+<g id="a_sourcefile~~postprocess.f90~~EfferentGraph_node8"><a xlink:href="../sourcefile/config.f90.html" xlink:title="config.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="301.56,-1175.82 236.79,-1175.82 236.79,-1151.55 301.56,-1151.55 301.56,-1175.82"/>
+<text xml:space="preserve" text-anchor="middle" x="269.17" y="-1160.09" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">config.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~solver.f90&#45;&gt;sourcefile~config.f90 -->
+<g id="sourcefile~~postprocess.f90~~EfferentGraph_edge10" class="edge">
+<title>sourcefile~solver.f90&#45;&gt;sourcefile~config.f90</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M1358.58,-648.31C1351.97,-740.99 1305.34,-1312.69 1161.29,-1312.69 1161.29,-1312.69 1161.29,-1312.69 1053.41,-1312.69 942.29,-1312.69 914.16,-1321.46 803.38,-1312.69"/>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M801.38,-1312.69C746.86,-1307.86 738.33,-1283 684.23,-1274.69"/>
+</g>
+<!-- sourcefile~ibm.f90 -->
+<g id="sourcefile~~postprocess.f90~~EfferentGraph_node9" class="node">
+<title>sourcefile~ibm.f90</title>
+<g id="a_sourcefile~~postprocess.f90~~EfferentGraph_node9"><a xlink:href="../sourcefile/ibm.f90.html" xlink:title="ibm.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1293.18,-578.82 1239.18,-578.82 1239.18,-554.55 1293.18,-554.55 1293.18,-578.82"/>
+<text xml:space="preserve" text-anchor="middle" x="1266.18" y="-563.09" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ibm.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~solver.f90&#45;&gt;sourcefile~ibm.f90 -->
+<g id="sourcefile~~postprocess.f90~~EfferentGraph_edge12" class="edge">
+<title>sourcefile~solver.f90&#45;&gt;sourcefile~ibm.f90</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M1342.95,-623.35C1328.99,-612.92 1308.77,-597.79 1292.73,-585.79"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="1295.16,-583.24 1285.05,-580.05 1290.97,-588.85 1295.16,-583.24"/>
+</g>
+<!-- sourcefile~les.f90 -->
+<g id="sourcefile~~postprocess.f90~~EfferentGraph_node10" class="node">
+<title>sourcefile~les.f90</title>
+<g id="a_sourcefile~~postprocess.f90~~EfferentGraph_node10"><a xlink:href="../sourcefile/les.f90.html" xlink:title="les.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="961.27,-954.82 907.27,-954.82 907.27,-930.55 961.27,-930.55 961.27,-954.82"/>
+<text xml:space="preserve" text-anchor="middle" x="934.27" y="-939.09" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">les.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~solver.f90&#45;&gt;sourcefile~les.f90 -->
+<g id="sourcefile~~postprocess.f90~~EfferentGraph_edge13" class="edge">
+<title>sourcefile~solver.f90&#45;&gt;sourcefile~les.f90</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M1053.41,-900.69C1037.96,-905.45 1000.68,-918.82 972.09,-929.21"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="971.24,-925.8 963.05,-932.51 973.64,-932.37 971.24,-925.8"/>
+</g>
+<!-- sourcefile~mesh.f90 -->
+<g id="sourcefile~~postprocess.f90~~EfferentGraph_node11" class="node">
+<title>sourcefile~mesh.f90</title>
+<g id="a_sourcefile~~postprocess.f90~~EfferentGraph_node11"><a xlink:href="../sourcefile/mesh.f90.html" xlink:title="mesh.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="600.22,-828.82 539.2,-828.82 539.2,-804.55 600.22,-804.55 600.22,-828.82"/>
+<text xml:space="preserve" text-anchor="middle" x="569.71" y="-813.09" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">mesh.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~solver.f90&#45;&gt;sourcefile~mesh.f90 -->
+<g id="sourcefile~~postprocess.f90~~EfferentGraph_edge15" class="edge">
+<title>sourcefile~solver.f90&#45;&gt;sourcefile~mesh.f90</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M1159.29,-859.69C1110.86,-870.56 1102.84,-886.05 1055.41,-900.69"/>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M1053.41,-900.69C1015.87,-912.27 1027.64,-852.86 991.41,-837.69 898.01,-798.56 864.28,-831.64 763.62,-842.69 728.01,-846.59 718.72,-866.38 684.23,-856.69"/>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M682.23,-856.69C658.28,-849.35 631.89,-839.95 610.79,-832.1"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="612.29,-828.92 601.7,-828.69 609.83,-835.48 612.29,-828.92"/>
+</g>
+<!-- sourcefile~tdsops.f90~2 -->
+<g id="sourcefile~~postprocess.f90~~EfferentGraph_node12" class="node">
+<title>sourcefile~tdsops.f90~2</title>
+<g id="a_sourcefile~~postprocess.f90~~EfferentGraph_node12"><a xlink:href="../sourcefile/tdsops.f90~2.html" xlink:title="tdsops.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="602.85,-943.82 536.58,-943.82 536.58,-919.55 602.85,-919.55 602.85,-943.82"/>
+<text xml:space="preserve" text-anchor="middle" x="569.71" y="-928.09" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">tdsops.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~solver.f90&#45;&gt;sourcefile~tdsops.f90~2 -->
+<g id="sourcefile~~postprocess.f90~~EfferentGraph_edge16" class="edge">
+<title>sourcefile~solver.f90&#45;&gt;sourcefile~tdsops.f90~2</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M1053.41,-900.69C946.86,-934.45 1031.29,-1065.47 935.27,-1122.69"/>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M933.27,-1122.69C803.35,-1200.11 639.19,-1017.23 587.25,-952.98"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="590.07,-950.9 581.1,-945.26 584.59,-955.26 590.07,-950.9"/>
+</g>
+<!-- sourcefile~tdsops_setup.f90 -->
+<g id="sourcefile~~postprocess.f90~~EfferentGraph_node13" class="node">
+<title>sourcefile~tdsops_setup.f90</title>
+<g id="a_sourcefile~~postprocess.f90~~EfferentGraph_node13"><a xlink:href="../sourcefile/tdsops_setup.f90.html" xlink:title="tdsops_setup.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="984.66,-912.82 883.89,-912.82 883.89,-888.55 984.66,-888.55 984.66,-912.82"/>
+<text xml:space="preserve" text-anchor="middle" x="934.27" y="-897.09" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">tdsops_setup.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~solver.f90&#45;&gt;sourcefile~tdsops_setup.f90 -->
+<g id="sourcefile~~postprocess.f90~~EfferentGraph_edge17" class="edge">
+<title>sourcefile~solver.f90&#45;&gt;sourcefile~tdsops_setup.f90</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M1053.41,-900.69C1035.39,-906.24 1015.09,-907.81 996.45,-907.53"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="996.73,-904.04 986.62,-907.2 996.49,-911.04 996.73,-904.04"/>
+</g>
+<!-- sourcefile~time_integrator.f90 -->
+<g id="sourcefile~~postprocess.f90~~EfferentGraph_node14" class="node">
+<title>sourcefile~time_integrator.f90</title>
+<g id="a_sourcefile~~postprocess.f90~~EfferentGraph_node14"><a xlink:href="../sourcefile/time_integrator.f90.html" xlink:title="time_integrator.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="990.66,-562.82 877.89,-562.82 877.89,-538.55 990.66,-538.55 990.66,-562.82"/>
+<text xml:space="preserve" text-anchor="middle" x="934.27" y="-547.09" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">time_integrator.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~solver.f90&#45;&gt;sourcefile~time_integrator.f90 -->
+<g id="sourcefile~~postprocess.f90~~EfferentGraph_edge18" class="edge">
+<title>sourcefile~solver.f90&#45;&gt;sourcefile~time_integrator.f90</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M1357.52,-648.05C1351.54,-681.6 1329.72,-773.79 1267.18,-802.69"/>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M1265.18,-802.69C1207.56,-829.31 1215.55,-737.63 1161.29,-704.69"/>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M1159.29,-704.69C1096.42,-666.51 1085.75,-649.49 1027.41,-604.69 1011.33,-592.34 1008.72,-587.24 991.41,-576.69 986.49,-573.69 981.17,-570.81 975.83,-568.12"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="977.54,-565.06 967.01,-563.88 974.51,-571.37 977.54,-565.06"/>
+</g>
+<!-- sourcefile~vector_calculus.f90 -->
+<g id="sourcefile~~postprocess.f90~~EfferentGraph_node15" class="node">
+<title>sourcefile~vector_calculus.f90</title>
+<g id="a_sourcefile~~postprocess.f90~~EfferentGraph_node15"><a xlink:href="../sourcefile/vector_calculus.f90.html" xlink:title="vector_calculus.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="991.41,-870.82 877.14,-870.82 877.14,-846.55 991.41,-846.55 991.41,-870.82"/>
+<text xml:space="preserve" text-anchor="middle" x="934.27" y="-855.09" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">vector_calculus.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~solver.f90&#45;&gt;sourcefile~vector_calculus.f90 -->
+<g id="sourcefile~~postprocess.f90~~EfferentGraph_edge19" class="edge">
+<title>sourcefile~solver.f90&#45;&gt;sourcefile~vector_calculus.f90</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M1053.41,-900.69C1051.49,-901.28 1012.65,-887.27 980.02,-875.28"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="981.27,-872.01 970.67,-871.84 978.85,-878.58 981.27,-872.01"/>
+</g>
+<!-- sourcefile~allocator.f90~3&#45;&gt;sourcefile~common.f90~4 -->
+<g id="sourcefile~~postprocess.f90~~EfferentGraph_edge20" class="edge">
+<title>sourcefile~allocator.f90~3&#45;&gt;sourcefile~common.f90~4</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M644.18,-535.45C551.14,-509.07 316.32,-449.6 270.17,-506.69"/>
+</g>
+<!-- sourcefile~allocator.f90~3&#45;&gt;sourcefile~field.f90 -->
+<g id="sourcefile~~postprocess.f90~~EfferentGraph_edge21" class="edge">
+<title>sourcefile~allocator.f90~3&#45;&gt;sourcefile~field.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M674.17,-559.23C657.25,-583.79 615.86,-634.98 570.71,-624.69"/>
+</g>
+<!-- sourcefile~backend.f90~2&#45;&gt;sourcefile~common.f90~4 -->
+<g id="sourcefile~~postprocess.f90~~EfferentGraph_edge23" class="edge">
+<title>sourcefile~backend.f90~2&#45;&gt;sourcefile~common.f90~4</title>
+<path fill="none" stroke="#ff9900" stroke-dasharray="5,2" d="M682.23,-662.69C629.56,-642.09 477.81,-669.58 430.57,-700.69"/>
+<path fill="none" stroke="#ff9900" stroke-dasharray="5,2" d="M428.57,-700.69C313.62,-777.01 399.04,-918.38 270.17,-967.69"/>
+<path fill="none" stroke="#ff9900" stroke-dasharray="5,2" d="M268.17,-967.69C243.14,-977.26 214.6,-986 190.94,-992.67"/>
+<polygon fill="#ff9900" stroke="#ff9900" points="190.25,-989.23 181.55,-995.27 192.12,-995.97 190.25,-989.23"/>
+</g>
+<!-- sourcefile~backend.f90~2&#45;&gt;sourcefile~field.f90 -->
+<g id="sourcefile~~postprocess.f90~~EfferentGraph_edge24" class="edge">
+<title>sourcefile~backend.f90~2&#45;&gt;sourcefile~field.f90</title>
+<path fill="none" stroke="#ff9900" stroke-dasharray="5,2" d="M787.02,-728.08C766.01,-710.4 724.97,-678.61 684.23,-662.69"/>
+<path fill="none" stroke="#ff9900" stroke-dasharray="5,2" d="M682.23,-662.69C633.47,-643.62 621.77,-636.33 570.71,-624.69"/>
+</g>
+<!-- sourcefile~backend.f90~2&#45;&gt;sourcefile~logger.f90 -->
+<g id="sourcefile~~postprocess.f90~~EfferentGraph_edge25" class="edge">
+<title>sourcefile~backend.f90~2&#45;&gt;sourcefile~logger.f90</title>
+<path fill="none" stroke="#ff9900" stroke-dasharray="5,2" d="M792.4,-728.28C779.05,-710.13 752.83,-675.56 727.62,-648.69 691.08,-609.73 670.72,-610.55 638.85,-567.69 616.79,-538.01 633.42,-513.49 602.85,-492.69 480.31,-409.27 417.41,-451.48 270.17,-468.69"/>
+</g>
+<!-- sourcefile~backend.f90~2&#45;&gt;sourcefile~allocator.f90~3 -->
+<g id="sourcefile~~postprocess.f90~~EfferentGraph_edge22" class="edge">
+<title>sourcefile~backend.f90~2&#45;&gt;sourcefile~allocator.f90~3</title>
+<path fill="none" stroke="#ff9900" stroke-dasharray="5,2" d="M798.7,-728.3C791.7,-698.41 770.37,-621.2 727.62,-572.69 725.44,-570.22 722.97,-567.91 720.34,-565.78"/>
+<polygon fill="#ff9900" stroke="#ff9900" points="722.4,-562.95 712.21,-560.05 718.37,-568.67 722.4,-562.95"/>
+</g>
+<!-- sourcefile~backend.f90~2&#45;&gt;sourcefile~mesh.f90 -->
+<g id="sourcefile~~postprocess.f90~~EfferentGraph_edge26" class="edge">
+<title>sourcefile~backend.f90~2&#45;&gt;sourcefile~mesh.f90</title>
+<path fill="none" stroke="#ff9900" stroke-dasharray="5,2" d="M770.03,-753.16C746.7,-762.01 713.9,-773.53 684.23,-780.69"/>
+<path fill="none" stroke="#ff9900" stroke-dasharray="5,2" d="M682.23,-780.69C658.43,-786.43 632.36,-794.73 611.41,-801.91"/>
+<polygon fill="#ff9900" stroke="#ff9900" points="610.38,-798.57 602.09,-805.16 612.68,-805.18 610.38,-798.57"/>
+</g>
+<!-- sourcefile~backend.f90~2&#45;&gt;sourcefile~tdsops.f90~2 -->
+<g id="sourcefile~~postprocess.f90~~EfferentGraph_edge28" class="edge">
+<title>sourcefile~backend.f90~2&#45;&gt;sourcefile~tdsops.f90~2</title>
+<path fill="none" stroke="#ff9900" stroke-dasharray="5,2" d="M786.25,-753.22C747.06,-785.66 642.06,-872.61 594.59,-911.91"/>
+<polygon fill="#ff9900" stroke="#ff9900" points="592.54,-909.07 587.07,-918.14 597.01,-914.46 592.54,-909.07"/>
+</g>
+<!-- sourcefile~poisson_fft.f90~2 -->
+<g id="sourcefile~~postprocess.f90~~EfferentGraph_node19" class="node">
+<title>sourcefile~poisson_fft.f90~2</title>
+<g id="a_sourcefile~~postprocess.f90~~EfferentGraph_node19"><a xlink:href="../sourcefile/poisson_fft.f90~2.html" xlink:title="poisson_fft.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="727.62,-752.82 638.85,-752.82 638.85,-728.55 727.62,-728.55 727.62,-752.82"/>
+<text xml:space="preserve" text-anchor="middle" x="683.23" y="-737.09" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">poisson_fft.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~backend.f90~2&#45;&gt;sourcefile~poisson_fft.f90~2 -->
+<g id="sourcefile~~postprocess.f90~~EfferentGraph_edge27" class="edge">
+<title>sourcefile~backend.f90~2&#45;&gt;sourcefile~poisson_fft.f90~2</title>
+<path fill="none" stroke="#ff9900" stroke-dasharray="5,2" d="M763.35,-740.69C755.63,-740.69 747.36,-740.69 739.19,-740.69"/>
+<polygon fill="#ff9900" stroke="#ff9900" points="739.28,-737.19 729.28,-740.69 739.28,-744.19 739.28,-737.19"/>
+</g>
+<!-- sourcefile~config.f90&#45;&gt;sourcefile~common.f90~4 -->
+<g id="sourcefile~~postprocess.f90~~EfferentGraph_edge29" class="edge">
+<title>sourcefile~config.f90&#45;&gt;sourcefile~common.f90~4</title>
+<path fill="none" stroke="#cbff00" stroke-dasharray="5,2" d="M256.63,-1151.28C245.81,-1139.52 229.32,-1121.23 215.79,-1104.69 194.58,-1078.76 171.61,-1047.75 156.87,-1027.43"/>
+<polygon fill="#cbff00" stroke="#cbff00" points="159.72,-1025.41 151.03,-1019.35 154.05,-1029.51 159.72,-1025.41"/>
+</g>
+<!-- sourcefile~config.f90&#45;&gt;sourcefile~logger.f90 -->
+<g id="sourcefile~~postprocess.f90~~EfferentGraph_edge30" class="edge">
+<title>sourcefile~config.f90&#45;&gt;sourcefile~logger.f90</title>
+<path fill="none" stroke="#cbff00" stroke-dasharray="5,2" d="M236.39,-1155.2C210.42,-1147.9 172.96,-1136.54 141.28,-1123.69"/>
+</g>
+<!-- sourcefile~ibm.f90&#45;&gt;sourcefile~common.f90~4 -->
+<g id="sourcefile~~postprocess.f90~~EfferentGraph_edge33" class="edge">
+<title>sourcefile~ibm.f90&#45;&gt;sourcefile~common.f90~4</title>
+<path fill="none" stroke="#33ff00" stroke-dasharray="5,2" d="M1264.17,-554.25C1259.94,-509.21 1239.95,-352.38 1161.29,-257.69"/>
+<path fill="none" stroke="#33ff00" stroke-dasharray="5,2" d="M1159.29,-257.69C931.69,16.32 642.23,-76.25 358.56,-291.69 271.3,-357.96 256.53,-390.96 215.79,-492.69 144.63,-670.38 140.28,-906.93 140.85,-981.87"/>
+<polygon fill="#33ff00" stroke="#33ff00" points="137.34,-981.74 140.96,-991.7 144.34,-981.66 137.34,-981.74"/>
+</g>
+<!-- sourcefile~ibm.f90&#45;&gt;sourcefile~field.f90 -->
+<g id="sourcefile~~postprocess.f90~~EfferentGraph_edge34" class="edge">
+<title>sourcefile~ibm.f90&#45;&gt;sourcefile~field.f90</title>
+<path fill="none" stroke="#33ff00" stroke-dasharray="5,2" d="M1159.29,-257.69C1124.32,-210.05 1085.99,-232.84 1027.41,-240.69 839.51,-265.86 779.5,-289.56 638.85,-416.69 601.63,-450.33 608.59,-473.78 570.71,-506.69"/>
+</g>
+<!-- sourcefile~ibm.f90&#45;&gt;sourcefile~logger.f90 -->
+<g id="sourcefile~~postprocess.f90~~EfferentGraph_edge36" class="edge">
+<title>sourcefile~ibm.f90&#45;&gt;sourcefile~logger.f90</title>
+<path fill="none" stroke="#33ff00" stroke-dasharray="5,2" d="M1265.18,-554.19C1264.69,-509.5 1258.83,-354.39 1203.18,-243.69 1140.62,-119.25 1118.9,-68.77 991.41,-12.69 944.92,7.76 926.5,-0.72 877.14,-12.69 841.3,-21.38 839.8,-44.87 803.38,-50.69"/>
+<path fill="none" stroke="#33ff00" stroke-dasharray="5,2" d="M801.38,-50.69C551.86,-75.37 455.71,-72.02 270.17,-240.69"/>
+<path fill="none" stroke="#33ff00" stroke-dasharray="5,2" d="M268.17,-240.69C181.9,-318.18 214.32,-378.6 141.28,-468.69"/>
+<path fill="none" stroke="#33ff00" stroke-dasharray="5,2" d="M139.28,-468.69C73.41,-549.93 42.52,-888.56 35.16,-981.82"/>
+<polygon fill="#33ff00" stroke="#33ff00" points="31.67,-981.55 34.39,-991.79 38.65,-982.08 31.67,-981.55"/>
+</g>
+<!-- sourcefile~ibm.f90&#45;&gt;sourcefile~allocator.f90~3 -->
+<g id="sourcefile~~postprocess.f90~~EfferentGraph_edge31" class="edge">
+<title>sourcefile~ibm.f90&#45;&gt;sourcefile~allocator.f90~3</title>
+<path fill="none" stroke="#33ff00" stroke-dasharray="5,2" d="M1159.29,-257.69C1108.83,-189.8 865.18,-334.92 803.38,-392.69"/>
+</g>
+<!-- sourcefile~ibm.f90&#45;&gt;sourcefile~backend.f90~2 -->
+<g id="sourcefile~~postprocess.f90~~EfferentGraph_edge32" class="edge">
+<title>sourcefile~ibm.f90&#45;&gt;sourcefile~backend.f90~2</title>
+<path fill="none" stroke="#33ff00" stroke-dasharray="5,2" d="M1250.73,-579.17C1206.98,-615.82 1070.63,-721.84 935.27,-741.69"/>
+<path fill="none" stroke="#33ff00" stroke-dasharray="5,2" d="M933.27,-741.69C906.79,-743.61 877.2,-743.55 852.95,-742.93"/>
+<polygon fill="#33ff00" stroke="#33ff00" points="853.13,-739.43 843.03,-742.63 852.92,-746.43 853.13,-739.43"/>
+</g>
+<!-- sourcefile~ibm.f90&#45;&gt;sourcefile~mesh.f90 -->
+<g id="sourcefile~~postprocess.f90~~EfferentGraph_edge37" class="edge">
+<title>sourcefile~ibm.f90&#45;&gt;sourcefile~mesh.f90</title>
+<path fill="none" stroke="#33ff00" stroke-dasharray="5,2" d="M1260.31,-579.12C1241.53,-624.79 1169.09,-780.69 1055.41,-780.69 1055.41,-780.69 1055.41,-780.69 933.27,-780.69 822.59,-780.69 791.83,-754.73 684.23,-780.69"/>
+</g>
+<!-- sourcefile~io_session.f90 -->
+<g id="sourcefile~~postprocess.f90~~EfferentGraph_node17" class="node">
+<title>sourcefile~io_session.f90</title>
+<g id="a_sourcefile~~postprocess.f90~~EfferentGraph_node17"><a xlink:href="../sourcefile/io_session.f90.html" xlink:title="io_session.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1203.18,-480.82 1117.41,-480.82 1117.41,-456.55 1203.18,-456.55 1203.18,-480.82"/>
+<text xml:space="preserve" text-anchor="middle" x="1160.29" y="-465.09" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">io_session.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~ibm.f90&#45;&gt;sourcefile~io_session.f90 -->
+<g id="sourcefile~~postprocess.f90~~EfferentGraph_edge35" class="edge">
+<title>sourcefile~ibm.f90&#45;&gt;sourcefile~io_session.f90</title>
+<path fill="none" stroke="#33ff00" stroke-dasharray="5,2" d="M1252.02,-554.27C1234.63,-537.87 1203.77,-508.75 1182.93,-489.09"/>
+<polygon fill="#33ff00" stroke="#33ff00" points="1185.45,-486.66 1175.77,-482.35 1180.65,-491.75 1185.45,-486.66"/>
+</g>
+<!-- sourcefile~les.f90&#45;&gt;sourcefile~common.f90~4 -->
+<g id="sourcefile~~postprocess.f90~~EfferentGraph_edge39" class="edge">
+<title>sourcefile~les.f90&#45;&gt;sourcefile~common.f90~4</title>
+<path fill="none" stroke="#00ff66" stroke-dasharray="5,2" d="M906.86,-950C888.54,-954.82 863.52,-960.91 841.14,-964.69 660.31,-995.16 613.9,-1010.2 430.57,-1005.69"/>
+</g>
+<!-- sourcefile~les.f90&#45;&gt;sourcefile~field.f90 -->
+<g id="sourcefile~~postprocess.f90~~EfferentGraph_edge41" class="edge">
+<title>sourcefile~les.f90&#45;&gt;sourcefile~field.f90</title>
+<path fill="none" stroke="#00ff66" stroke-dasharray="5,2" d="M801.38,-932.69C768.24,-928.79 760.76,-942.76 727.62,-946.69 672.49,-953.21 658.35,-951.35 602.85,-952.69 573.41,-953.39 558.76,-972.07 536.58,-952.69 491.66,-913.44 519.88,-743.13 500.58,-686.69 487.86,-649.48 463.19,-610.9 446.8,-587.59"/>
+<polygon fill="#00ff66" stroke="#00ff66" points="449.69,-585.61 441.02,-579.53 444,-589.69 449.69,-585.61"/>
+</g>
+<!-- sourcefile~les.f90&#45;&gt;sourcefile~logger.f90 -->
+<g id="sourcefile~~postprocess.f90~~EfferentGraph_edge42" class="edge">
+<title>sourcefile~les.f90&#45;&gt;sourcefile~logger.f90</title>
+<path fill="none" stroke="#00ff66" stroke-dasharray="5,2" d="M801.38,-1274.69C780.02,-1291.8 711.6,-1312.69 684.23,-1312.69"/>
+<path fill="none" stroke="#00ff66" stroke-dasharray="5,2" d="M682.23,-1312.69C467.26,-1312.69 403.58,-1289.32 215.79,-1184.69 178.4,-1163.86 180.5,-1140.81 141.28,-1123.69"/>
+</g>
+<!-- sourcefile~les.f90&#45;&gt;sourcefile~backend.f90~2 -->
+<g id="sourcefile~~postprocess.f90~~EfferentGraph_edge38" class="edge">
+<title>sourcefile~les.f90&#45;&gt;sourcefile~backend.f90~2</title>
+<path fill="none" stroke="#00ff66" stroke-dasharray="5,2" d="M907.05,-937.68C896.66,-934.57 885.28,-929.59 877.14,-921.69 871.13,-915.84 830.41,-811.08 812.18,-763.66"/>
+<polygon fill="#00ff66" stroke="#00ff66" points="815.55,-762.69 808.7,-754.61 809.02,-765.2 815.55,-762.69"/>
+</g>
+<!-- sourcefile~les.f90&#45;&gt;sourcefile~config.f90 -->
+<g id="sourcefile~~postprocess.f90~~EfferentGraph_edge40" class="edge">
+<title>sourcefile~les.f90&#45;&gt;sourcefile~config.f90</title>
+<path fill="none" stroke="#00ff66" stroke-dasharray="5,2" d="M929.22,-955.15C910.3,-1012.95 830.55,-1252.92 803.38,-1274.69"/>
+<path fill="none" stroke="#00ff66" stroke-dasharray="5,2" d="M801.38,-1274.69C760.75,-1307.24 736.14,-1278.8 684.23,-1274.69"/>
+<path fill="none" stroke="#00ff66" stroke-dasharray="5,2" d="M682.23,-1274.69C542.96,-1263.65 385.29,-1208.65 311.89,-1180.44"/>
+<polygon fill="#00ff66" stroke="#00ff66" points="313.27,-1177.22 302.68,-1176.86 310.74,-1183.74 313.27,-1177.22"/>
+</g>
+<!-- sourcefile~les.f90&#45;&gt;sourcefile~mesh.f90 -->
+<g id="sourcefile~~postprocess.f90~~EfferentGraph_edge43" class="edge">
+<title>sourcefile~les.f90&#45;&gt;sourcefile~mesh.f90</title>
+<path fill="none" stroke="#00ff66" stroke-dasharray="5,2" d="M906.84,-941.27C880.55,-939.72 839.1,-936.88 803.38,-932.69"/>
+<path fill="none" stroke="#00ff66" stroke-dasharray="5,2" d="M801.38,-932.69C781.63,-930.37 779.88,-920.14 763.62,-908.69 729.14,-884.4 724.84,-868.1 684.23,-856.69"/>
+</g>
+<!-- sourcefile~les.f90&#45;&gt;sourcefile~tdsops.f90~2 -->
+<g id="sourcefile~~postprocess.f90~~EfferentGraph_edge44" class="edge">
+<title>sourcefile~les.f90&#45;&gt;sourcefile~tdsops.f90~2</title>
+<path fill="none" stroke="#00ff66" stroke-dasharray="5,2" d="M906.78,-945.2C855.08,-949.62 737.19,-957.38 638.85,-946.69 630.83,-945.81 622.37,-944.38 614.24,-942.74"/>
+<polygon fill="#00ff66" stroke="#00ff66" points="615.05,-939.33 604.53,-940.63 613.56,-946.17 615.05,-939.33"/>
+</g>
+<!-- sourcefile~mesh.f90&#45;&gt;sourcefile~common.f90~4 -->
+<g id="sourcefile~~postprocess.f90~~EfferentGraph_edge45" class="edge">
+<title>sourcefile~mesh.f90&#45;&gt;sourcefile~common.f90~4</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M560.67,-829.3C541.63,-858.14 490.84,-929.38 430.57,-967.69"/>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M428.57,-967.69C369.16,-1005.45 335.92,-942.53 270.17,-967.69"/>
+</g>
+<!-- sourcefile~mesh.f90&#45;&gt;sourcefile~field.f90 -->
+<g id="sourcefile~~postprocess.f90~~EfferentGraph_edge47" class="edge">
+<title>sourcefile~mesh.f90&#45;&gt;sourcefile~field.f90</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M562.5,-804.41C550.71,-781.24 524.19,-729.54 500.58,-686.69 481.4,-651.88 458.11,-612.09 443.82,-587.93"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="446.99,-586.42 438.88,-579.61 440.97,-589.99 446.99,-586.42"/>
+</g>
+<!-- sourcefile~mesh.f90&#45;&gt;sourcefile~logger.f90 -->
+<g id="sourcefile~~postprocess.f90~~EfferentGraph_edge48" class="edge">
+<title>sourcefile~mesh.f90&#45;&gt;sourcefile~logger.f90</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M428.57,-967.69C341.17,-1023.24 303.92,-1008.29 215.79,-1062.69 179.37,-1085.16 180.94,-1139.78 141.28,-1123.69"/>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M139.28,-1123.69C95.21,-1104.45 61.98,-1056.52 45.31,-1028.02"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="48.45,-1026.46 40.49,-1019.46 42.35,-1029.89 48.45,-1026.46"/>
+</g>
+<!-- sourcefile~decomp_2decompfft.f90 -->
+<g id="sourcefile~~postprocess.f90~~EfferentGraph_node16" class="node">
+<title>sourcefile~decomp_2decompfft.f90</title>
+<g id="a_sourcefile~~postprocess.f90~~EfferentGraph_node16"><a xlink:href="../sourcefile/decomp_2decompfft.f90.html" xlink:title="decomp_2decompfft.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="500.58,-1095.82 358.56,-1095.82 358.56,-1071.55 500.58,-1071.55 500.58,-1095.82"/>
+<text xml:space="preserve" text-anchor="middle" x="429.57" y="-1080.09" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">decomp_2decompfft.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~mesh.f90&#45;&gt;sourcefile~decomp_2decompfft.f90 -->
+<g id="sourcefile~~postprocess.f90~~EfferentGraph_edge46" class="edge">
+<title>sourcefile~mesh.f90&#45;&gt;sourcefile~decomp_2decompfft.f90</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M564.41,-829.14C558.21,-847.12 546.41,-881.42 536.58,-910.69 520.33,-959.05 528.31,-976.86 500.58,-1019.69 489.35,-1037.04 472.3,-1052.76 457.84,-1064.27"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="455.8,-1061.43 450,-1070.29 460.06,-1066.98 455.8,-1061.43"/>
+</g>
+<!-- sourcefile~mesh_content.f90 -->
+<g id="sourcefile~~postprocess.f90~~EfferentGraph_node18" class="node">
+<title>sourcefile~mesh_content.f90</title>
+<g id="a_sourcefile~~postprocess.f90~~EfferentGraph_node18"><a xlink:href="../sourcefile/mesh_content.f90.html" xlink:title="mesh_content.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="322.56,-1095.82 215.79,-1095.82 215.79,-1071.55 322.56,-1071.55 322.56,-1095.82"/>
+<text xml:space="preserve" text-anchor="middle" x="269.17" y="-1080.09" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">mesh_content.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~mesh.f90&#45;&gt;sourcefile~mesh_content.f90 -->
+<g id="sourcefile~~postprocess.f90~~EfferentGraph_edge49" class="edge">
+<title>sourcefile~mesh.f90&#45;&gt;sourcefile~mesh_content.f90</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M428.57,-967.69C379.3,-999 325.05,-1040.34 294.55,-1064.27"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="292.75,-1061.23 287.06,-1070.17 297.08,-1066.73 292.75,-1061.23"/>
+</g>
+<!-- sourcefile~tdsops.f90~2&#45;&gt;sourcefile~common.f90~4 -->
+<g id="sourcefile~~postprocess.f90~~EfferentGraph_edge50" class="edge">
+<title>sourcefile~tdsops.f90~2&#45;&gt;sourcefile~common.f90~4</title>
+<path fill="none" stroke="#0066ff" stroke-dasharray="5,2" d="M556.21,-944.16C533.31,-965.58 482.25,-1006.96 430.57,-1005.69"/>
+</g>
+<!-- sourcefile~tdsops.f90~2&#45;&gt;sourcefile~logger.f90 -->
+<g id="sourcefile~~postprocess.f90~~EfferentGraph_edge51" class="edge">
+<title>sourcefile~tdsops.f90~2&#45;&gt;sourcefile~logger.f90</title>
+<path fill="none" stroke="#0066ff" stroke-dasharray="5,2" d="M564.5,-944.25C551.69,-982.12 513.33,-1093.27 500.58,-1104.69 476.56,-1126.19 461.52,-1114.66 430.57,-1123.69"/>
+<path fill="none" stroke="#0066ff" stroke-dasharray="5,2" d="M428.57,-1123.69C360.99,-1143.39 340.44,-1119.32 270.17,-1123.69"/>
+</g>
+<!-- sourcefile~tdsops_setup.f90&#45;&gt;sourcefile~common.f90~4 -->
+<g id="sourcefile~~postprocess.f90~~EfferentGraph_edge53" class="edge">
+<title>sourcefile~tdsops_setup.f90&#45;&gt;sourcefile~common.f90~4</title>
+<path fill="none" stroke="#3200ff" stroke-dasharray="5,2" d="M801.38,-894.69C749.33,-893.5 736.19,-891.26 684.23,-894.69"/>
+</g>
+<!-- sourcefile~tdsops_setup.f90&#45;&gt;sourcefile~logger.f90 -->
+<g id="sourcefile~~postprocess.f90~~EfferentGraph_edge54" class="edge">
+<title>sourcefile~tdsops_setup.f90&#45;&gt;sourcefile~logger.f90</title>
+<path fill="none" stroke="#3200ff" stroke-dasharray="5,2" d="M898.04,-913.29C891.06,-915.94 883.83,-918.81 877.14,-921.69 706.13,-995.03 674.81,-1039.36 500.58,-1104.69 470.39,-1116 461.52,-1114.66 430.57,-1123.69"/>
+</g>
+<!-- sourcefile~tdsops_setup.f90&#45;&gt;sourcefile~backend.f90~2 -->
+<g id="sourcefile~~postprocess.f90~~EfferentGraph_edge52" class="edge">
+<title>sourcefile~tdsops_setup.f90&#45;&gt;sourcefile~backend.f90~2</title>
+<path fill="none" stroke="#3200ff" stroke-dasharray="5,2" d="M889.75,-888.15C885.21,-885.78 880.89,-882.98 877.14,-879.69 841.07,-848.02 819.77,-794.36 809.95,-763.8"/>
+<polygon fill="#3200ff" stroke="#3200ff" points="813.35,-762.95 807.09,-754.4 806.66,-764.99 813.35,-762.95"/>
+</g>
+<!-- sourcefile~tdsops_setup.f90&#45;&gt;sourcefile~mesh.f90 -->
+<g id="sourcefile~~postprocess.f90~~EfferentGraph_edge55" class="edge">
+<title>sourcefile~tdsops_setup.f90&#45;&gt;sourcefile~mesh.f90</title>
+<path fill="none" stroke="#3200ff" stroke-dasharray="5,2" d="M883.64,-897.85C859.44,-896.6 829.9,-895.29 803.38,-894.69"/>
+<path fill="none" stroke="#3200ff" stroke-dasharray="5,2" d="M801.38,-894.69C746.66,-893.44 736.93,-871.5 684.23,-856.69"/>
+</g>
+<!-- sourcefile~tdsops_setup.f90&#45;&gt;sourcefile~tdsops.f90~2 -->
+<g id="sourcefile~~postprocess.f90~~EfferentGraph_edge56" class="edge">
+<title>sourcefile~tdsops_setup.f90&#45;&gt;sourcefile~tdsops.f90~2</title>
+<path fill="none" stroke="#3200ff" stroke-dasharray="5,2" d="M801.38,-894.69C746.66,-893.44 737.67,-920.81 684.23,-932.69"/>
+</g>
+<!-- sourcefile~time_integrator.f90&#45;&gt;sourcefile~common.f90~4 -->
+<g id="sourcefile~~postprocess.f90~~EfferentGraph_edge59" class="edge">
+<title>sourcefile~time_integrator.f90&#45;&gt;sourcefile~common.f90~4</title>
+<path fill="none" stroke="#cc00ff" stroke-dasharray="5,2" d="M877.63,-551.21C854.52,-550.63 827.51,-548.91 803.38,-544.69"/>
+<path fill="none" stroke="#cc00ff" stroke-dasharray="5,2" d="M801.38,-544.69C631.55,-514.96 592.32,-370.98 430.57,-430.69"/>
+</g>
+<!-- sourcefile~time_integrator.f90&#45;&gt;sourcefile~field.f90 -->
+<g id="sourcefile~~postprocess.f90~~EfferentGraph_edge60" class="edge">
+<title>sourcefile~time_integrator.f90&#45;&gt;sourcefile~field.f90</title>
+<path fill="none" stroke="#cc00ff" stroke-dasharray="5,2" d="M903.63,-563.21C894.93,-567.2 885.51,-571.85 877.14,-576.69 842.41,-596.75 843.17,-623.61 803.38,-628.69"/>
+<path fill="none" stroke="#cc00ff" stroke-dasharray="5,2" d="M801.38,-628.69C699.67,-641.67 670.68,-647.48 570.71,-624.69"/>
+</g>
+<!-- sourcefile~time_integrator.f90&#45;&gt;sourcefile~logger.f90 -->
+<g id="sourcefile~~postprocess.f90~~EfferentGraph_edge61" class="edge">
+<title>sourcefile~time_integrator.f90&#45;&gt;sourcefile~logger.f90</title>
+<path fill="none" stroke="#cc00ff" stroke-dasharray="5,2" d="M895.16,-538.14C889,-535.63 882.79,-532.79 877.14,-529.69 804.14,-489.56 806.59,-443.17 727.62,-416.69 572.11,-364.53 516.82,-373.58 358.56,-416.69 314.59,-428.66 315.27,-462.08 270.17,-468.69"/>
+<path fill="none" stroke="#cc00ff" stroke-dasharray="5,2" d="M268.17,-468.69C212.28,-476.23 176.8,-424.88 141.28,-468.69"/>
+</g>
+<!-- sourcefile~time_integrator.f90&#45;&gt;sourcefile~allocator.f90~3 -->
+<g id="sourcefile~~postprocess.f90~~EfferentGraph_edge57" class="edge">
+<title>sourcefile~time_integrator.f90&#45;&gt;sourcefile~allocator.f90~3</title>
+<path fill="none" stroke="#cc00ff" stroke-dasharray="5,2" d="M801.38,-544.69C779.32,-540.82 754.56,-540.65 733.51,-541.72"/>
+<polygon fill="#cc00ff" stroke="#cc00ff" points="733.51,-538.21 723.75,-542.32 733.95,-545.19 733.51,-538.21"/>
+</g>
+<!-- sourcefile~time_integrator.f90&#45;&gt;sourcefile~backend.f90~2 -->
+<g id="sourcefile~~postprocess.f90~~EfferentGraph_edge58" class="edge">
+<title>sourcefile~time_integrator.f90&#45;&gt;sourcefile~backend.f90~2</title>
+<path fill="none" stroke="#cc00ff" stroke-dasharray="5,2" d="M896.1,-563.3C889.21,-566.85 882.5,-571.26 877.14,-576.69 866.56,-587.39 830.07,-675.01 812.71,-717.61"/>
+<polygon fill="#cc00ff" stroke="#cc00ff" points="809.54,-716.11 809.02,-726.69 816.02,-718.74 809.54,-716.11"/>
+</g>
+<!-- sourcefile~vector_calculus.f90&#45;&gt;sourcefile~common.f90~4 -->
+<g id="sourcefile~~postprocess.f90~~EfferentGraph_edge64" class="edge">
+<title>sourcefile~vector_calculus.f90&#45;&gt;sourcefile~common.f90~4</title>
+<path fill="none" stroke="#ff0098" stroke-dasharray="5,2" d="M801.38,-856.69C746.78,-852.88 738.85,-891.08 684.23,-894.69"/>
+<path fill="none" stroke="#ff0098" stroke-dasharray="5,2" d="M682.23,-894.69C617.25,-898.97 590.13,-873.62 536.58,-910.69 507.49,-930.82 527.27,-958.47 500.58,-981.69 475.76,-1003.27 463.46,-1006.33 430.57,-1005.69"/>
+<path fill="none" stroke="#ff0098" stroke-dasharray="5,2" d="M428.57,-1005.69C356.2,-1003.72 337.79,-941.81 270.17,-967.69"/>
+</g>
+<!-- sourcefile~vector_calculus.f90&#45;&gt;sourcefile~field.f90 -->
+<g id="sourcefile~~postprocess.f90~~EfferentGraph_edge65" class="edge">
+<title>sourcefile~vector_calculus.f90&#45;&gt;sourcefile~field.f90</title>
+<path fill="none" stroke="#ff0098" stroke-dasharray="5,2" d="M876.96,-859.06C854.1,-858.89 827.46,-858.28 803.38,-856.69"/>
+<path fill="none" stroke="#ff0098" stroke-dasharray="5,2" d="M801.38,-856.69C732.38,-852.12 777.55,-767.53 727.62,-719.69 695.97,-689.36 676.19,-699.66 638.85,-676.69 606.4,-656.73 607.74,-633.67 570.71,-624.69"/>
+</g>
+<!-- sourcefile~vector_calculus.f90&#45;&gt;sourcefile~logger.f90 -->
+<g id="sourcefile~~postprocess.f90~~EfferentGraph_edge66" class="edge">
+<title>sourcefile~vector_calculus.f90&#45;&gt;sourcefile~logger.f90</title>
+<path fill="none" stroke="#ff0098" stroke-dasharray="5,2" d="M896.64,-871.3C890.06,-873.87 883.33,-876.71 877.14,-879.69 701.44,-964.19 680.01,-1028.44 500.58,-1104.69 470.91,-1117.29 461.73,-1115.42 430.57,-1123.69"/>
+</g>
+<!-- sourcefile~vector_calculus.f90&#45;&gt;sourcefile~allocator.f90~3 -->
+<g id="sourcefile~~postprocess.f90~~EfferentGraph_edge62" class="edge">
+<title>sourcefile~vector_calculus.f90&#45;&gt;sourcefile~allocator.f90~3</title>
+<path fill="none" stroke="#ff0098" stroke-dasharray="5,2" d="M931.98,-846.26C927.28,-807.05 907.69,-684.5 841.14,-614.69 812.21,-584.34 767.45,-566.78 733.13,-557.14"/>
+<polygon fill="#ff0098" stroke="#ff0098" points="734.42,-553.86 723.85,-554.67 732.62,-560.62 734.42,-553.86"/>
+</g>
+<!-- sourcefile~vector_calculus.f90&#45;&gt;sourcefile~backend.f90~2 -->
+<g id="sourcefile~~postprocess.f90~~EfferentGraph_edge63" class="edge">
+<title>sourcefile~vector_calculus.f90&#45;&gt;sourcefile~backend.f90~2</title>
+<path fill="none" stroke="#ff0098" stroke-dasharray="5,2" d="M919.37,-846.06C896.91,-825.65 852.44,-785.26 825.57,-760.84"/>
+<polygon fill="#ff0098" stroke="#ff0098" points="828.06,-758.37 818.3,-754.24 823.35,-763.56 828.06,-758.37"/>
+</g>
+<!-- sourcefile~vector_calculus.f90&#45;&gt;sourcefile~tdsops.f90~2 -->
+<g id="sourcefile~~postprocess.f90~~EfferentGraph_edge67" class="edge">
+<title>sourcefile~vector_calculus.f90&#45;&gt;sourcefile~tdsops.f90~2</title>
+<path fill="none" stroke="#ff0098" stroke-dasharray="5,2" d="M801.38,-856.69C781.54,-855.37 779.88,-869.24 763.62,-880.69 729.14,-904.97 725.41,-923.53 684.23,-932.69"/>
+<path fill="none" stroke="#ff0098" stroke-dasharray="5,2" d="M682.23,-932.69C660.33,-937.55 635.4,-937.81 614.68,-936.63"/>
+<polygon fill="#ff0098" stroke="#ff0098" points="615.06,-933.15 604.84,-935.93 614.56,-940.13 615.06,-933.15"/>
+</g>
+<!-- sourcefile~decomp_2decompfft.f90&#45;&gt;sourcefile~logger.f90 -->
+<g id="sourcefile~~postprocess.f90~~EfferentGraph_edge68" class="edge">
+<title>sourcefile~decomp_2decompfft.f90&#45;&gt;sourcefile~logger.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M394.24,-1096.28C362.55,-1106.96 313.91,-1120.97 270.17,-1123.69"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M268.17,-1123.69C211.89,-1127.18 193.54,-1144.9 141.28,-1123.69"/>
+</g>
+<!-- sourcefile~decomp_2decompfft.f90&#45;&gt;sourcefile~mesh_content.f90 -->
+<g id="sourcefile~~postprocess.f90~~EfferentGraph_edge69" class="edge">
+<title>sourcefile~decomp_2decompfft.f90&#45;&gt;sourcefile~mesh_content.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M358.17,-1083.69C350.18,-1083.69 342.06,-1083.69 334.16,-1083.69"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="334.28,-1080.19 324.28,-1083.69 334.28,-1087.19 334.28,-1080.19"/>
+</g>
+<!-- sourcefile~io_session.f90&#45;&gt;sourcefile~common.f90~4 -->
+<g id="sourcefile~~postprocess.f90~~EfferentGraph_edge71" class="edge">
+<title>sourcefile~io_session.f90&#45;&gt;sourcefile~common.f90~4</title>
+<path fill="none" stroke="#7fff00" stroke-dasharray="5,2" d="M1152.93,-456.45C1138.78,-430.37 1102.25,-368.82 1055.41,-333.69"/>
+<path fill="none" stroke="#7fff00" stroke-dasharray="5,2" d="M1053.41,-333.69C962.02,-265.12 951.03,-219.94 841.14,-188.69 808,-179.26 797.7,-183.61 763.62,-188.69 706.28,-197.22 691.16,-201.7 638.85,-226.69 503.05,-291.56 459.73,-305.27 358.56,-416.69 336.1,-441.42 347,-459.9 322.56,-482.69 303.83,-500.15 286.09,-486.62 270.17,-506.69"/>
+<path fill="none" stroke="#7fff00" stroke-dasharray="5,2" d="M268.17,-506.69C199.83,-576.73 155.56,-892.02 144.19,-981.78"/>
+<polygon fill="#7fff00" stroke="#7fff00" points="140.73,-981.25 142.96,-991.61 147.67,-982.12 140.73,-981.25"/>
+</g>
+<!-- sourcefile~io_session.f90&#45;&gt;sourcefile~field.f90 -->
+<g id="sourcefile~~postprocess.f90~~EfferentGraph_edge72" class="edge">
+<title>sourcefile~io_session.f90&#45;&gt;sourcefile~field.f90</title>
+<path fill="none" stroke="#7fff00" stroke-dasharray="5,2" d="M1053.41,-333.69C946.28,-259.44 885.28,-331.92 763.62,-378.69 724.25,-393.82 721.29,-410.54 684.23,-430.69"/>
+<path fill="none" stroke="#7fff00" stroke-dasharray="5,2" d="M682.23,-430.69C627.31,-454.78 615.99,-467.35 570.71,-506.69"/>
+</g>
+<!-- sourcefile~io_session.f90&#45;&gt;sourcefile~logger.f90 -->
+<g id="sourcefile~~postprocess.f90~~EfferentGraph_edge75" class="edge">
+<title>sourcefile~io_session.f90&#45;&gt;sourcefile~logger.f90</title>
+<path fill="none" stroke="#7fff00" stroke-dasharray="5,2" d="M1155.92,-456.13C1135.15,-381.68 1018.28,-2.78 803.38,-50.69"/>
+</g>
+<!-- sourcefile~io_session.f90&#45;&gt;sourcefile~backend.f90~2 -->
+<g id="sourcefile~~postprocess.f90~~EfferentGraph_edge70" class="edge">
+<title>sourcefile~io_session.f90&#45;&gt;sourcefile~backend.f90~2</title>
+<path fill="none" stroke="#7fff00" stroke-dasharray="5,2" d="M1053.41,-590.69C1002.72,-604.36 976.76,-558.51 935.27,-590.69"/>
+</g>
+<!-- sourcefile~io.f90 -->
+<g id="sourcefile~~postprocess.f90~~EfferentGraph_node20" class="node">
+<title>sourcefile~io.f90</title>
+<g id="a_sourcefile~~postprocess.f90~~EfferentGraph_node20"><a xlink:href="../sourcefile/io.f90.html" xlink:title="io.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1081.41,-480.82 1027.41,-480.82 1027.41,-456.55 1081.41,-456.55 1081.41,-480.82"/>
+<text xml:space="preserve" text-anchor="middle" x="1054.41" y="-465.09" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">io.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~io_session.f90&#45;&gt;sourcefile~io.f90 -->
+<g id="sourcefile~~postprocess.f90~~EfferentGraph_edge73" class="edge">
+<title>sourcefile~io_session.f90&#45;&gt;sourcefile~io.f90</title>
+<path fill="none" stroke="#7fff00" stroke-dasharray="5,2" d="M1117.04,-468.69C1109.13,-468.69 1100.91,-468.69 1093.15,-468.69"/>
+<polygon fill="#7fff00" stroke="#7fff00" points="1093.34,-465.19 1083.34,-468.69 1093.34,-472.19 1093.34,-465.19"/>
+</g>
+<!-- sourcefile~io_base.f90 -->
+<g id="sourcefile~~postprocess.f90~~EfferentGraph_node21" class="node">
+<title>sourcefile~io_base.f90</title>
+<g id="a_sourcefile~~postprocess.f90~~EfferentGraph_node21"><a xlink:href="../sourcefile/io_base.f90.html" xlink:title="io_base.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="970.41,-520.82 898.14,-520.82 898.14,-496.55 970.41,-496.55 970.41,-520.82"/>
+<text xml:space="preserve" text-anchor="middle" x="934.27" y="-505.09" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">io_base.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~io_session.f90&#45;&gt;sourcefile~io_base.f90 -->
+<g id="sourcefile~~postprocess.f90~~EfferentGraph_edge74" class="edge">
+<title>sourcefile~io_session.f90&#45;&gt;sourcefile~io_base.f90</title>
+<path fill="none" stroke="#7fff00" stroke-dasharray="5,2" d="M1154.45,-481.14C1142.65,-509.22 1109.4,-576.12 1055.41,-590.69"/>
+<path fill="none" stroke="#7fff00" stroke-dasharray="5,2" d="M1053.41,-590.69C1016.09,-600.76 1024,-550.47 991.41,-529.69 988.15,-527.61 984.66,-525.69 981.07,-523.93"/>
+<polygon fill="#7fff00" stroke="#7fff00" points="982.74,-520.85 972.18,-520.01 979.91,-527.25 982.74,-520.85"/>
+</g>
+<!-- sourcefile~mesh_content.f90&#45;&gt;sourcefile~common.f90~4 -->
+<g id="sourcefile~~postprocess.f90~~EfferentGraph_edge76" class="edge">
+<title>sourcefile~mesh_content.f90&#45;&gt;sourcefile~common.f90~4</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M240.85,-1071.08C232.66,-1067.04 223.74,-1062.4 215.79,-1057.69 198.92,-1047.69 180.86,-1035.14 166.75,-1024.87"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="169.02,-1022.2 158.89,-1019.09 164.87,-1027.83 169.02,-1022.2"/>
+</g>
+<!-- sourcefile~mesh_content.f90&#45;&gt;sourcefile~logger.f90 -->
+<g id="sourcefile~~postprocess.f90~~EfferentGraph_edge77" class="edge">
+<title>sourcefile~mesh_content.f90&#45;&gt;sourcefile~logger.f90</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M241.82,-1096.32C210.35,-1110.65 159.63,-1131.14 141.28,-1123.69"/>
+</g>
+<!-- sourcefile~poisson_fft.f90~2&#45;&gt;sourcefile~common.f90~4 -->
+<g id="sourcefile~~postprocess.f90~~EfferentGraph_edge78" class="edge">
+<title>sourcefile~poisson_fft.f90~2&#45;&gt;sourcefile~common.f90~4</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M568.71,-700.69C509.54,-684.33 481.85,-666.92 430.57,-700.69"/>
+</g>
+<!-- sourcefile~poisson_fft.f90~2&#45;&gt;sourcefile~field.f90 -->
+<g id="sourcefile~~postprocess.f90~~EfferentGraph_edge79" class="edge">
+<title>sourcefile~poisson_fft.f90~2&#45;&gt;sourcefile~field.f90</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M657.68,-728.19C651.21,-724.32 644.47,-719.73 638.85,-714.69 601.51,-681.18 619.63,-635.84 570.71,-624.69"/>
+</g>
+<!-- sourcefile~poisson_fft.f90~2&#45;&gt;sourcefile~logger.f90 -->
+<g id="sourcefile~~postprocess.f90~~EfferentGraph_edge80" class="edge">
+<title>sourcefile~poisson_fft.f90~2&#45;&gt;sourcefile~logger.f90</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M651.39,-728.22C629.22,-719.6 598.47,-708.36 570.71,-700.69"/>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M568.71,-700.69C466.3,-672.37 451.95,-637.37 358.56,-586.69 334.41,-573.58 158.92,-447.63 141.28,-468.69"/>
+</g>
+<!-- sourcefile~poisson_fft.f90~2&#45;&gt;sourcefile~mesh.f90 -->
+<g id="sourcefile~~postprocess.f90~~EfferentGraph_edge81" class="edge">
+<title>sourcefile~poisson_fft.f90~2&#45;&gt;sourcefile~mesh.f90</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M660.36,-753.26C653.4,-757.4 645.72,-762.12 638.85,-766.69 624.34,-776.33 608.63,-787.78 595.96,-797.29"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="594,-794.39 588.14,-803.21 598.22,-799.97 594,-794.39"/>
+</g>
+<!-- sourcefile~poisson_fft.f90~2&#45;&gt;sourcefile~tdsops.f90~2 -->
+<g id="sourcefile~~postprocess.f90~~EfferentGraph_edge82" class="edge">
+<title>sourcefile~poisson_fft.f90~2&#45;&gt;sourcefile~tdsops.f90~2</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M673.2,-753.18C664.14,-765.9 649.97,-786.31 638.85,-804.69 617.3,-840.3 594.98,-883.27 582,-908.99"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="578.91,-907.33 577.56,-917.84 585.17,-910.47 578.91,-907.33"/>
+</g>
+<!-- sourcefile~io.f90&#45;&gt;sourcefile~common.f90~4 -->
+<g id="sourcefile~~postprocess.f90~~EfferentGraph_edge84" class="edge">
+<title>sourcefile~io.f90&#45;&gt;sourcefile~common.f90~4</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M933.27,-295.69C882.22,-254.45 701.88,-300.42 638.85,-318.69 605.95,-328.22 601.35,-339.36 570.71,-354.69"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M568.71,-354.69C504.41,-382.52 496.42,-406.72 430.57,-430.69"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M428.57,-430.69C379.26,-448.63 369.98,-460.2 322.56,-482.69 299.42,-493.66 286.09,-486.62 270.17,-506.69"/>
+</g>
+<!-- sourcefile~io.f90&#45;&gt;sourcefile~field.f90 -->
+<g id="sourcefile~~postprocess.f90~~EfferentGraph_edge85" class="edge">
+<title>sourcefile~io.f90&#45;&gt;sourcefile~field.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1027.02,-465.88C942.85,-456.93 686.18,-429.75 684.23,-430.69"/>
+</g>
+<!-- sourcefile~io.f90&#45;&gt;sourcefile~logger.f90 -->
+<g id="sourcefile~~postprocess.f90~~EfferentGraph_edge87" class="edge">
+<title>sourcefile~io.f90&#45;&gt;sourcefile~logger.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1048.17,-456.34C1034.31,-425.08 993.7,-342 935.27,-295.69"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M933.27,-295.69C900.44,-269.66 882.65,-281.43 841.14,-275.69 715.22,-258.26 367.49,-158.9 270.17,-240.69"/>
+</g>
+<!-- sourcefile~io.f90&#45;&gt;sourcefile~backend.f90~2 -->
+<g id="sourcefile~~postprocess.f90~~EfferentGraph_edge83" class="edge">
+<title>sourcefile~io.f90&#45;&gt;sourcefile~backend.f90~2</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1049.21,-481.08C1041.29,-502.6 1022.14,-546.95 991.41,-571.69 970.89,-588.2 956.09,-574.54 935.27,-590.69"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M933.27,-590.69C884.15,-628.79 839.73,-687.71 817.8,-719.17"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="815.13,-716.88 812.35,-727.11 820.9,-720.85 815.13,-716.88"/>
+</g>
+<!-- sourcefile~io.f90&#45;&gt;sourcefile~io_base.f90 -->
+<g id="sourcefile~~postprocess.f90~~EfferentGraph_edge86" class="edge">
+<title>sourcefile~io.f90&#45;&gt;sourcefile~io_base.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1027.19,-477.56C1013.72,-482.13 996.89,-487.82 981.34,-493.09"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="980.61,-489.64 972.26,-496.16 982.86,-496.27 980.61,-489.64"/>
+</g>
+<!-- sourcefile~nvtx.f90 -->
+<g id="sourcefile~~postprocess.f90~~EfferentGraph_node22" class="node">
+<title>sourcefile~nvtx.f90</title>
+<g id="a_sourcefile~~postprocess.f90~~EfferentGraph_node22"><a xlink:href="../sourcefile/nvtx.f90.html" xlink:title="nvtx.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="961.41,-440.82 907.14,-440.82 907.14,-416.55 961.41,-416.55 961.41,-440.82"/>
+<text xml:space="preserve" text-anchor="middle" x="934.27" y="-425.09" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">nvtx.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~io.f90&#45;&gt;sourcefile~nvtx.f90 -->
+<g id="sourcefile~~postprocess.f90~~EfferentGraph_edge88" class="edge">
+<title>sourcefile~io.f90&#45;&gt;sourcefile~nvtx.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1027.19,-459.81C1011.17,-454.38 990.42,-447.36 972.68,-441.35"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="973.86,-438.05 963.26,-438.16 971.61,-444.68 973.86,-438.05"/>
+</g>
+<!-- sourcefile~io_base.f90&#45;&gt;sourcefile~common.f90~4 -->
+<g id="sourcefile~~postprocess.f90~~EfferentGraph_edge90" class="edge">
+<title>sourcefile~io_base.f90&#45;&gt;sourcefile~common.f90~4</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M919.15,-496.08C907,-484.75 889.54,-467.24 877.14,-449.69 856.73,-420.79 870.44,-398.52 841.14,-378.69 741.22,-311.05 681.38,-306.59 570.71,-354.69"/>
+</g>
+<!-- sourcefile~io_base.f90&#45;&gt;sourcefile~field.f90 -->
+<g id="sourcefile~~postprocess.f90~~EfferentGraph_edge91" class="edge">
+<title>sourcefile~io_base.f90&#45;&gt;sourcefile~field.f90</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M897.89,-501.32C839.66,-491.16 721.83,-478.96 638.85,-525.69 592.31,-551.89 622.67,-637.1 570.71,-624.69"/>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M568.71,-624.69C531.13,-615.57 490.72,-597.21 463.38,-583.38"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="465.06,-580.31 454.57,-578.84 461.86,-586.53 465.06,-580.31"/>
+</g>
+<!-- sourcefile~io_base.f90&#45;&gt;sourcefile~backend.f90~2 -->
+<g id="sourcefile~~postprocess.f90~~EfferentGraph_edge89" class="edge">
+<title>sourcefile~io_base.f90&#45;&gt;sourcefile~backend.f90~2</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M897.71,-516.5C890.13,-519.56 882.74,-523.81 877.14,-529.69 840.8,-567.87 858.62,-592.96 841.14,-642.69 832.04,-668.57 820.59,-697.88 812.7,-717.65"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="809.55,-716.1 809.07,-726.68 816.05,-718.71 809.55,-716.1"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var pansourcefilepostprocessf90EfferentGraph = svgPanZoom('#sourcefilepostprocessf90EfferentGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#EfferentGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="EfferentGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="200pt" height="32pt"
+ viewBox="0.00 0.00 200.00 32.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(4 28.27)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-28.27 195.52,-28.27 195.52,4 -4,4"/>
+<!-- Source File -->
+<g id="node1" class="node">
+<title>Source File</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="69.27,-24.27 0,-24.27 0,0 69.27,0 69.27,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="34.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Source File</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node2" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="191.52,-24.27 87.75,-24.27 87.75,0 191.52,0 191.52,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="139.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a file to a file which it depends on. A file
+is dependent upon another if the latter must be compiled before the former
+can be.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header">
+            <h3 class="card-title">Files dependent on this one</h3>
+          </div>
+          <div class="card-body">
+            <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: sourcefile~~postprocess.f90~~AfferentGraph Pages: 1 -->
+<svg id="sourcefilepostprocessf90AfferentGraph" width="641pt" height="232pt"
+ viewBox="0.00 0.00 641.00 232.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="sourcefile~~postprocess.f90~~AfferentGraph" class="graph" transform="scale(0.661739 0.661739) rotate(0) translate(4 347.05)">
+<title>sourcefile~~postprocess.f90~~AfferentGraph</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-347.05 964.66,-347.05 964.66,4 -4,4"/>
+<!-- sourcefile~postprocess.f90 -->
+<g id="sourcefile~~postprocess.f90~~AfferentGraph_node1" class="node">
+<title>sourcefile~postprocess.f90</title>
+<polygon fill="none" stroke="black" points="94.77,-192.27 0,-192.27 0,-168 94.77,-168 94.77,-192.27"/>
+<text xml:space="preserve" text-anchor="middle" x="47.38" y="-176.53" font-family="Helvetica,sans-Serif" font-size="10.50">postprocess.f90</text>
+</g>
+<!-- sourcefile~base_case.f90 -->
+<g id="sourcefile~~postprocess.f90~~AfferentGraph_node2" class="node">
+<title>sourcefile~base_case.f90</title>
+<g id="a_sourcefile~~postprocess.f90~~AfferentGraph_node2"><a xlink:href="../sourcefile/base_case.f90.html" xlink:title="base_case.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="218.04,-192.27 130.77,-192.27 130.77,-168 218.04,-168 218.04,-192.27"/>
+<text xml:space="preserve" text-anchor="middle" x="174.4" y="-176.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">base_case.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~base_case.f90&#45;&gt;sourcefile~postprocess.f90 -->
+<g id="sourcefile~~postprocess.f90~~AfferentGraph_edge1" class="edge">
+<title>sourcefile~base_case.f90&#45;&gt;sourcefile~postprocess.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M130.38,-180.13C122.6,-180.13 114.38,-180.13 106.26,-180.13"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="106.42,-176.64 96.42,-180.14 106.42,-183.64 106.42,-176.64"/>
+</g>
+<!-- sourcefile~abl.f90~2 -->
+<g id="sourcefile~~postprocess.f90~~AfferentGraph_node3" class="node">
+<title>sourcefile~abl.f90~2</title>
+<g id="a_sourcefile~~postprocess.f90~~AfferentGraph_node3"><a xlink:href="../sourcefile/abl.f90~2.html" xlink:title="abl.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="346.8,-66.27 292.8,-66.27 292.8,-42 346.8,-42 346.8,-66.27"/>
+<text xml:space="preserve" text-anchor="middle" x="319.8" y="-50.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">abl.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~abl.f90~2&#45;&gt;sourcefile~base_case.f90 -->
+<g id="sourcefile~~postprocess.f90~~AfferentGraph_edge2" class="edge">
+<title>sourcefile~abl.f90~2&#45;&gt;sourcefile~base_case.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M292.52,-58.79C280.03,-61.93 265.38,-67.02 254.04,-75.14 223.52,-96.96 199.71,-134.19 186.62,-157.95"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="183.69,-156.01 182.08,-166.48 189.87,-159.29 183.69,-156.01"/>
+</g>
+<!-- sourcefile~build.f90 -->
+<g id="sourcefile~~postprocess.f90~~AfferentGraph_node4" class="node">
+<title>sourcefile~build.f90</title>
+<g id="a_sourcefile~~postprocess.f90~~AfferentGraph_node4"><a xlink:href="../sourcefile/build.f90.html" xlink:title="build.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="833.64,-89.27 775.62,-89.27 775.62,-65 833.64,-65 833.64,-89.27"/>
+<text xml:space="preserve" text-anchor="middle" x="804.63" y="-73.54" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">build.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~build.f90&#45;&gt;sourcefile~base_case.f90 -->
+<g id="sourcefile~~postprocess.f90~~AfferentGraph_edge3" class="edge">
+<title>sourcefile~build.f90&#45;&gt;sourcefile~base_case.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M706.61,-201.13C611.3,-247.58 570.98,-204.62 471.44,-241.13"/>
+</g>
+<!-- sourcefile~build.f90&#45;&gt;sourcefile~abl.f90~2 -->
+<g id="sourcefile~~postprocess.f90~~AfferentGraph_edge12" class="edge">
+<title>sourcefile~build.f90&#45;&gt;sourcefile~abl.f90~2</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M596.46,-161.13C499.25,-132.9 480.64,-109.88 385.56,-75.14 376.64,-71.88 366.94,-68.59 357.83,-65.62"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="359.14,-62.37 348.54,-62.64 357,-69.03 359.14,-62.37"/>
+</g>
+<!-- sourcefile~case_factory.f90 -->
+<g id="sourcefile~~postprocess.f90~~AfferentGraph_node5" class="node">
+<title>sourcefile~case_factory.f90</title>
+<g id="a_sourcefile~~postprocess.f90~~AfferentGraph_node5"><a xlink:href="../sourcefile/case_factory.f90.html" xlink:title="case_factory.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="519.33,-213.27 421.56,-213.27 421.56,-189 519.33,-189 519.33,-213.27"/>
+<text xml:space="preserve" text-anchor="middle" x="470.44" y="-197.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">case_factory.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~build.f90&#45;&gt;sourcefile~case_factory.f90 -->
+<g id="sourcefile~~postprocess.f90~~AfferentGraph_edge15" class="edge">
+<title>sourcefile~build.f90&#45;&gt;sourcefile~case_factory.f90</title>
+<path fill="none" stroke="#cbff00" stroke-dasharray="5,2" d="M596.46,-161.13C579.92,-156.33 539.32,-171.15 508.84,-184.09"/>
+<polygon fill="#cbff00" stroke="#cbff00" points="507.71,-180.77 499.93,-187.95 510.5,-187.19 507.71,-180.77"/>
+</g>
+<!-- sourcefile~context.f90 -->
+<g id="sourcefile~~postprocess.f90~~AfferentGraph_node13" class="node">
+<title>sourcefile~context.f90</title>
+<g id="a_sourcefile~~postprocess.f90~~AfferentGraph_node13"><a xlink:href="../sourcefile/context.f90.html" xlink:title="context.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="505.83,-49.27 435.06,-49.27 435.06,-25 505.83,-25 505.83,-49.27"/>
+<text xml:space="preserve" text-anchor="middle" x="470.44" y="-33.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">context.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~build.f90&#45;&gt;sourcefile~context.f90 -->
+<g id="sourcefile~~postprocess.f90~~AfferentGraph_edge24" class="edge">
+<title>sourcefile~build.f90&#45;&gt;sourcefile~context.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M798.64,-89.72C787.33,-116.3 756.88,-177.61 708.61,-201.13"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M706.61,-201.13C695.09,-206.75 610.77,-164.71 598.46,-161.13"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M596.46,-161.13C543.45,-145.74 503.02,-90.36 483.8,-59.07"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="486.99,-57.59 478.88,-50.77 480.97,-61.16 486.99,-57.59"/>
+</g>
+<!-- sourcefile~report.f90 -->
+<g id="sourcefile~~postprocess.f90~~AfferentGraph_node15" class="node">
+<title>sourcefile~report.f90</title>
+<g id="a_sourcefile~~postprocess.f90~~AfferentGraph_node15"><a xlink:href="../sourcefile/report.f90.html" xlink:title="report.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="739.62,-108.27 675.6,-108.27 675.6,-84 739.62,-84 739.62,-108.27"/>
+<text xml:space="preserve" text-anchor="middle" x="707.61" y="-92.54" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">report.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~build.f90&#45;&gt;sourcefile~report.f90 -->
+<g id="sourcefile~~postprocess.f90~~AfferentGraph_edge28" class="edge">
+<title>sourcefile~build.f90&#45;&gt;sourcefile~report.f90</title>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M775.12,-82.84C767.62,-84.34 759.35,-85.99 751.28,-87.6"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="750.69,-84.15 741.57,-89.54 752.06,-91.02 750.69,-84.15"/>
+</g>
+<!-- sourcefile~estimate.f90 -->
+<g id="sourcefile~~postprocess.f90~~AfferentGraph_node16" class="node">
+<title>sourcefile~estimate.f90</title>
+<g id="a_sourcefile~~postprocess.f90~~AfferentGraph_node16"><a xlink:href="../sourcefile/estimate.f90.html" xlink:title="estimate.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="636.6,-49.27 558.33,-49.27 558.33,-25 636.6,-25 636.6,-49.27"/>
+<text xml:space="preserve" text-anchor="middle" x="597.46" y="-33.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">estimate.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~build.f90&#45;&gt;sourcefile~estimate.f90 -->
+<g id="sourcefile~~postprocess.f90~~AfferentGraph_edge30" class="edge">
+<title>sourcefile~build.f90&#45;&gt;sourcefile~estimate.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M775.53,-71.66C742.8,-65.28 688.12,-54.61 648.16,-46.82"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="649.03,-43.43 638.54,-44.95 647.69,-50.3 649.03,-43.43"/>
+</g>
+<!-- sourcefile~case_factory.f90&#45;&gt;sourcefile~base_case.f90 -->
+<g id="sourcefile~~postprocess.f90~~AfferentGraph_edge4" class="edge">
+<title>sourcefile~case_factory.f90&#45;&gt;sourcefile~base_case.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M446,-213.57C423.47,-225.4 391.94,-241.63 385.56,-243.13 328.67,-256.58 309.19,-262.5 254.04,-243.13 230.17,-234.75 208.18,-215.74 193.55,-200.78"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="196.27,-198.55 186.87,-193.65 191.16,-203.34 196.27,-198.55"/>
+</g>
+<!-- sourcefile~case_factory.f90&#45;&gt;sourcefile~abl.f90~2 -->
+<g id="sourcefile~~postprocess.f90~~AfferentGraph_edge13" class="edge">
+<title>sourcefile~case_factory.f90&#45;&gt;sourcefile~abl.f90~2</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M438.66,-188.74C432.37,-185.1 426.24,-180.59 421.56,-175.13 390.79,-139.3 419.49,-108 385.56,-75.14 378.1,-67.91 368.12,-63.17 358.24,-60.06"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="359.29,-56.71 348.73,-57.58 357.52,-63.49 359.29,-56.71"/>
+</g>
+<!-- sourcefile~channel.f90 -->
+<g id="sourcefile~~postprocess.f90~~AfferentGraph_node6" class="node">
+<title>sourcefile~channel.f90</title>
+<g id="a_sourcefile~~postprocess.f90~~AfferentGraph_node6"><a xlink:href="../sourcefile/channel.f90.html" xlink:title="channel.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="357.06,-234.27 282.54,-234.27 282.54,-210 357.06,-210 357.06,-234.27"/>
+<text xml:space="preserve" text-anchor="middle" x="319.8" y="-218.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">channel.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~case_factory.f90&#45;&gt;sourcefile~channel.f90 -->
+<g id="sourcefile~~postprocess.f90~~AfferentGraph_edge17" class="edge">
+<title>sourcefile~case_factory.f90&#45;&gt;sourcefile~channel.f90</title>
+<path fill="none" stroke="#33ff00" stroke-dasharray="5,2" d="M421.18,-207.95C404.38,-210.33 385.54,-212.99 368.76,-215.36"/>
+<polygon fill="#33ff00" stroke="#33ff00" points="368.43,-211.87 359.02,-216.74 369.41,-218.8 368.43,-211.87"/>
+</g>
+<!-- sourcefile~cylinder.f90 -->
+<g id="sourcefile~~postprocess.f90~~AfferentGraph_node7" class="node">
+<title>sourcefile~cylinder.f90</title>
+<g id="a_sourcefile~~postprocess.f90~~AfferentGraph_node7"><a xlink:href="../sourcefile/cylinder.f90.html" xlink:title="cylinder.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="356.31,-192.27 283.29,-192.27 283.29,-168 356.31,-168 356.31,-192.27"/>
+<text xml:space="preserve" text-anchor="middle" x="319.8" y="-176.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">cylinder.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~case_factory.f90&#45;&gt;sourcefile~cylinder.f90 -->
+<g id="sourcefile~~postprocess.f90~~AfferentGraph_edge18" class="edge">
+<title>sourcefile~case_factory.f90&#45;&gt;sourcefile~cylinder.f90</title>
+<path fill="none" stroke="#00ff66" stroke-dasharray="5,2" d="M421.18,-194.32C404.1,-191.9 384.92,-189.19 367.93,-186.79"/>
+<polygon fill="#00ff66" stroke="#00ff66" points="368.47,-183.33 358.07,-185.4 367.49,-190.27 368.47,-183.33"/>
+</g>
+<!-- sourcefile~generic.f90 -->
+<g id="sourcefile~~postprocess.f90~~AfferentGraph_node8" class="node">
+<title>sourcefile~generic.f90</title>
+<g id="a_sourcefile~~postprocess.f90~~AfferentGraph_node8"><a xlink:href="../sourcefile/generic.f90.html" xlink:title="generic.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="355.93,-150.27 283.66,-150.27 283.66,-126 355.93,-126 355.93,-150.27"/>
+<text xml:space="preserve" text-anchor="middle" x="319.8" y="-134.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">generic.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~case_factory.f90&#45;&gt;sourcefile~generic.f90 -->
+<g id="sourcefile~~postprocess.f90~~AfferentGraph_edge19" class="edge">
+<title>sourcefile~case_factory.f90&#45;&gt;sourcefile~generic.f90</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M446.73,-188.59C430.1,-179.7 406.81,-167.84 385.56,-159.13 379.53,-156.67 373.1,-154.29 366.72,-152.07"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="368.13,-148.86 357.54,-149 365.91,-155.49 368.13,-148.86"/>
+</g>
+<!-- sourcefile~tgv.f90 -->
+<g id="sourcefile~~postprocess.f90~~AfferentGraph_node10" class="node">
+<title>sourcefile~tgv.f90</title>
+<g id="a_sourcefile~~postprocess.f90~~AfferentGraph_node10"><a xlink:href="../sourcefile/tgv.f90.html" xlink:title="tgv.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="346.8,-108.27 292.8,-108.27 292.8,-84 346.8,-84 346.8,-108.27"/>
+<text xml:space="preserve" text-anchor="middle" x="319.8" y="-92.54" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">tgv.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~case_factory.f90&#45;&gt;sourcefile~tgv.f90 -->
+<g id="sourcefile~~postprocess.f90~~AfferentGraph_edge22" class="edge">
+<title>sourcefile~case_factory.f90&#45;&gt;sourcefile~tgv.f90</title>
+<path fill="none" stroke="#3200ff" stroke-dasharray="5,2" d="M440.47,-188.53C433.8,-184.82 427.06,-180.33 421.56,-175.13 399.49,-154.31 409.45,-135.84 385.56,-117.14 377.6,-110.9 367.73,-106.49 358.12,-103.38"/>
+<polygon fill="#3200ff" stroke="#3200ff" points="359.11,-100.02 348.53,-100.7 357.22,-106.76 359.11,-100.02"/>
+</g>
+<!-- sourcefile~wind_turbine.f90 -->
+<g id="sourcefile~~postprocess.f90~~AfferentGraph_node11" class="node">
+<title>sourcefile~wind_turbine.f90</title>
+<g id="a_sourcefile~~postprocess.f90~~AfferentGraph_node11"><a xlink:href="../sourcefile/wind_turbine.f90.html" xlink:title="wind_turbine.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="369.81,-314.27 269.79,-314.27 269.79,-290 369.81,-290 369.81,-314.27"/>
+<text xml:space="preserve" text-anchor="middle" x="319.8" y="-298.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">wind_turbine.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~case_factory.f90&#45;&gt;sourcefile~wind_turbine.f90 -->
+<g id="sourcefile~~postprocess.f90~~AfferentGraph_edge23" class="edge">
+<title>sourcefile~case_factory.f90&#45;&gt;sourcefile~wind_turbine.f90</title>
+<path fill="none" stroke="#cc00ff" stroke-dasharray="5,2" d="M441.75,-213.5C434.76,-217.32 427.55,-221.91 421.56,-227.13 401.2,-244.9 406.92,-259.58 385.56,-276.13 381.52,-279.27 377.05,-282.07 372.41,-284.58"/>
+<polygon fill="#cc00ff" stroke="#cc00ff" points="370.9,-281.42 363.41,-288.92 373.94,-287.72 370.9,-281.42"/>
+</g>
+<!-- sourcefile~channel.f90&#45;&gt;sourcefile~base_case.f90 -->
+<g id="sourcefile~~postprocess.f90~~AfferentGraph_edge5" class="edge">
+<title>sourcefile~channel.f90&#45;&gt;sourcefile~base_case.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M282.24,-211.43C266.24,-206.74 247.13,-201.14 229.53,-195.99"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="230.55,-192.64 219.97,-193.19 228.59,-199.36 230.55,-192.64"/>
+</g>
+<!-- sourcefile~cylinder.f90&#45;&gt;sourcefile~base_case.f90 -->
+<g id="sourcefile~~postprocess.f90~~AfferentGraph_edge6" class="edge">
+<title>sourcefile~cylinder.f90&#45;&gt;sourcefile~base_case.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M282.99,-180.13C266.93,-180.13 247.63,-180.13 229.84,-180.13"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="229.93,-176.64 219.93,-180.14 229.93,-183.64 229.93,-176.64"/>
+</g>
+<!-- sourcefile~generic.f90&#45;&gt;sourcefile~base_case.f90 -->
+<g id="sourcefile~~postprocess.f90~~AfferentGraph_edge7" class="edge">
+<title>sourcefile~generic.f90&#45;&gt;sourcefile~base_case.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M283.35,-148.52C267.08,-153.28 247.42,-159.04 229.36,-164.33"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="228.43,-160.96 219.82,-167.13 230.4,-167.67 228.43,-160.96"/>
+</g>
+<!-- sourcefile~memcheck_device.f90 -->
+<g id="sourcefile~~postprocess.f90~~AfferentGraph_node9" class="node">
+<title>sourcefile~memcheck_device.f90</title>
+<g id="a_sourcefile~~postprocess.f90~~AfferentGraph_node9"><a xlink:href="../sourcefile/memcheck_device.f90.html" xlink:title="memcheck_device.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="385.56,-24.27 254.04,-24.27 254.04,0 385.56,0 385.56,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="319.8" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">memcheck_device.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~memcheck_device.f90&#45;&gt;sourcefile~base_case.f90 -->
+<g id="sourcefile~~postprocess.f90~~AfferentGraph_edge8" class="edge">
+<title>sourcefile~memcheck_device.f90&#45;&gt;sourcefile~base_case.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M267.33,-24.62C262.56,-26.99 258.03,-29.8 254.04,-33.13 214.47,-66.23 191.88,-124.5 181.81,-156.84"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="178.46,-155.83 178.98,-166.41 185.17,-157.81 178.46,-155.83"/>
+</g>
+<!-- sourcefile~tgv.f90&#45;&gt;sourcefile~base_case.f90 -->
+<g id="sourcefile~~postprocess.f90~~AfferentGraph_edge9" class="edge">
+<title>sourcefile~tgv.f90&#45;&gt;sourcefile~base_case.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M292.39,-102.36C280.29,-105.79 266,-110.68 254.04,-117.14 232.55,-128.73 211.11,-146.41 196.06,-160.09"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="194.03,-157.21 189.09,-166.58 198.8,-162.33 194.03,-157.21"/>
+</g>
+<!-- sourcefile~wind_turbine.f90&#45;&gt;sourcefile~base_case.f90 -->
+<g id="sourcefile~~postprocess.f90~~AfferentGraph_edge10" class="edge">
+<title>sourcefile~wind_turbine.f90&#45;&gt;sourcefile~base_case.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M278.44,-289.59C269.96,-285.97 261.37,-281.51 254.04,-276.13 226.43,-255.87 202.78,-223.75 188.83,-202.31"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="191.89,-200.61 183.59,-194.03 185.98,-204.35 191.89,-200.61"/>
+</g>
+<!-- sourcefile~xcompact.f90 -->
+<g id="sourcefile~~postprocess.f90~~AfferentGraph_node12" class="node">
+<title>sourcefile~xcompact.f90</title>
+<g id="a_sourcefile~~postprocess.f90~~AfferentGraph_node12"><a xlink:href="../sourcefile/xcompact.f90.html" xlink:title="xcompact.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="639.6,-213.27 555.33,-213.27 555.33,-189 639.6,-189 639.6,-213.27"/>
+<text xml:space="preserve" text-anchor="middle" x="597.46" y="-197.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">xcompact.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~xcompact.f90&#45;&gt;sourcefile~base_case.f90 -->
+<g id="sourcefile~~postprocess.f90~~AfferentGraph_edge11" class="edge">
+<title>sourcefile~xcompact.f90&#45;&gt;sourcefile~base_case.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M554.9,-212.98C530.35,-220.34 498.82,-230.41 471.44,-241.13"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M469.44,-241.13C420.9,-260.15 433.84,-303.46 385.56,-323.13 331.43,-345.2 304.35,-352.89 254.04,-323.13 210.17,-297.19 189.12,-237.09 180.49,-203.65"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="183.94,-203.03 178.2,-194.12 177.13,-204.66 183.94,-203.03"/>
+</g>
+<!-- sourcefile~xcompact.f90&#45;&gt;sourcefile~case_factory.f90 -->
+<g id="sourcefile~~postprocess.f90~~AfferentGraph_edge16" class="edge">
+<title>sourcefile~xcompact.f90&#45;&gt;sourcefile~case_factory.f90</title>
+<path fill="none" stroke="#cbff00" stroke-dasharray="5,2" d="M554.84,-201.13C547.21,-201.13 539.11,-201.13 531.08,-201.13"/>
+<polygon fill="#cbff00" stroke="#cbff00" points="531.33,-197.64 521.33,-201.14 531.33,-204.64 531.33,-197.64"/>
+</g>
+<!-- sourcefile~context.f90&#45;&gt;sourcefile~memcheck_device.f90 -->
+<g id="sourcefile~~postprocess.f90~~AfferentGraph_edge20" class="edge">
+<title>sourcefile~context.f90&#45;&gt;sourcefile~memcheck_device.f90</title>
+<path fill="none" stroke="#0066ff" stroke-dasharray="5,2" d="M434.59,-31.27C423.26,-29.37 410.21,-27.17 397.08,-24.96"/>
+<polygon fill="#0066ff" stroke="#0066ff" points="397.99,-21.57 387.55,-23.36 396.83,-28.47 397.99,-21.57"/>
+</g>
+<!-- sourcefile~memcheck.f90 -->
+<g id="sourcefile~~postprocess.f90~~AfferentGraph_node14" class="node">
+<title>sourcefile~memcheck.f90</title>
+<g id="a_sourcefile~~postprocess.f90~~AfferentGraph_node14"><a xlink:href="../sourcefile/memcheck.f90.html" xlink:title="memcheck.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="960.66,-50.27 869.64,-50.27 869.64,-26 960.66,-26 960.66,-50.27"/>
+<text xml:space="preserve" text-anchor="middle" x="915.15" y="-34.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">memcheck.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~memcheck.f90&#45;&gt;sourcefile~build.f90 -->
+<g id="sourcefile~~postprocess.f90~~AfferentGraph_edge14" class="edge">
+<title>sourcefile~memcheck.f90&#45;&gt;sourcefile~build.f90</title>
+<path fill="none" stroke="#ff9900" stroke-dasharray="5,2" d="M879.22,-50.69C868.13,-54.67 855.82,-59.1 844.48,-63.17"/>
+<polygon fill="#ff9900" stroke="#ff9900" points="843.63,-59.76 835.4,-66.44 846,-66.35 843.63,-59.76"/>
+</g>
+<!-- sourcefile~memcheck.f90&#45;&gt;sourcefile~context.f90 -->
+<g id="sourcefile~~postprocess.f90~~AfferentGraph_edge26" class="edge">
+<title>sourcefile~memcheck.f90&#45;&gt;sourcefile~context.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M875.44,-25.55C854.83,-20.23 828.98,-15.75 805.63,-18.13"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M803.63,-18.13C761.62,-22.42 750.84,-18.33 708.61,-18.13"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M706.61,-18.13C639.37,-17.83 622.07,-7.91 555.33,-16.13 542.78,-17.68 529.41,-20.48 517.12,-23.55"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="516.44,-20.11 507.65,-26.02 518.21,-26.88 516.44,-20.11"/>
+</g>
+<!-- sourcefile~memcheck.f90&#45;&gt;sourcefile~report.f90 -->
+<g id="sourcefile~~postprocess.f90~~AfferentGraph_edge29" class="edge">
+<title>sourcefile~memcheck.f90&#45;&gt;sourcefile~report.f90</title>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M803.63,-18.13C768.83,-21.68 739.64,-52.66 723.14,-74.49"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="720.37,-72.35 717.37,-82.52 726.05,-76.44 720.37,-72.35"/>
+</g>
+<!-- sourcefile~memcheck.f90&#45;&gt;sourcefile~estimate.f90 -->
+<g id="sourcefile~~postprocess.f90~~AfferentGraph_edge31" class="edge">
+<title>sourcefile~memcheck.f90&#45;&gt;sourcefile~estimate.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M706.61,-18.13C687.36,-18.05 666.48,-20.98 648.24,-24.57"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="647.52,-21.15 638.45,-26.63 648.96,-28 647.52,-21.15"/>
+</g>
+<!-- sourcefile~report.f90&#45;&gt;sourcefile~memcheck_device.f90 -->
+<g id="sourcefile~~postprocess.f90~~AfferentGraph_edge21" class="edge">
+<title>sourcefile~report.f90&#45;&gt;sourcefile~memcheck_device.f90</title>
+<path fill="none" stroke="#0066ff" stroke-dasharray="5,2" d="M596.46,-77.14C519.31,-64.41 494.81,-85.5 421.56,-58.13 403.31,-51.32 403.01,-41.79 385.56,-33.13 382.48,-31.61 379.27,-30.16 375.99,-28.79"/>
+<polygon fill="#0066ff" stroke="#0066ff" points="377.38,-25.57 366.79,-25.22 374.85,-32.1 377.38,-25.57"/>
+</g>
+<!-- sourcefile~report.f90&#45;&gt;sourcefile~context.f90 -->
+<g id="sourcefile~~postprocess.f90~~AfferentGraph_edge27" class="edge">
+<title>sourcefile~report.f90&#45;&gt;sourcefile~context.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M675.41,-90.48C653.82,-86.6 624.42,-81.42 598.46,-77.14"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M596.46,-77.14C567.8,-72.41 536.69,-62.47 512.67,-53.68"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="514.17,-50.51 503.58,-50.28 511.72,-57.06 514.17,-50.51"/>
+</g>
+<!-- sourcefile~report.f90&#45;&gt;sourcefile~estimate.f90 -->
+<g id="sourcefile~~postprocess.f90~~AfferentGraph_edge32" class="edge">
+<title>sourcefile~report.f90&#45;&gt;sourcefile~estimate.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M683.68,-83.62C668.48,-75.33 648.3,-64.32 631.4,-55.1"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="633.15,-52.07 622.7,-50.35 629.8,-58.22 633.15,-52.07"/>
+</g>
+<!-- sourcefile~estimate.f90&#45;&gt;sourcefile~context.f90 -->
+<g id="sourcefile~~postprocess.f90~~AfferentGraph_edge25" class="edge">
+<title>sourcefile~estimate.f90&#45;&gt;sourcefile~context.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M557.93,-37.13C545.17,-37.13 530.84,-37.13 517.56,-37.13"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="517.75,-33.64 507.75,-37.14 517.75,-40.64 517.75,-33.64"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var pansourcefilepostprocessf90AfferentGraph = svgPanZoom('#sourcefilepostprocessf90AfferentGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#AfferentGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="AfferentGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="200pt" height="32pt"
+ viewBox="0.00 0.00 200.00 32.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(4 28.27)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-28.27 195.52,-28.27 195.52,4 -4,4"/>
+<!-- Source File -->
+<g id="node1" class="node">
+<title>Source File</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="69.27,-24.27 0,-24.27 0,0 69.27,0 69.27,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="34.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Source File</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node2" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="191.52,-24.27 87.75,-24.27 87.75,0 191.52,0 191.52,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="139.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a file to a file which it depends on. A file
+is dependent upon another if the latter must be compiled before the former
+can be.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+          </div>
+        </div>
+<br>
+      <section>
+        <h2><span class="anchor" id="src"></span>Source Code</h2>
+        <div class="hl codehilite"><pre><span></span><a id="ln-1" name="ln-1" href="#ln-1"></a><span class="k">module </span><span class="n">m_postprocess</span>
+<a id="ln-2" name="ln-2" href="#ln-2"></a><span class="w">  </span><span class="c">!! Computation of derived fields for snapshot output.</span>
+<a id="ln-3" name="ln-3" href="#ln-3"></a><span class="w">  </span><span class="c">!!</span>
+<a id="ln-4" name="ln-4" href="#ln-4"></a><span class="w">  </span><span class="c">!! Provides routines to compute quantities that are not part of</span>
+<a id="ln-5" name="ln-5" href="#ln-5"></a><span class="w">  </span><span class="c">!! the core time-stepping algorithm but are useful for analysis</span>
+<a id="ln-6" name="ln-6" href="#ln-6"></a><span class="w">  </span><span class="c">!! and visualisation (e.g. pressure on the vertex grid, vorticity</span>
+<a id="ln-7" name="ln-7" href="#ln-7"></a><span class="w">  </span><span class="c">!! magnitude, Q-criterion).</span>
+<a id="ln-8" name="ln-8" href="#ln-8"></a>
+<a id="ln-9" name="ln-9" href="#ln-9"></a><span class="w">  </span><span class="k">use </span><span class="n">m_common</span><span class="p">,</span><span class="w"> </span><span class="k">only</span><span class="p">:</span><span class="w"> </span><span class="n">dp</span><span class="p">,</span><span class="w"> </span><span class="n">DIR_X</span><span class="p">,</span><span class="w"> </span><span class="n">DIR_Y</span><span class="p">,</span><span class="w"> </span><span class="n">DIR_Z</span><span class="p">,</span><span class="w"> </span><span class="n">VERT</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-10" name="ln-10" href="#ln-10"></a><span class="w">                      </span><span class="n">RDR_X2Y</span><span class="p">,</span><span class="w"> </span><span class="n">RDR_X2Z</span><span class="p">,</span><span class="w"> </span><span class="n">RDR_Y2X</span><span class="p">,</span><span class="w"> </span><span class="n">RDR_Z2X</span>
+<a id="ln-11" name="ln-11" href="#ln-11"></a><span class="w">  </span><span class="k">use </span><span class="n">m_field</span><span class="p">,</span><span class="w"> </span><span class="k">only</span><span class="p">:</span><span class="w"> </span><span class="n">field_t</span>
+<a id="ln-12" name="ln-12" href="#ln-12"></a><span class="w">  </span><span class="k">use </span><span class="n">m_logger</span><span class="p">,</span><span class="w"> </span><span class="k">only</span><span class="p">:</span><span class="w"> </span><span class="n">abort_run</span>
+<a id="ln-13" name="ln-13" href="#ln-13"></a><span class="w">  </span><span class="k">use </span><span class="n">m_solver</span><span class="p">,</span><span class="w"> </span><span class="k">only</span><span class="p">:</span><span class="w"> </span><span class="n">solver_t</span>
+<a id="ln-14" name="ln-14" href="#ln-14"></a>
+<a id="ln-15" name="ln-15" href="#ln-15"></a><span class="w">  </span><span class="k">implicit none</span>
+<a id="ln-16" name="ln-16" href="#ln-16"></a>
+<a id="ln-17" name="ln-17" href="#ln-17"></a><span class="k">  private</span>
+<a id="ln-18" name="ln-18" href="#ln-18"></a><span class="k">  public</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">compute_derived_fields</span><span class="p">,</span><span class="w"> </span><span class="n">compute_pressure_vert</span>
+<a id="ln-19" name="ln-19" href="#ln-19"></a>
+<a id="ln-20" name="ln-20" href="#ln-20"></a><span class="k">contains</span>
+<a id="ln-21" name="ln-21" href="#ln-21"></a>
+<a id="ln-22" name="ln-22" href="#ln-22"></a><span class="k">  subroutine </span><span class="n">compute_derived_fields</span><span class="p">(</span><span class="n">solver</span><span class="p">,</span><span class="w"> </span><span class="n">output_vorticity</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-23" name="ln-23" href="#ln-23"></a><span class="w">                                    </span><span class="n">output_qcriterion</span><span class="p">)</span>
+<a id="ln-24" name="ln-24" href="#ln-24"></a><span class="w">    </span><span class="c">!! Compute derived fields from the velocity gradient tensor.</span>
+<a id="ln-25" name="ln-25" href="#ln-25"></a><span class="w">    </span><span class="c">!!</span>
+<a id="ln-26" name="ln-26" href="#ln-26"></a><span class="w">    </span><span class="c">!! All 9 components of the velocity gradient tensor are computed</span>
+<a id="ln-27" name="ln-27" href="#ln-27"></a><span class="w">    </span><span class="c">!! once, then used to evaluate whichever quantities are enabled</span>
+<a id="ln-28" name="ln-28" href="#ln-28"></a><span class="w">    </span><span class="c">!! (vorticity magnitude, Q-criterion).</span>
+<a id="ln-29" name="ln-29" href="#ln-29"></a><span class="w">    </span><span class="k">implicit none</span>
+<a id="ln-30" name="ln-30" href="#ln-30"></a>
+<a id="ln-31" name="ln-31" href="#ln-31"></a><span class="k">    class</span><span class="p">(</span><span class="n">solver_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">solver</span>
+<a id="ln-32" name="ln-32" href="#ln-32"></a><span class="w">    </span><span class="kt">logical</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">output_vorticity</span><span class="p">,</span><span class="w"> </span><span class="n">output_qcriterion</span>
+<a id="ln-33" name="ln-33" href="#ln-33"></a>
+<a id="ln-34" name="ln-34" href="#ln-34"></a><span class="w">    </span><span class="k">class</span><span class="p">(</span><span class="n">field_t</span><span class="p">),</span><span class="w"> </span><span class="k">pointer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-35" name="ln-35" href="#ln-35"></a><span class="w">      </span><span class="n">dudx</span><span class="p">,</span><span class="w"> </span><span class="n">dudy_x</span><span class="p">,</span><span class="w"> </span><span class="n">dudz_x</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-36" name="ln-36" href="#ln-36"></a><span class="w">      </span><span class="n">dvdx</span><span class="p">,</span><span class="w"> </span><span class="n">dvdy_x</span><span class="p">,</span><span class="w"> </span><span class="n">dvdz_x</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-37" name="ln-37" href="#ln-37"></a><span class="w">      </span><span class="n">dwdx</span><span class="p">,</span><span class="w"> </span><span class="n">dwdy_x</span><span class="p">,</span><span class="w"> </span><span class="n">dwdz_x</span>
+<a id="ln-38" name="ln-38" href="#ln-38"></a><span class="w">    </span><span class="k">class</span><span class="p">(</span><span class="n">field_t</span><span class="p">),</span><span class="w"> </span><span class="k">pointer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-39" name="ln-39" href="#ln-39"></a><span class="w">      </span><span class="n">u_y</span><span class="p">,</span><span class="w"> </span><span class="n">dudy_y</span><span class="p">,</span><span class="w"> </span><span class="n">u_z</span><span class="p">,</span><span class="w"> </span><span class="n">dudz_z</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-40" name="ln-40" href="#ln-40"></a><span class="w">      </span><span class="n">v_y</span><span class="p">,</span><span class="w"> </span><span class="n">dvdy_y</span><span class="p">,</span><span class="w"> </span><span class="n">v_z</span><span class="p">,</span><span class="w"> </span><span class="n">dvdz_z</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-41" name="ln-41" href="#ln-41"></a><span class="w">      </span><span class="n">w_y</span><span class="p">,</span><span class="w"> </span><span class="n">dwdy_y</span><span class="p">,</span><span class="w"> </span><span class="n">w_z</span><span class="p">,</span><span class="w"> </span><span class="n">dwdz_z</span>
+<a id="ln-42" name="ln-42" href="#ln-42"></a><span class="w">    </span><span class="c">! Allocate output fields on first use</span>
+<a id="ln-43" name="ln-43" href="#ln-43"></a><span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">output_vorticity</span><span class="w"> </span><span class="p">.</span><span class="nb">and</span><span class="p">.</span><span class="w"> </span><span class="p">.</span><span class="nb">not</span><span class="p">.</span><span class="w"> </span><span class="nb">associated</span><span class="p">(</span><span class="n">solver</span><span class="p">%</span><span class="n">vort</span><span class="p">))</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-44" name="ln-44" href="#ln-44"></a><span class="w">      </span><span class="n">solver</span><span class="p">%</span><span class="n">vort</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="n">solver</span><span class="p">%</span><span class="n">backend</span><span class="p">%</span><span class="n">allocator</span><span class="p">%</span><span class="n">get_block</span><span class="p">(</span><span class="n">DIR_X</span><span class="p">,</span><span class="w"> </span><span class="n">VERT</span><span class="p">)</span>
+<a id="ln-45" name="ln-45" href="#ln-45"></a><span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">output_qcriterion</span><span class="w"> </span><span class="p">.</span><span class="nb">and</span><span class="p">.</span><span class="w"> </span><span class="p">.</span><span class="nb">not</span><span class="p">.</span><span class="w"> </span><span class="nb">associated</span><span class="p">(</span><span class="n">solver</span><span class="p">%</span><span class="n">qcrit</span><span class="p">))</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-46" name="ln-46" href="#ln-46"></a><span class="w">      </span><span class="n">solver</span><span class="p">%</span><span class="n">qcrit</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="n">solver</span><span class="p">%</span><span class="n">backend</span><span class="p">%</span><span class="n">allocator</span><span class="p">%</span><span class="n">get_block</span><span class="p">(</span><span class="n">DIR_X</span><span class="p">,</span><span class="w"> </span><span class="n">VERT</span><span class="p">)</span>
+<a id="ln-47" name="ln-47" href="#ln-47"></a>
+<a id="ln-48" name="ln-48" href="#ln-48"></a><span class="w">    </span><span class="c">! Compute all 9 velocity gradient components</span>
+<a id="ln-49" name="ln-49" href="#ln-49"></a><span class="w">    </span><span class="c">! du/dx (x-derivative in x-pencil, no reorder needed)</span>
+<a id="ln-50" name="ln-50" href="#ln-50"></a><span class="w">    </span><span class="n">dudx</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="n">solver</span><span class="p">%</span><span class="n">backend</span><span class="p">%</span><span class="n">allocator</span><span class="p">%</span><span class="n">get_block</span><span class="p">(</span><span class="n">DIR_X</span><span class="p">)</span>
+<a id="ln-51" name="ln-51" href="#ln-51"></a><span class="w">    </span><span class="k">call </span><span class="n">solver</span><span class="p">%</span><span class="n">backend</span><span class="p">%</span><span class="n">tds_solve</span><span class="p">(</span><span class="n">dudx</span><span class="p">,</span><span class="w"> </span><span class="n">solver</span><span class="p">%</span><span class="n">u</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-52" name="ln-52" href="#ln-52"></a><span class="w">                                  </span><span class="n">solver</span><span class="p">%</span><span class="n">xdirps</span><span class="p">%</span><span class="n">der1st</span><span class="p">)</span>
+<a id="ln-53" name="ln-53" href="#ln-53"></a>
+<a id="ln-54" name="ln-54" href="#ln-54"></a><span class="w">    </span><span class="c">! dv/dx</span>
+<a id="ln-55" name="ln-55" href="#ln-55"></a><span class="w">    </span><span class="n">dvdx</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="n">solver</span><span class="p">%</span><span class="n">backend</span><span class="p">%</span><span class="n">allocator</span><span class="p">%</span><span class="n">get_block</span><span class="p">(</span><span class="n">DIR_X</span><span class="p">)</span>
+<a id="ln-56" name="ln-56" href="#ln-56"></a><span class="w">    </span><span class="k">call </span><span class="n">solver</span><span class="p">%</span><span class="n">backend</span><span class="p">%</span><span class="n">tds_solve</span><span class="p">(</span><span class="n">dvdx</span><span class="p">,</span><span class="w"> </span><span class="n">solver</span><span class="p">%</span><span class="n">v</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-57" name="ln-57" href="#ln-57"></a><span class="w">                                  </span><span class="n">solver</span><span class="p">%</span><span class="n">xdirps</span><span class="p">%</span><span class="n">der1st</span><span class="p">)</span>
+<a id="ln-58" name="ln-58" href="#ln-58"></a>
+<a id="ln-59" name="ln-59" href="#ln-59"></a><span class="w">    </span><span class="c">! dw/dx</span>
+<a id="ln-60" name="ln-60" href="#ln-60"></a><span class="w">    </span><span class="n">dwdx</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="n">solver</span><span class="p">%</span><span class="n">backend</span><span class="p">%</span><span class="n">allocator</span><span class="p">%</span><span class="n">get_block</span><span class="p">(</span><span class="n">DIR_X</span><span class="p">)</span>
+<a id="ln-61" name="ln-61" href="#ln-61"></a><span class="w">    </span><span class="k">call </span><span class="n">solver</span><span class="p">%</span><span class="n">backend</span><span class="p">%</span><span class="n">tds_solve</span><span class="p">(</span><span class="n">dwdx</span><span class="p">,</span><span class="w"> </span><span class="n">solver</span><span class="p">%</span><span class="n">w</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-62" name="ln-62" href="#ln-62"></a><span class="w">                                  </span><span class="n">solver</span><span class="p">%</span><span class="n">xdirps</span><span class="p">%</span><span class="n">der1st</span><span class="p">)</span>
+<a id="ln-63" name="ln-63" href="#ln-63"></a>
+<a id="ln-64" name="ln-64" href="#ln-64"></a><span class="w">    </span><span class="c">! du/dy</span>
+<a id="ln-65" name="ln-65" href="#ln-65"></a><span class="w">    </span><span class="n">u_y</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="n">solver</span><span class="p">%</span><span class="n">backend</span><span class="p">%</span><span class="n">allocator</span><span class="p">%</span><span class="n">get_block</span><span class="p">(</span><span class="n">DIR_Y</span><span class="p">)</span>
+<a id="ln-66" name="ln-66" href="#ln-66"></a><span class="w">    </span><span class="n">dudy_y</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="n">solver</span><span class="p">%</span><span class="n">backend</span><span class="p">%</span><span class="n">allocator</span><span class="p">%</span><span class="n">get_block</span><span class="p">(</span><span class="n">DIR_Y</span><span class="p">)</span>
+<a id="ln-67" name="ln-67" href="#ln-67"></a><span class="w">    </span><span class="k">call </span><span class="n">solver</span><span class="p">%</span><span class="n">backend</span><span class="p">%</span><span class="n">reorder</span><span class="p">(</span><span class="n">u_y</span><span class="p">,</span><span class="w"> </span><span class="n">solver</span><span class="p">%</span><span class="n">u</span><span class="p">,</span><span class="w"> </span><span class="n">RDR_X2Y</span><span class="p">)</span>
+<a id="ln-68" name="ln-68" href="#ln-68"></a><span class="w">    </span><span class="k">call </span><span class="n">solver</span><span class="p">%</span><span class="n">backend</span><span class="p">%</span><span class="n">tds_solve</span><span class="p">(</span><span class="n">dudy_y</span><span class="p">,</span><span class="w"> </span><span class="n">u_y</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-69" name="ln-69" href="#ln-69"></a><span class="w">                                  </span><span class="n">solver</span><span class="p">%</span><span class="n">ydirps</span><span class="p">%</span><span class="n">der1st</span><span class="p">)</span>
+<a id="ln-70" name="ln-70" href="#ln-70"></a><span class="w">    </span><span class="n">dudy_x</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="n">solver</span><span class="p">%</span><span class="n">backend</span><span class="p">%</span><span class="n">allocator</span><span class="p">%</span><span class="n">get_block</span><span class="p">(</span><span class="n">DIR_X</span><span class="p">)</span>
+<a id="ln-71" name="ln-71" href="#ln-71"></a><span class="w">    </span><span class="k">call </span><span class="n">solver</span><span class="p">%</span><span class="n">backend</span><span class="p">%</span><span class="n">reorder</span><span class="p">(</span><span class="n">dudy_x</span><span class="p">,</span><span class="w"> </span><span class="n">dudy_y</span><span class="p">,</span><span class="w"> </span><span class="n">RDR_Y2X</span><span class="p">)</span>
+<a id="ln-72" name="ln-72" href="#ln-72"></a><span class="w">    </span><span class="k">call </span><span class="n">solver</span><span class="p">%</span><span class="n">backend</span><span class="p">%</span><span class="n">allocator</span><span class="p">%</span><span class="n">release_block</span><span class="p">(</span><span class="n">u_y</span><span class="p">)</span>
+<a id="ln-73" name="ln-73" href="#ln-73"></a><span class="w">    </span><span class="k">call </span><span class="n">solver</span><span class="p">%</span><span class="n">backend</span><span class="p">%</span><span class="n">allocator</span><span class="p">%</span><span class="n">release_block</span><span class="p">(</span><span class="n">dudy_y</span><span class="p">)</span>
+<a id="ln-74" name="ln-74" href="#ln-74"></a>
+<a id="ln-75" name="ln-75" href="#ln-75"></a><span class="w">    </span><span class="c">! dv/dy</span>
+<a id="ln-76" name="ln-76" href="#ln-76"></a><span class="w">    </span><span class="n">v_y</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="n">solver</span><span class="p">%</span><span class="n">backend</span><span class="p">%</span><span class="n">allocator</span><span class="p">%</span><span class="n">get_block</span><span class="p">(</span><span class="n">DIR_Y</span><span class="p">)</span>
+<a id="ln-77" name="ln-77" href="#ln-77"></a><span class="w">    </span><span class="n">dvdy_y</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="n">solver</span><span class="p">%</span><span class="n">backend</span><span class="p">%</span><span class="n">allocator</span><span class="p">%</span><span class="n">get_block</span><span class="p">(</span><span class="n">DIR_Y</span><span class="p">)</span>
+<a id="ln-78" name="ln-78" href="#ln-78"></a><span class="w">    </span><span class="k">call </span><span class="n">solver</span><span class="p">%</span><span class="n">backend</span><span class="p">%</span><span class="n">reorder</span><span class="p">(</span><span class="n">v_y</span><span class="p">,</span><span class="w"> </span><span class="n">solver</span><span class="p">%</span><span class="n">v</span><span class="p">,</span><span class="w"> </span><span class="n">RDR_X2Y</span><span class="p">)</span>
+<a id="ln-79" name="ln-79" href="#ln-79"></a><span class="w">    </span><span class="k">call </span><span class="n">solver</span><span class="p">%</span><span class="n">backend</span><span class="p">%</span><span class="n">tds_solve</span><span class="p">(</span><span class="n">dvdy_y</span><span class="p">,</span><span class="w"> </span><span class="n">v_y</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-80" name="ln-80" href="#ln-80"></a><span class="w">                                  </span><span class="n">solver</span><span class="p">%</span><span class="n">ydirps</span><span class="p">%</span><span class="n">der1st</span><span class="p">)</span>
+<a id="ln-81" name="ln-81" href="#ln-81"></a><span class="w">    </span><span class="n">dvdy_x</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="n">solver</span><span class="p">%</span><span class="n">backend</span><span class="p">%</span><span class="n">allocator</span><span class="p">%</span><span class="n">get_block</span><span class="p">(</span><span class="n">DIR_X</span><span class="p">)</span>
+<a id="ln-82" name="ln-82" href="#ln-82"></a><span class="w">    </span><span class="k">call </span><span class="n">solver</span><span class="p">%</span><span class="n">backend</span><span class="p">%</span><span class="n">reorder</span><span class="p">(</span><span class="n">dvdy_x</span><span class="p">,</span><span class="w"> </span><span class="n">dvdy_y</span><span class="p">,</span><span class="w"> </span><span class="n">RDR_Y2X</span><span class="p">)</span>
+<a id="ln-83" name="ln-83" href="#ln-83"></a><span class="w">    </span><span class="k">call </span><span class="n">solver</span><span class="p">%</span><span class="n">backend</span><span class="p">%</span><span class="n">allocator</span><span class="p">%</span><span class="n">release_block</span><span class="p">(</span><span class="n">v_y</span><span class="p">)</span>
+<a id="ln-84" name="ln-84" href="#ln-84"></a><span class="w">    </span><span class="k">call </span><span class="n">solver</span><span class="p">%</span><span class="n">backend</span><span class="p">%</span><span class="n">allocator</span><span class="p">%</span><span class="n">release_block</span><span class="p">(</span><span class="n">dvdy_y</span><span class="p">)</span>
+<a id="ln-85" name="ln-85" href="#ln-85"></a>
+<a id="ln-86" name="ln-86" href="#ln-86"></a><span class="w">    </span><span class="c">! dw/dy</span>
+<a id="ln-87" name="ln-87" href="#ln-87"></a><span class="w">    </span><span class="n">w_y</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="n">solver</span><span class="p">%</span><span class="n">backend</span><span class="p">%</span><span class="n">allocator</span><span class="p">%</span><span class="n">get_block</span><span class="p">(</span><span class="n">DIR_Y</span><span class="p">)</span>
+<a id="ln-88" name="ln-88" href="#ln-88"></a><span class="w">    </span><span class="n">dwdy_y</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="n">solver</span><span class="p">%</span><span class="n">backend</span><span class="p">%</span><span class="n">allocator</span><span class="p">%</span><span class="n">get_block</span><span class="p">(</span><span class="n">DIR_Y</span><span class="p">)</span>
+<a id="ln-89" name="ln-89" href="#ln-89"></a><span class="w">    </span><span class="k">call </span><span class="n">solver</span><span class="p">%</span><span class="n">backend</span><span class="p">%</span><span class="n">reorder</span><span class="p">(</span><span class="n">w_y</span><span class="p">,</span><span class="w"> </span><span class="n">solver</span><span class="p">%</span><span class="n">w</span><span class="p">,</span><span class="w"> </span><span class="n">RDR_X2Y</span><span class="p">)</span>
+<a id="ln-90" name="ln-90" href="#ln-90"></a><span class="w">    </span><span class="k">call </span><span class="n">solver</span><span class="p">%</span><span class="n">backend</span><span class="p">%</span><span class="n">tds_solve</span><span class="p">(</span><span class="n">dwdy_y</span><span class="p">,</span><span class="w"> </span><span class="n">w_y</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-91" name="ln-91" href="#ln-91"></a><span class="w">                                  </span><span class="n">solver</span><span class="p">%</span><span class="n">ydirps</span><span class="p">%</span><span class="n">der1st</span><span class="p">)</span>
+<a id="ln-92" name="ln-92" href="#ln-92"></a><span class="w">    </span><span class="n">dwdy_x</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="n">solver</span><span class="p">%</span><span class="n">backend</span><span class="p">%</span><span class="n">allocator</span><span class="p">%</span><span class="n">get_block</span><span class="p">(</span><span class="n">DIR_X</span><span class="p">)</span>
+<a id="ln-93" name="ln-93" href="#ln-93"></a><span class="w">    </span><span class="k">call </span><span class="n">solver</span><span class="p">%</span><span class="n">backend</span><span class="p">%</span><span class="n">reorder</span><span class="p">(</span><span class="n">dwdy_x</span><span class="p">,</span><span class="w"> </span><span class="n">dwdy_y</span><span class="p">,</span><span class="w"> </span><span class="n">RDR_Y2X</span><span class="p">)</span>
+<a id="ln-94" name="ln-94" href="#ln-94"></a><span class="w">    </span><span class="k">call </span><span class="n">solver</span><span class="p">%</span><span class="n">backend</span><span class="p">%</span><span class="n">allocator</span><span class="p">%</span><span class="n">release_block</span><span class="p">(</span><span class="n">w_y</span><span class="p">)</span>
+<a id="ln-95" name="ln-95" href="#ln-95"></a><span class="w">    </span><span class="k">call </span><span class="n">solver</span><span class="p">%</span><span class="n">backend</span><span class="p">%</span><span class="n">allocator</span><span class="p">%</span><span class="n">release_block</span><span class="p">(</span><span class="n">dwdy_y</span><span class="p">)</span>
+<a id="ln-96" name="ln-96" href="#ln-96"></a>
+<a id="ln-97" name="ln-97" href="#ln-97"></a><span class="w">    </span><span class="c">! du/dz</span>
+<a id="ln-98" name="ln-98" href="#ln-98"></a><span class="w">    </span><span class="n">u_z</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="n">solver</span><span class="p">%</span><span class="n">backend</span><span class="p">%</span><span class="n">allocator</span><span class="p">%</span><span class="n">get_block</span><span class="p">(</span><span class="n">DIR_Z</span><span class="p">)</span>
+<a id="ln-99" name="ln-99" href="#ln-99"></a><span class="w">    </span><span class="n">dudz_z</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="n">solver</span><span class="p">%</span><span class="n">backend</span><span class="p">%</span><span class="n">allocator</span><span class="p">%</span><span class="n">get_block</span><span class="p">(</span><span class="n">DIR_Z</span><span class="p">)</span>
+<a id="ln-100" name="ln-100" href="#ln-100"></a><span class="w">    </span><span class="k">call </span><span class="n">solver</span><span class="p">%</span><span class="n">backend</span><span class="p">%</span><span class="n">reorder</span><span class="p">(</span><span class="n">u_z</span><span class="p">,</span><span class="w"> </span><span class="n">solver</span><span class="p">%</span><span class="n">u</span><span class="p">,</span><span class="w"> </span><span class="n">RDR_X2Z</span><span class="p">)</span>
+<a id="ln-101" name="ln-101" href="#ln-101"></a><span class="w">    </span><span class="k">call </span><span class="n">solver</span><span class="p">%</span><span class="n">backend</span><span class="p">%</span><span class="n">tds_solve</span><span class="p">(</span><span class="n">dudz_z</span><span class="p">,</span><span class="w"> </span><span class="n">u_z</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-102" name="ln-102" href="#ln-102"></a><span class="w">                                  </span><span class="n">solver</span><span class="p">%</span><span class="n">zdirps</span><span class="p">%</span><span class="n">der1st</span><span class="p">)</span>
+<a id="ln-103" name="ln-103" href="#ln-103"></a><span class="w">    </span><span class="n">dudz_x</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="n">solver</span><span class="p">%</span><span class="n">backend</span><span class="p">%</span><span class="n">allocator</span><span class="p">%</span><span class="n">get_block</span><span class="p">(</span><span class="n">DIR_X</span><span class="p">)</span>
+<a id="ln-104" name="ln-104" href="#ln-104"></a><span class="w">    </span><span class="k">call </span><span class="n">solver</span><span class="p">%</span><span class="n">backend</span><span class="p">%</span><span class="n">reorder</span><span class="p">(</span><span class="n">dudz_x</span><span class="p">,</span><span class="w"> </span><span class="n">dudz_z</span><span class="p">,</span><span class="w"> </span><span class="n">RDR_Z2X</span><span class="p">)</span>
+<a id="ln-105" name="ln-105" href="#ln-105"></a><span class="w">    </span><span class="k">call </span><span class="n">solver</span><span class="p">%</span><span class="n">backend</span><span class="p">%</span><span class="n">allocator</span><span class="p">%</span><span class="n">release_block</span><span class="p">(</span><span class="n">u_z</span><span class="p">)</span>
+<a id="ln-106" name="ln-106" href="#ln-106"></a><span class="w">    </span><span class="k">call </span><span class="n">solver</span><span class="p">%</span><span class="n">backend</span><span class="p">%</span><span class="n">allocator</span><span class="p">%</span><span class="n">release_block</span><span class="p">(</span><span class="n">dudz_z</span><span class="p">)</span>
+<a id="ln-107" name="ln-107" href="#ln-107"></a>
+<a id="ln-108" name="ln-108" href="#ln-108"></a><span class="w">    </span><span class="c">! dv/dz</span>
+<a id="ln-109" name="ln-109" href="#ln-109"></a><span class="w">    </span><span class="n">v_z</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="n">solver</span><span class="p">%</span><span class="n">backend</span><span class="p">%</span><span class="n">allocator</span><span class="p">%</span><span class="n">get_block</span><span class="p">(</span><span class="n">DIR_Z</span><span class="p">)</span>
+<a id="ln-110" name="ln-110" href="#ln-110"></a><span class="w">    </span><span class="n">dvdz_z</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="n">solver</span><span class="p">%</span><span class="n">backend</span><span class="p">%</span><span class="n">allocator</span><span class="p">%</span><span class="n">get_block</span><span class="p">(</span><span class="n">DIR_Z</span><span class="p">)</span>
+<a id="ln-111" name="ln-111" href="#ln-111"></a><span class="w">    </span><span class="k">call </span><span class="n">solver</span><span class="p">%</span><span class="n">backend</span><span class="p">%</span><span class="n">reorder</span><span class="p">(</span><span class="n">v_z</span><span class="p">,</span><span class="w"> </span><span class="n">solver</span><span class="p">%</span><span class="n">v</span><span class="p">,</span><span class="w"> </span><span class="n">RDR_X2Z</span><span class="p">)</span>
+<a id="ln-112" name="ln-112" href="#ln-112"></a><span class="w">    </span><span class="k">call </span><span class="n">solver</span><span class="p">%</span><span class="n">backend</span><span class="p">%</span><span class="n">tds_solve</span><span class="p">(</span><span class="n">dvdz_z</span><span class="p">,</span><span class="w"> </span><span class="n">v_z</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-113" name="ln-113" href="#ln-113"></a><span class="w">                                  </span><span class="n">solver</span><span class="p">%</span><span class="n">zdirps</span><span class="p">%</span><span class="n">der1st</span><span class="p">)</span>
+<a id="ln-114" name="ln-114" href="#ln-114"></a><span class="w">    </span><span class="n">dvdz_x</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="n">solver</span><span class="p">%</span><span class="n">backend</span><span class="p">%</span><span class="n">allocator</span><span class="p">%</span><span class="n">get_block</span><span class="p">(</span><span class="n">DIR_X</span><span class="p">)</span>
+<a id="ln-115" name="ln-115" href="#ln-115"></a><span class="w">    </span><span class="k">call </span><span class="n">solver</span><span class="p">%</span><span class="n">backend</span><span class="p">%</span><span class="n">reorder</span><span class="p">(</span><span class="n">dvdz_x</span><span class="p">,</span><span class="w"> </span><span class="n">dvdz_z</span><span class="p">,</span><span class="w"> </span><span class="n">RDR_Z2X</span><span class="p">)</span>
+<a id="ln-116" name="ln-116" href="#ln-116"></a><span class="w">    </span><span class="k">call </span><span class="n">solver</span><span class="p">%</span><span class="n">backend</span><span class="p">%</span><span class="n">allocator</span><span class="p">%</span><span class="n">release_block</span><span class="p">(</span><span class="n">v_z</span><span class="p">)</span>
+<a id="ln-117" name="ln-117" href="#ln-117"></a><span class="w">    </span><span class="k">call </span><span class="n">solver</span><span class="p">%</span><span class="n">backend</span><span class="p">%</span><span class="n">allocator</span><span class="p">%</span><span class="n">release_block</span><span class="p">(</span><span class="n">dvdz_z</span><span class="p">)</span>
+<a id="ln-118" name="ln-118" href="#ln-118"></a>
+<a id="ln-119" name="ln-119" href="#ln-119"></a><span class="w">    </span><span class="c">! dw/dz</span>
+<a id="ln-120" name="ln-120" href="#ln-120"></a><span class="w">    </span><span class="n">w_z</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="n">solver</span><span class="p">%</span><span class="n">backend</span><span class="p">%</span><span class="n">allocator</span><span class="p">%</span><span class="n">get_block</span><span class="p">(</span><span class="n">DIR_Z</span><span class="p">)</span>
+<a id="ln-121" name="ln-121" href="#ln-121"></a><span class="w">    </span><span class="n">dwdz_z</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="n">solver</span><span class="p">%</span><span class="n">backend</span><span class="p">%</span><span class="n">allocator</span><span class="p">%</span><span class="n">get_block</span><span class="p">(</span><span class="n">DIR_Z</span><span class="p">)</span>
+<a id="ln-122" name="ln-122" href="#ln-122"></a><span class="w">    </span><span class="k">call </span><span class="n">solver</span><span class="p">%</span><span class="n">backend</span><span class="p">%</span><span class="n">reorder</span><span class="p">(</span><span class="n">w_z</span><span class="p">,</span><span class="w"> </span><span class="n">solver</span><span class="p">%</span><span class="n">w</span><span class="p">,</span><span class="w"> </span><span class="n">RDR_X2Z</span><span class="p">)</span>
+<a id="ln-123" name="ln-123" href="#ln-123"></a><span class="w">    </span><span class="k">call </span><span class="n">solver</span><span class="p">%</span><span class="n">backend</span><span class="p">%</span><span class="n">tds_solve</span><span class="p">(</span><span class="n">dwdz_z</span><span class="p">,</span><span class="w"> </span><span class="n">w_z</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-124" name="ln-124" href="#ln-124"></a><span class="w">                                  </span><span class="n">solver</span><span class="p">%</span><span class="n">zdirps</span><span class="p">%</span><span class="n">der1st</span><span class="p">)</span>
+<a id="ln-125" name="ln-125" href="#ln-125"></a><span class="w">    </span><span class="n">dwdz_x</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="n">solver</span><span class="p">%</span><span class="n">backend</span><span class="p">%</span><span class="n">allocator</span><span class="p">%</span><span class="n">get_block</span><span class="p">(</span><span class="n">DIR_X</span><span class="p">)</span>
+<a id="ln-126" name="ln-126" href="#ln-126"></a><span class="w">    </span><span class="k">call </span><span class="n">solver</span><span class="p">%</span><span class="n">backend</span><span class="p">%</span><span class="n">reorder</span><span class="p">(</span><span class="n">dwdz_x</span><span class="p">,</span><span class="w"> </span><span class="n">dwdz_z</span><span class="p">,</span><span class="w"> </span><span class="n">RDR_Z2X</span><span class="p">)</span>
+<a id="ln-127" name="ln-127" href="#ln-127"></a><span class="w">    </span><span class="k">call </span><span class="n">solver</span><span class="p">%</span><span class="n">backend</span><span class="p">%</span><span class="n">allocator</span><span class="p">%</span><span class="n">release_block</span><span class="p">(</span><span class="n">w_z</span><span class="p">)</span>
+<a id="ln-128" name="ln-128" href="#ln-128"></a><span class="w">    </span><span class="k">call </span><span class="n">solver</span><span class="p">%</span><span class="n">backend</span><span class="p">%</span><span class="n">allocator</span><span class="p">%</span><span class="n">release_block</span><span class="p">(</span><span class="n">dwdz_z</span><span class="p">)</span>
+<a id="ln-129" name="ln-129" href="#ln-129"></a>
+<a id="ln-130" name="ln-130" href="#ln-130"></a><span class="w">    </span><span class="c">! All 9 derivatives now in x-pencil layout:</span>
+<a id="ln-131" name="ln-131" href="#ln-131"></a><span class="w">    </span><span class="c">! dudx, dudy_x, dudz_x</span>
+<a id="ln-132" name="ln-132" href="#ln-132"></a><span class="w">    </span><span class="c">! dvdx, dvdy_x, dvdz_x</span>
+<a id="ln-133" name="ln-133" href="#ln-133"></a><span class="w">    </span><span class="c">! dwdx, dwdy_x, dwdz_x</span>
+<a id="ln-134" name="ln-134" href="#ln-134"></a>
+<a id="ln-135" name="ln-135" href="#ln-135"></a><span class="w">    </span><span class="c">!! Vorticity magnitude:</span>
+<a id="ln-136" name="ln-136" href="#ln-136"></a><span class="w">    </span><span class="c">!! \( |\boldsymbol{\omega}| = \sqrt{(\partial w/\partial y - \partial v/\partial z)^2</span>
+<a id="ln-137" name="ln-137" href="#ln-137"></a><span class="w">    </span><span class="c">!! + (\partial u/\partial z - \partial w/\partial x)^2</span>
+<a id="ln-138" name="ln-138" href="#ln-138"></a><span class="w">    </span><span class="c">!! + (\partial v/\partial x - \partial u/\partial y)^2} \)</span>
+<a id="ln-139" name="ln-139" href="#ln-139"></a><span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">output_vorticity</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<a id="ln-140" name="ln-140" href="#ln-140"></a><span class="k">      call </span><span class="n">solver</span><span class="p">%</span><span class="n">backend</span><span class="p">%</span><span class="n">compute_vorticity</span><span class="p">(</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-141" name="ln-141" href="#ln-141"></a><span class="w">        </span><span class="n">solver</span><span class="p">%</span><span class="n">vort</span><span class="p">,</span><span class="w"> </span><span class="n">dudx</span><span class="p">,</span><span class="w"> </span><span class="n">dudy_x</span><span class="p">,</span><span class="w"> </span><span class="n">dudz_x</span><span class="p">,</span><span class="w"> </span><span class="n">dvdx</span><span class="p">,</span><span class="w"> </span><span class="n">dvdy_x</span><span class="p">,</span><span class="w"> </span><span class="n">dvdz_x</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-142" name="ln-142" href="#ln-142"></a><span class="w">        </span><span class="n">dwdx</span><span class="p">,</span><span class="w"> </span><span class="n">dwdy_x</span><span class="p">,</span><span class="w"> </span><span class="n">dwdz_x</span><span class="p">)</span>
+<a id="ln-143" name="ln-143" href="#ln-143"></a><span class="w">    </span><span class="k">end if</span>
+<a id="ln-144" name="ln-144" href="#ln-144"></a>
+<a id="ln-145" name="ln-145" href="#ln-145"></a><span class="w">    </span><span class="c">!! Q-criterion (second invariant of the velocity-gradient tensor):</span>
+<a id="ln-146" name="ln-146" href="#ln-146"></a><span class="w">    </span><span class="c">!! \( Q = \frac{1}{2}(u_x+v_y+w_z)^2 - \frac{1}{2}(u_{x}^2 + v_{y}^2 + w_{z}^2)</span>
+<a id="ln-147" name="ln-147" href="#ln-147"></a><span class="w">    </span><span class="c">!! - u_{y}v_{x} - u_{z}w_{x} - v_{z}w_{y} \)</span>
+<a id="ln-148" name="ln-148" href="#ln-148"></a><span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">output_qcriterion</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<a id="ln-149" name="ln-149" href="#ln-149"></a><span class="k">      call </span><span class="n">solver</span><span class="p">%</span><span class="n">backend</span><span class="p">%</span><span class="n">compute_qcriterion</span><span class="p">(</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-150" name="ln-150" href="#ln-150"></a><span class="w">        </span><span class="n">solver</span><span class="p">%</span><span class="n">qcrit</span><span class="p">,</span><span class="w"> </span><span class="n">dudx</span><span class="p">,</span><span class="w"> </span><span class="n">dudy_x</span><span class="p">,</span><span class="w"> </span><span class="n">dudz_x</span><span class="p">,</span><span class="w"> </span><span class="n">dvdx</span><span class="p">,</span><span class="w"> </span><span class="n">dvdy_x</span><span class="p">,</span><span class="w"> </span><span class="n">dvdz_x</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-151" name="ln-151" href="#ln-151"></a><span class="w">        </span><span class="n">dwdx</span><span class="p">,</span><span class="w"> </span><span class="n">dwdy_x</span><span class="p">,</span><span class="w"> </span><span class="n">dwdz_x</span><span class="p">)</span>
+<a id="ln-152" name="ln-152" href="#ln-152"></a><span class="w">    </span><span class="k">end if</span>
+<a id="ln-153" name="ln-153" href="#ln-153"></a>
+<a id="ln-154" name="ln-154" href="#ln-154"></a><span class="w">    </span><span class="c">! Release all gradient fields</span>
+<a id="ln-155" name="ln-155" href="#ln-155"></a><span class="w">    </span><span class="k">call </span><span class="n">solver</span><span class="p">%</span><span class="n">backend</span><span class="p">%</span><span class="n">allocator</span><span class="p">%</span><span class="n">release_block</span><span class="p">(</span><span class="n">dudx</span><span class="p">)</span>
+<a id="ln-156" name="ln-156" href="#ln-156"></a><span class="w">    </span><span class="k">call </span><span class="n">solver</span><span class="p">%</span><span class="n">backend</span><span class="p">%</span><span class="n">allocator</span><span class="p">%</span><span class="n">release_block</span><span class="p">(</span><span class="n">dvdx</span><span class="p">)</span>
+<a id="ln-157" name="ln-157" href="#ln-157"></a><span class="w">    </span><span class="k">call </span><span class="n">solver</span><span class="p">%</span><span class="n">backend</span><span class="p">%</span><span class="n">allocator</span><span class="p">%</span><span class="n">release_block</span><span class="p">(</span><span class="n">dwdx</span><span class="p">)</span>
+<a id="ln-158" name="ln-158" href="#ln-158"></a><span class="w">    </span><span class="k">call </span><span class="n">solver</span><span class="p">%</span><span class="n">backend</span><span class="p">%</span><span class="n">allocator</span><span class="p">%</span><span class="n">release_block</span><span class="p">(</span><span class="n">dudy_x</span><span class="p">)</span>
+<a id="ln-159" name="ln-159" href="#ln-159"></a><span class="w">    </span><span class="k">call </span><span class="n">solver</span><span class="p">%</span><span class="n">backend</span><span class="p">%</span><span class="n">allocator</span><span class="p">%</span><span class="n">release_block</span><span class="p">(</span><span class="n">dvdy_x</span><span class="p">)</span>
+<a id="ln-160" name="ln-160" href="#ln-160"></a><span class="w">    </span><span class="k">call </span><span class="n">solver</span><span class="p">%</span><span class="n">backend</span><span class="p">%</span><span class="n">allocator</span><span class="p">%</span><span class="n">release_block</span><span class="p">(</span><span class="n">dwdy_x</span><span class="p">)</span>
+<a id="ln-161" name="ln-161" href="#ln-161"></a><span class="w">    </span><span class="k">call </span><span class="n">solver</span><span class="p">%</span><span class="n">backend</span><span class="p">%</span><span class="n">allocator</span><span class="p">%</span><span class="n">release_block</span><span class="p">(</span><span class="n">dudz_x</span><span class="p">)</span>
+<a id="ln-162" name="ln-162" href="#ln-162"></a><span class="w">    </span><span class="k">call </span><span class="n">solver</span><span class="p">%</span><span class="n">backend</span><span class="p">%</span><span class="n">allocator</span><span class="p">%</span><span class="n">release_block</span><span class="p">(</span><span class="n">dvdz_x</span><span class="p">)</span>
+<a id="ln-163" name="ln-163" href="#ln-163"></a><span class="w">    </span><span class="k">call </span><span class="n">solver</span><span class="p">%</span><span class="n">backend</span><span class="p">%</span><span class="n">allocator</span><span class="p">%</span><span class="n">release_block</span><span class="p">(</span><span class="n">dwdz_x</span><span class="p">)</span>
+<a id="ln-164" name="ln-164" href="#ln-164"></a>
+<a id="ln-165" name="ln-165" href="#ln-165"></a><span class="w">  </span><span class="k">end subroutine </span><span class="n">compute_derived_fields</span>
+<a id="ln-166" name="ln-166" href="#ln-166"></a>
+<a id="ln-167" name="ln-167" href="#ln-167"></a><span class="w">  </span><span class="k">subroutine </span><span class="n">compute_pressure_vert</span><span class="p">(</span><span class="n">solver</span><span class="p">)</span>
+<a id="ln-168" name="ln-168" href="#ln-168"></a><span class="w">    </span><span class="c">!! Interpolates the pressure field from CELL (DIR_Z) to VERT</span>
+<a id="ln-169" name="ln-169" href="#ln-169"></a><span class="w">    </span><span class="c">!! (DIR_X) for snapshot output and rescales from pseudo-pressure</span>
+<a id="ln-170" name="ln-170" href="#ln-170"></a><span class="w">    </span><span class="c">!! to physical (kinematic) pressure.</span>
+<a id="ln-171" name="ln-171" href="#ln-171"></a><span class="w">    </span><span class="k">implicit none</span>
+<a id="ln-172" name="ln-172" href="#ln-172"></a>
+<a id="ln-173" name="ln-173" href="#ln-173"></a><span class="k">    class</span><span class="p">(</span><span class="n">solver_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">solver</span>
+<a id="ln-174" name="ln-174" href="#ln-174"></a>
+<a id="ln-175" name="ln-175" href="#ln-175"></a><span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(.</span><span class="nb">not</span><span class="p">.</span><span class="w"> </span><span class="nb">associated</span><span class="p">(</span><span class="n">solver</span><span class="p">%</span><span class="n">pressure</span><span class="p">))</span><span class="w"> </span><span class="k">then</span>
+<a id="ln-176" name="ln-176" href="#ln-176"></a><span class="k">      call </span><span class="n">abort_run</span><span class="p">(</span><span class="s1">'compute_pressure_vert: pressure not yet computed'</span><span class="p">)</span>
+<a id="ln-177" name="ln-177" href="#ln-177"></a><span class="w">    </span><span class="k">end if</span>
+<a id="ln-178" name="ln-178" href="#ln-178"></a>
+<a id="ln-179" name="ln-179" href="#ln-179"></a><span class="w">    </span><span class="c">! Allocate pressure_vert on first use</span>
+<a id="ln-180" name="ln-180" href="#ln-180"></a><span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(.</span><span class="nb">not</span><span class="p">.</span><span class="w"> </span><span class="nb">associated</span><span class="p">(</span><span class="n">solver</span><span class="p">%</span><span class="n">pressure_vert</span><span class="p">))</span><span class="w"> </span><span class="k">then</span>
+<a id="ln-181" name="ln-181" href="#ln-181"></a><span class="k">      </span><span class="n">solver</span><span class="p">%</span><span class="n">pressure_vert</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-182" name="ln-182" href="#ln-182"></a><span class="w">        </span><span class="n">solver</span><span class="p">%</span><span class="n">backend</span><span class="p">%</span><span class="n">allocator</span><span class="p">%</span><span class="n">get_block</span><span class="p">(</span><span class="n">DIR_X</span><span class="p">,</span><span class="w"> </span><span class="n">VERT</span><span class="p">)</span>
+<a id="ln-183" name="ln-183" href="#ln-183"></a><span class="w">    </span><span class="k">end if</span>
+<a id="ln-184" name="ln-184" href="#ln-184"></a>
+<a id="ln-185" name="ln-185" href="#ln-185"></a><span class="k">    call </span><span class="n">solver</span><span class="p">%</span><span class="n">vector_calculus</span><span class="p">%</span><span class="n">interpl_c2v</span><span class="p">(</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-186" name="ln-186" href="#ln-186"></a><span class="w">      </span><span class="n">solver</span><span class="p">%</span><span class="n">pressure_vert</span><span class="p">,</span><span class="w"> </span><span class="n">solver</span><span class="p">%</span><span class="n">pressure</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-187" name="ln-187" href="#ln-187"></a><span class="w">      </span><span class="n">solver</span><span class="p">%</span><span class="n">xdirps</span><span class="p">%</span><span class="n">interpl_p2v</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-188" name="ln-188" href="#ln-188"></a><span class="w">      </span><span class="n">solver</span><span class="p">%</span><span class="n">ydirps</span><span class="p">%</span><span class="n">interpl_p2v</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-189" name="ln-189" href="#ln-189"></a><span class="w">      </span><span class="n">solver</span><span class="p">%</span><span class="n">zdirps</span><span class="p">%</span><span class="n">interpl_p2v</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-190" name="ln-190" href="#ln-190"></a><span class="w">      </span><span class="p">)</span>
+<a id="ln-191" name="ln-191" href="#ln-191"></a>
+<a id="ln-192" name="ln-192" href="#ln-192"></a><span class="w">    </span><span class="c">! Rescale pseudo-pressure to physical pressure: p'/dt -&gt; p</span>
+<a id="ln-193" name="ln-193" href="#ln-193"></a><span class="w">    </span><span class="k">call </span><span class="n">solver</span><span class="p">%</span><span class="n">backend</span><span class="p">%</span><span class="n">vecadd</span><span class="p">(</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-194" name="ln-194" href="#ln-194"></a><span class="w">      </span><span class="mf">1._dp</span><span class="o">/</span><span class="n">solver</span><span class="p">%</span><span class="n">dt</span><span class="p">,</span><span class="w"> </span><span class="n">solver</span><span class="p">%</span><span class="n">pressure_vert</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-195" name="ln-195" href="#ln-195"></a><span class="w">      </span><span class="mf">0._dp</span><span class="p">,</span><span class="w"> </span><span class="n">solver</span><span class="p">%</span><span class="n">pressure_vert</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-196" name="ln-196" href="#ln-196"></a><span class="w">      </span><span class="p">)</span>
+<a id="ln-197" name="ln-197" href="#ln-197"></a>
+<a id="ln-198" name="ln-198" href="#ln-198"></a><span class="w">  </span><span class="k">end subroutine </span><span class="n">compute_pressure_vert</span>
+<a id="ln-199" name="ln-199" href="#ln-199"></a>
+<a id="ln-200" name="ln-200" href="#ln-200"></a><span class="k">end module </span><span class="n">m_postprocess</span>
+</pre></div>
+
+      </section>
+    </div>
+  </div>
+
+      <hr>
+    </div> <!-- /container -->
+    <footer>
+      <div class="container">
+        <div class="row justify-content-between">
+          <div class="col">
+            <p>
+              x3d2
+ was developed by Xcompact3d Team<br>              &copy; 2026 
+</p>
+          </div>
+          <div class="col">
+            <p class="text-end">
+              Documentation generated by
+              <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
+            </p>
+          </div>
+        </div>
+        <br>
+      </div> <!-- /container -->
+    </footer>
+  </body>
+</html>
