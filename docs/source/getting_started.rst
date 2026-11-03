@@ -258,8 +258,10 @@ Build options
      - Build in single precision.
    * - ``X3D2_FAST_MATH``
      - ``OFF``
-     - Select the floating-point flags of the ``Release`` build. ``ON`` adds
-       ``-ffast-math`` for GNU and Flang and uses ``-fp-model=fast`` for Intel.
+     - Select the floating-point flags. ``ON`` adds ``-ffast-math`` for GNU
+       and Flang and uses ``-fp-model=fast`` for Intel.
+       The GNU and Flang flag applies to ``Release`` builds only.
+       The Intel flag applies to every build type, also to ``Debug``.
        ``OFF`` adds no fast-math flag for GNU and Flang and uses
        ``-fp-model=precise`` for Intel.
        The NVHPC GPU backends always build ``Release`` with ``-O3 -fast``. The
@@ -268,8 +270,7 @@ Build options
        The Intel flag applies to Fortran code only: x3d2 with its tests, the
        decomp2d that the build downloads, and the Fortran bindings of the ADIOS2
        that the build downloads. The ADIOS2 C and C++ code gets no fp-model
-       flag. The flag applies to every build type, not only ``Release``.
-       It does not apply to a decomp2d that CMake finds in
+       flag. The Intel flag does not apply to a decomp2d that CMake finds in
        ``decomp2d_install_dir``, to a system ADIOS2 (``USE_SYSTEM_ADIOS2=ON``)
        or to a prebuilt ADIOS2 install.
        After you change ``X3D2_FAST_MATH`` on Intel, the build does not rebuild
