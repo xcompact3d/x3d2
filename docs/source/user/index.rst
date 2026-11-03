@@ -6,6 +6,7 @@ User documentation
 
    theory.rst
    input_file.rst
+   examples/index
    advanced_build.rst
    memcheck.rst
    post-processing/index.rst
