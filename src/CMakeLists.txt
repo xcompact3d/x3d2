@@ -179,12 +179,8 @@ if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "GNU" OR
     set(CMAKE_Fortran_FLAGS_RELEASE "-O3 -funroll-loops -floop-optimize -march=native")
     set(CMAKE_Fortran_FLAGS_DEBUG "-g -Og -Wall -Wpedantic -Werror -Wimplicit-interface -Wimplicit-procedure -Wno-unused-dummy-argument")
   endif()
-  if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "GNU" OR
-           ${CMAKE_Fortran_COMPILER_ID} STREQUAL "LLVMFlang" OR
-           ${CMAKE_Fortran_COMPILER_ID} STREQUAL "Flang")
-    if(X3D2_FAST_MATH)
-      string(APPEND CMAKE_Fortran_FLAGS_RELEASE " -ffast-math")
-    endif()
+  if(X3D2_FAST_MATH)
+    string(APPEND CMAKE_Fortran_FLAGS_RELEASE " -ffast-math")
   endif()
 elseif(${CMAKE_Fortran_COMPILER_ID} STREQUAL "IntelLLVM" OR
        ${CMAKE_Fortran_COMPILER_ID} STREQUAL "Intel")
