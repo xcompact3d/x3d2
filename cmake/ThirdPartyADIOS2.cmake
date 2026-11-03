@@ -133,6 +133,17 @@ if(WITH_ADIOS2)
         endif()
       endif()
 
+      # Intel Fortran defaults to -fp-model=fast.  ADIOS2 keeps the flags
+      # passed here, so set the model for its Fortran bindings.  The flags
+      # from the FFLAGS environment variable stay.  ADIOS2 C and C++ get no
+      # fp-model flag.
+      set(adios2_fp_args "")
+      if(CMAKE_Fortran_COMPILER_ID STREQUAL "Intel" OR
+         CMAKE_Fortran_COMPILER_ID STREQUAL "IntelLLVM")
+        string(STRIP "$ENV{FFLAGS} ${X3D2_INTEL_FP_MODEL}" adios2_fortran_flags)
+        list(APPEND adios2_fp_args "-DCMAKE_Fortran_FLAGS=${adios2_fortran_flags}")
+      endif()
+
       include(ExternalProject)
 
       ExternalProject_Add(adios2-${adios2_version}
@@ -156,6 +167,7 @@ if(WITH_ADIOS2)
                           "-DADIOS2_USE_HDF5=OFF"
                           "-DADIOS2_USE_CURL=OFF"
                           ${adios2_cuda_args}
+                          ${adios2_fp_args}
         BUILD_BYPRODUCTS  ${adios2_byproducts}
         TEST_COMMAND      ""
         # The git update step carries no stamp, so it is always out of date and

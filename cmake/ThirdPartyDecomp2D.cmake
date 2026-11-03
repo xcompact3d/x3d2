@@ -48,6 +48,16 @@ if(WITH_2DECOMPFFT)
 
     include(ExternalProject)
 
+    # 2decomp-fft replaces CMAKE_Fortran_FLAGS with its own, so patch the Intel
+    # fp-model into its flag file.  Other compilers keep the plain build.
+    set(decomp2d_patch_command "")
+    if(CMAKE_Fortran_COMPILER_ID STREQUAL "Intel" OR
+       CMAKE_Fortran_COMPILER_ID STREQUAL "IntelLLVM")
+      set(decomp2d_patch_command PATCH_COMMAND ${CMAKE_COMMAND}
+        "-DSRC_DIR=<SOURCE_DIR>" "-DFP_MODEL=${X3D2_INTEL_FP_MODEL}"
+        -P "${CMAKE_CURRENT_LIST_DIR}/PatchDecomp2DFpModel.cmake")
+    endif()
+
     ExternalProject_Add(2decomp-${decomp2d_version}
       GIT_REPOSITORY    "https://github.com/xcompact3d/2decomp-fft"
       GIT_TAG           "${decomp2d_version}"
@@ -55,6 +65,7 @@ if(WITH_2DECOMPFFT)
       SOURCE_DIR        "${CMAKE_CURRENT_BINARY_DIR}/decomp2d-src"
       BINARY_DIR        "${CMAKE_CURRENT_BINARY_DIR}/decomp2d-build"
       INSTALL_DIR       "${decomp2d_install_dir}"
+      ${decomp2d_patch_command}
       CMAKE_ARGS        "-DCMAKE_INSTALL_PREFIX=<INSTALL_DIR>"
                         "-DCMAKE_INSTALL_LIBDIR=lib"
                         "-DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}"
