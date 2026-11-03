@@ -56,6 +56,19 @@ set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS "Debug;Release")
 option(SINGLE_PREC "Enable single precision" OFF)
 option(X3D2_FAST_MATH "Use fast-math Release flags (GNU, Flang and Intel)" OFF)
 mark_as_advanced(X3D2_FAST_MATH)
+
+# Intel Fortran defaults to -fp-model=fast, so x3d2, 2decomp-fft and the ADIOS2
+# Fortran bindings get the model explicitly.  This covers every Fortran source
+# in this project, including the tests.
+if(CMAKE_Fortran_COMPILER_ID STREQUAL "Intel" OR
+   CMAKE_Fortran_COMPILER_ID STREQUAL "IntelLLVM")
+  if(X3D2_FAST_MATH)
+    set(X3D2_INTEL_FP_MODEL "-fp-model=fast")
+  else()
+    set(X3D2_INTEL_FP_MODEL "-fp-model=precise")
+  endif()
+  add_compile_options("$<$<COMPILE_LANGUAGE:Fortran>:${X3D2_INTEL_FP_MODEL}>")
+endif()
 if(SINGLE_PREC)
   add_definitions("-DSINGLE_PREC")
 endif()

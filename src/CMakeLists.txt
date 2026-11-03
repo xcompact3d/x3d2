@@ -196,7 +196,7 @@ elseif(${CMAKE_Fortran_COMPILER_ID} STREQUAL "IntelLLVM" OR
   # uninit is deliberately absent: ifx implements it with MemorySanitizer,
   # which needs the whole program instrumented and fails to link otherwise.
   set(CMAKE_Fortran_FLAGS "-fpp -stand f18")
-  set(CMAKE_Fortran_FLAGS_RELEASE "-O3 -xHost -fp-model=fast")
+  set(CMAKE_Fortran_FLAGS_RELEASE "-O3 -xHost")
   set(CMAKE_Fortran_FLAGS_DEBUG "-g -O0 -traceback -check bounds,pointers -warn all,nounused")
 elseif(${CMAKE_Fortran_COMPILER_ID} STREQUAL "NVHPC" OR
        ${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI")
