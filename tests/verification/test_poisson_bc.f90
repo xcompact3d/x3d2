@@ -2,13 +2,18 @@ program test_poisson
   !! Poisson Solver Validation Test (self-contained, no input files)
   !!
   !! Validates the Poisson solver across the boundary condition
-  !! configurations listed in the table cases (4 at the moment):
-  !!   ppp : all periodic          (128 x 64 x 32)
-  !!   pdp : y-dirichlet           (128 x 65 x 128)
-  !!   dpp : x-dirichlet           (129 x 64 x 128)
-  !!   ddp : x,y-dirichlet         (129 x 257 x 64)
+  !! configurations listed in the table cases (7 at the moment):
+  !!   ppp     : all periodic          (128 x 64 x 32)
+  !!   pdp     : y-dirichlet           (128 x 65 x 128)
+  !!   dpp     : x-dirichlet           (129 x 64 x 128)
+  !!   ddp     : x,y-dirichlet         (129 x 257 x 64)
+  !!   pdp_odd : y-dirichlet, odd      (128 x 66 x 128)
+  !!   dpp_odd : x-dirichlet, odd      (130 x 64 x 128)
+  !!   ddp_odd : x,y-dirichlet, odd    (130 x 130 x 64)
   !! The code is one letter per direction in x,y,z order: d = dirichlet,
-  !! n = neumann, p = periodic.
+  !! n = neumann, p = periodic. The solver works on cells, and a
+  !! non-periodic direction has one cell fewer than vertices, so the _odd
+  !! suffix marks a case with an odd cell count in a non-periodic direction.
   !!
   !! For each configuration, runs the cosine tests listed in the table tests
   !! (8 at the moment, n=2,3):
@@ -63,7 +68,6 @@ program test_poisson
   !! Adding a BC scenario is one row in cases, and a new run is one
   !! define_verification_test line in tests/CMakeLists.txt.
   !!
-  !! NOTE: Dirichlet directions require odd dims_global (e.g. 65)
 
   use iso_fortran_env, only: stderr => error_unit
 
@@ -107,6 +111,17 @@ program test_poisson
     bc_case_t('x-dirichlet', [129, 64, 128], &
               [character(len=9) :: 'dirichlet', 'periodic', 'periodic']), &
     bc_case_t('x,y-dirichlet', [129, 257, 64], &
+              [character(len=9) :: 'dirichlet', 'dirichlet', 'periodic']), &
+    ! The rows above have even cell counts in their non-periodic directions.
+    ! These have odd ones, the odd-size branch of the fold that lets an FFT
+    ! stand in for the cosine transform. 129 cells, not 257: a prime length
+    ! FFT has a higher roundoff floor, which div(grad(p)) amplifies past
+    ! DIVGRAD_TOLERANCE.
+    bc_case_t('y-dirichlet, odd', [128, 66, 128], &
+              [character(len=9) :: 'periodic', 'dirichlet', 'periodic']), &
+    bc_case_t('x-dirichlet, odd', [130, 64, 128], &
+              [character(len=9) :: 'dirichlet', 'periodic', 'periodic']), &
+    bc_case_t('x,y-dirichlet, odd', [130, 130, 64], &
               [character(len=9) :: 'dirichlet', 'dirichlet', 'periodic'])]
 
   ! One cosine test: the directions that carry cos(n*pi*x_d) and the wavenumber
@@ -202,7 +217,7 @@ program test_poisson
   integer :: nproc_dir(3)
   character(len=32) :: arg
   character(len=len(arg)) :: only_bc
-  character(len=4*size(cases)) :: codes
+  character(len=8*size(cases)) :: codes
   logical :: config_run(size(cases))
   logical :: allpass
 
@@ -219,7 +234,8 @@ program test_poisson
 
   ! Optional --bc <code> restricts the run to the one configuration with that
   ! code: one letter per direction in x,y,z order, d = dirichlet, n = neumann,
-  ! p = periodic (ppp, pdp, dpp, ddp). This is what lets a multi rank run
+  ! p = periodic (ppp, pdp, dpp, ddp), with _odd for the odd cell count
+  ! cases (pdp_odd, dpp_odd, ddp_odd). This is what lets a multi rank run
   ! exercise one configuration at a time. With no argument every
   ! configuration runs, as before.
   only_bc = 'all'
@@ -280,7 +296,7 @@ program test_poisson
     write (stderr, '(A)') &
       '  ======================================================='
     write (stderr, '(A)') ''
-    write (stderr, '(2X,A5,2X,A10,A4,A16,A16,2X,A6,2X,A8,2X,A)') &
+    write (stderr, '(2X,A7,2X,A10,A4,A16,A16,2X,A6,2X,A8,2X,A)') &
       'BC', 'Type      ', '  n ', 'Poisson rel L2', &
       'DivGrad rel L2', 'Result', 'Expected', ''
     write (stderr, '(A)') ''
@@ -356,7 +372,7 @@ contains
     if (nrank == 0) then
       write (stderr, '(A)') ''
       write (stderr, '(A,A)') '  === BC ', &
-        bc_code(cfg)//' ('//trim(cfg%title)//')'
+        trim(bc_code(cfg))//' ('//trim(cfg%title)//')'
       write (stderr, '(4X,A,I0,A,I0,A,I0)') &
         'Grid: ', dims_global(1), ' x ', dims_global(2), &
         ' x ', dims_global(3)
@@ -404,13 +420,18 @@ contains
   end subroutine setup_case
 
   ! ================================================================
-  ! The --bc code of a case: the first letter of the BC of x, y and z
+  ! The --bc code of a case: the first letter of the BC of x, y and z,
+  ! then _odd when a non-periodic direction has an odd cell count, that is
+  ! an even vertex count
   ! ================================================================
   pure function bc_code(c) result(code)
     type(bc_case_t), intent(in) :: c
-    character(len=3) :: code
+    character(len=7) :: code
 
     code = c%bc(1)(1:1)//c%bc(2)(1:1)//c%bc(3)(1:1)
+    if (any(c%bc /= 'periodic' .and. mod(c%dims, 2) == 0)) then
+      code = trim(code)//'_odd'
+    end if
   end function bc_code
 
   ! ================================================================
@@ -436,7 +457,7 @@ contains
         verdict_str = '!!'
       end if
 
-      write (stderr, '(2X,A5,2X,A10,I4,ES16.4,ES16.4,2X,A4,4X,A4,4X,A)') &
+      write (stderr, '(2X,A7,2X,A10,I4,ES16.4,ES16.4,2X,A4,4X,A4,4X,A)') &
         bc_code(cases(config_id)), &
         tests(idx)%name, tests(idx)%n, &
         results(idx, config_id)%poisson_err, &
