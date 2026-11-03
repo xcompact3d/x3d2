@@ -124,7 +124,7 @@ module m_omp_poisson_fft
   end type omp_poisson_110_t
 
   private :: init_omp, init_buffers, init_buffers_010, init_buffers_100, &
-             init_buffers_110
+             init_buffers_110, fold_index
 
 contains
 
@@ -304,6 +304,18 @@ contains
         call abort_run('The 110 case cell-dims decomposition does not match &
                        &the FFT physical decomposition.')
       end if
+      ! The mesh splits the vertices, and the last rank of a non-periodic
+      ! direction has one cell fewer than vertices, while dc splits the
+      ! cells directly. The two can hand a rank different y ranges (257
+      ! cells on 2 ranks are 129 + 128 for the mesh but 128 + 129 for dc),
+      ! and the copies between the solver field and r_xp assume they
+      ! agree. A cell count divisible by p_row always agrees.
+      if (.not. all(self%dc%xsz == [self%nx_loc, self%ny_loc, &
+                                    self%nz_loc])) then
+        call abort_run('The OpenMP 110 Poisson solver needs the y cell &
+                       &count to be divisible by the number of ranks &
+                       &along y, or split along z instead.')
+      end if
 
       allocate (self%r_xp(self%dc%xsz(1), self%dc%xsz(2), self%dc%xsz(3)))
       allocate (self%r_yp(self%dc%ysz(1), self%dc%ysz(2), self%dc%ysz(3)))
@@ -404,8 +416,8 @@ contains
     class(omp_poisson_110_t) :: self
     class(field_t), intent(in) :: f_in
 
-    integer :: i, j, k, n2y
-    integer :: src_j
+    integer :: i, j, k
+    integer, allocatable :: src_j(:)
 
     if (self%mesh%par%nproc == 1) then
       !$omp parallel do collapse(2)
@@ -431,21 +443,13 @@ contains
       call transpose_x_to_y(self%r_xp, self%r_yp, self%dc)
 
       if (self%p_row > 1) then
-        n2y = self%ny_glob/2
+        src_j = fold_index([(j, j=1, self%ny_glob)], self%ny_glob)
 
-        !$omp parallel do private(src_j) collapse(2)
+        !$omp parallel do collapse(2)
         do k = 1, self%dc%ysz(3)
           do j = 1, self%ny_glob
-            if (j <= n2y) then
-              src_j = 2*j - 1
-            else if (mod(self%ny_glob, 2) == 1 .and. j == n2y + 1) then
-              src_j = self%ny_glob
-            else
-              src_j = 2*self%ny_glob - 2*j + 2
-            end if
-
             do i = 1, self%dc%ysz(1)
-              self%r_yp2(i, j, k) = self%r_yp(i, src_j, k)
+              self%r_yp2(i, j, k) = self%r_yp(i, src_j(j), k)
             end do
           end do
         end do
@@ -538,8 +542,8 @@ contains
     class(omp_poisson_110_t) :: self
     class(field_t), intent(inout) :: f_out
 
-    integer :: i, j, k, n2y
-    integer :: src_j
+    integer :: i, j, k
+    integer, allocatable :: dst_j(:)
 
     call decomp_2d_fft_3d(self%c_x, self%r_tr)
 
@@ -567,21 +571,13 @@ contains
       call transpose_z_to_y(self%r_zp, self%r_yp, self%dc)
 
       if (self%p_row > 1) then
-        n2y = self%ny_glob/2
+        dst_j = fold_index([(j, j=1, self%ny_glob)], self%ny_glob)
 
-        !$omp parallel do private(src_j) collapse(2)
+        !$omp parallel do collapse(2)
         do k = 1, self%dc%ysz(3)
           do j = 1, self%ny_glob
-            if (mod(self%ny_glob, 2) == 1 .and. j == self%ny_glob) then
-              src_j = n2y + 1
-            else if (mod(j, 2) == 1) then
-              src_j = (j + 1)/2
-            else
-              src_j = self%ny_glob - j/2 + 1
-            end if
-
             do i = 1, self%dc%ysz(1)
-              self%r_yp2(i, j, k) = self%r_yp(i, src_j, k)
+              self%r_yp2(i, dst_j(j), k) = self%r_yp(i, j, k)
             end do
           end do
         end do
@@ -733,35 +729,24 @@ contains
 
   subroutine enforce_periodicity_x_omp(self, f_out, f_in)
     !! Gathers the non-periodic x line into a periodic one so that a plain
-    !! FFT can stand in for the cosine transform. Unlike the y version
-    !! below this handles an odd nx, which the 100 case requires.
+    !! FFT can stand in for the cosine transform.
     implicit none
 
     class(omp_poisson_100_t) :: self
     class(field_t), intent(inout) :: f_out
     class(field_t), intent(in) :: f_in
 
-    integer :: i, j, k, n2
+    integer :: i, j, k
+    integer, allocatable :: src_i(:)
 
-    n2 = self%nx_glob/2
+    src_i = fold_index([(i, i=1, self%nx_glob)], self%nx_glob)
 
     !$omp parallel do collapse(2)
     do k = 1, self%nz_loc
       do j = 1, self%ny_loc
-        do i = 1, n2
-          f_out%data(i, j, k) = f_in%data(2*i - 1, j, k)
+        do i = 1, self%nx_glob
+          f_out%data(i, j, k) = f_in%data(src_i(i), j, k)
         end do
-        if (mod(self%nx_glob, 2) == 1) then
-          ! odd-size centre entry
-          f_out%data(n2 + 1, j, k) = f_in%data(self%nx_glob, j, k)
-          do i = n2 + 2, self%nx_glob
-            f_out%data(i, j, k) = f_in%data(2*self%nx_glob - 2*i + 2, j, k)
-          end do
-        else
-          do i = n2 + 1, self%nx_glob
-            f_out%data(i, j, k) = f_in%data(2*self%nx_glob - 2*i + 2, j, k)
-          end do
-        end if
       end do
     end do
     !$omp end parallel do
@@ -776,9 +761,12 @@ contains
     class(field_t), intent(inout) :: f_out
     class(field_t), intent(in) :: f_in
 
-    integer :: i, j, k, n2
+    integer :: i, j, k
+    integer, allocatable :: dst_i(:)
 
-    n2 = self%nx_glob/2
+    ! Scatter through the gather map rather than gather through its
+    ! inverse: the reads stay contiguous, which measured faster.
+    dst_i = fold_index([(i, i=1, self%nx_glob)], self%nx_glob)
 
     ! The gathered ordering only covers 1..nx_glob, but the block is padded
     ! up to a multiple of SZ and reorder copies the whole padded extent back
@@ -791,14 +779,9 @@ contains
     !$omp parallel do collapse(2)
     do k = 1, self%nz_loc
       do j = 1, self%ny_loc
-        do i = 1, n2
-          f_out%data(2*i - 1, j, k) = f_in%data(i, j, k)
-          f_out%data(2*i, j, k) = f_in%data(self%nx_glob - i + 1, j, k)
+        do i = 1, self%nx_glob
+          f_out%data(dst_i(i), j, k) = f_in%data(i, j, k)
         end do
-        if (mod(self%nx_glob, 2) == 1) then
-          ! odd-size centre entry
-          f_out%data(self%nx_glob, j, k) = f_in%data(n2 + 1, j, k)
-        end if
       end do
     end do
     !$omp end parallel do
@@ -813,17 +796,15 @@ contains
     class(field_t), intent(in) :: f_in
 
     integer :: i, j, k
+    integer, allocatable :: src_j(:)
 
-    !$omp parallel do
+    src_j = fold_index([(j, j=1, self%ny_glob)], self%ny_glob)
+
+    !$omp parallel do collapse(2)
     do k = 1, self%nz_loc
-      do j = 1, self%ny_glob/2
+      do j = 1, self%ny_glob
         do i = 1, self%nx_loc
-          f_out%data(i, j, k) = f_in%data(i, 2*(j - 1) + 1, k)
-        end do
-      end do
-      do j = self%ny_glob/2 + 1, self%ny_glob
-        do i = 1, self%nx_loc
-          f_out%data(i, j, k) = f_in%data(i, 2*self%ny_glob - 2*j + 2, k)
+          f_out%data(i, j, k) = f_in%data(i, src_j(j), k)
         end do
       end do
     end do
@@ -839,15 +820,16 @@ contains
     class(field_t), intent(in) :: f_in
 
     integer :: i, j, k
+    integer, allocatable :: dst_j(:)
 
-    !$omp parallel do
+    ! Scatter through the gather map, as in undo_periodicity_x_omp.
+    dst_j = fold_index([(j, j=1, self%ny_glob)], self%ny_glob)
+
+    !$omp parallel do collapse(2)
     do k = 1, self%nz_loc
-      do i = 1, self%nx_loc
-        do j = 1, self%ny_glob/2
-          f_out%data(i, 2*j - 1, k) = f_in%data(i, j, k)
-        end do
-        do j = 1, self%ny_glob/2
-          f_out%data(i, 2*j, k) = f_in%data(i, self%ny_glob - j + 1, k)
+      do j = 1, self%ny_glob
+        do i = 1, self%nx_loc
+          f_out%data(i, dst_j(j), k) = f_in%data(i, j, k)
         end do
       end do
     end do
@@ -870,57 +852,32 @@ contains
     class(field_t), intent(inout) :: f_out
     class(field_t), intent(in) :: f_in
 
-    integer :: i, j, k, n2x, n2y
-    integer :: src_i, src_j
+    integer :: i, j, k
+    integer, allocatable :: src_i(:), src_j(:)
 
-    n2x = self%nx_glob/2
+    ! The gather maps stay in global terms: they are a property of the
+    ! global line, and nx_loc == nx_glob always for the 110 case's x-pencil
+    ! field, and ny_loc == ny_glob when p_row == 1 since y is not split.
+    src_i = fold_index([(i, i=1, self%nx_glob)], self%nx_glob)
 
     if (self%p_row == 1) then
-      n2y = self%ny_glob/2
+      src_j = fold_index([(j, j=1, self%ny_glob)], self%ny_glob)
 
-      ! The gather arithmetic (n2x, n2y and the src_i/src_j mapping below)
-      ! stays in global terms: it is a property of the global line, and
-      ! nx_loc == nx_glob always for the 110 case's x-pencil field, and
-      ! ny_loc == ny_glob here since p_row == 1 means y is not split.
-      !$omp parallel do private(src_i, src_j) collapse(2)
+      !$omp parallel do collapse(2)
       do k = 1, self%nz_loc
         do j = 1, self%ny_loc
-          if (j <= n2y) then
-            src_j = 2*j - 1
-          else if (mod(self%ny_glob, 2) == 1 .and. j == n2y + 1) then
-            src_j = self%ny_glob
-          else
-            src_j = 2*self%ny_glob - 2*j + 2
-          end if
-
           do i = 1, self%nx_loc
-            if (i <= n2x) then
-              src_i = 2*i - 1
-            else if (mod(self%nx_glob, 2) == 1 .and. i == n2x + 1) then
-              src_i = self%nx_glob
-            else
-              src_i = 2*self%nx_glob - 2*i + 2
-            end if
-
-            f_out%data(i, j, k) = f_in%data(src_i, src_j, k)
+            f_out%data(i, j, k) = f_in%data(src_i(i), src_j(j), k)
           end do
         end do
       end do
       !$omp end parallel do
     else
-      !$omp parallel do private(src_i) collapse(2)
+      !$omp parallel do collapse(2)
       do k = 1, self%nz_loc
         do j = 1, self%ny_loc
           do i = 1, self%nx_loc
-            if (i <= n2x) then
-              src_i = 2*i - 1
-            else if (mod(self%nx_glob, 2) == 1 .and. i == n2x + 1) then
-              src_i = self%nx_glob
-            else
-              src_i = 2*self%nx_glob - 2*i + 2
-            end if
-
-            f_out%data(i, j, k) = f_in%data(src_i, j, k)
+            f_out%data(i, j, k) = f_in%data(src_i(i), j, k)
           end do
         end do
       end do
@@ -943,10 +900,12 @@ contains
     class(field_t), intent(inout) :: f_out
     class(field_t), intent(in) :: f_in
 
-    integer :: i, j, k, n2x, n2y
-    integer :: src_i, src_j
+    integer :: i, j, k
+    integer, allocatable :: dst_i(:), dst_j(:)
 
-    n2x = self%nx_glob/2
+    ! Scatter through the gather maps, as in undo_periodicity_x_omp. They
+    ! stay in global terms, as in enforce_periodicity_xy_omp.
+    dst_i = fold_index([(i, i=1, self%nx_glob)], self%nx_glob)
 
     ! The gathered ordering only covers the unpadded extent, but the
     ! block is padded up to a multiple of SZ and reorder copies the
@@ -958,51 +917,23 @@ contains
     !$omp end parallel workshare
 
     if (self%p_row == 1) then
-      n2y = self%ny_glob/2
+      dst_j = fold_index([(j, j=1, self%ny_glob)], self%ny_glob)
 
-      ! The gather arithmetic (n2x, n2y and the src_i/src_j mapping below)
-      ! stays in global terms: it is a property of the global line, and
-      ! nx_loc == nx_glob always for the 110 case's x-pencil field, and
-      ! ny_loc == ny_glob here since p_row == 1 means y is not split.
-      !$omp parallel do private(src_i, src_j) collapse(2)
+      !$omp parallel do collapse(2)
       do k = 1, self%nz_loc
         do j = 1, self%ny_loc
-          if (mod(self%ny_glob, 2) == 1 .and. j == self%ny_glob) then
-            src_j = n2y + 1
-          else if (mod(j, 2) == 1) then
-            src_j = (j + 1)/2
-          else
-            src_j = self%ny_glob - j/2 + 1
-          end if
-
           do i = 1, self%nx_loc
-            if (mod(self%nx_glob, 2) == 1 .and. i == self%nx_glob) then
-              src_i = n2x + 1
-            else if (mod(i, 2) == 1) then
-              src_i = (i + 1)/2
-            else
-              src_i = self%nx_glob - i/2 + 1
-            end if
-
-            f_out%data(i, j, k) = f_in%data(src_i, src_j, k)
+            f_out%data(dst_i(i), dst_j(j), k) = f_in%data(i, j, k)
           end do
         end do
       end do
       !$omp end parallel do
     else
-      !$omp parallel do private(src_i) collapse(2)
+      !$omp parallel do collapse(2)
       do k = 1, self%nz_loc
         do j = 1, self%ny_loc
           do i = 1, self%nx_loc
-            if (mod(self%nx_glob, 2) == 1 .and. i == self%nx_glob) then
-              src_i = n2x + 1
-            else if (mod(i, 2) == 1) then
-              src_i = (i + 1)/2
-            else
-              src_i = self%nx_glob - i/2 + 1
-            end if
-
-            f_out%data(i, j, k) = f_in%data(src_i, j, k)
+            f_out%data(dst_i(i), j, k) = f_in%data(i, j, k)
           end do
         end do
       end do
@@ -1010,4 +941,25 @@ contains
     end if
 
   end subroutine undo_periodicity_xy_omp
+
+  pure elemental integer function fold_index(i, n) result(src)
+    !! Source index of entry i of a non-periodic line of n points gathered
+    !! into a periodic one: the odd entries ascending, then the even
+    !! entries descending, so that a plain FFT can stand in for the cosine
+    !! transform. For an odd n the last entry lands at the centre, n/2 + 1.
+    !! The single definition of the fold: the enforce routines gather
+    !! through it and the undo routines scatter through it.
+    implicit none
+
+    integer, intent(in) :: i, n
+
+    if (i <= n/2) then
+      src = 2*i - 1
+    else if (mod(n, 2) == 1 .and. i == n/2 + 1) then
+      src = n
+    else
+      src = 2*n - 2*i + 2
+    end if
+
+  end function fold_index
 end module m_omp_poisson_fft
