@@ -65,9 +65,8 @@ directory:
    cp /path/to/x3d2/examples/abl/input.x3d .
    mpirun -np 1 /path/to/x3d2/build/bin/xcompact input.x3d
 
-The run takes about an hour on one NVIDIA A100. If you run on more ranks,
-do not decompose :math:`y`: the profile diagnostics need it on a single
-rank.
+If you run on more ranks, do not decompose :math:`y`: the profile
+diagnostics need it on a single rank.
 
 The run writes:
 
