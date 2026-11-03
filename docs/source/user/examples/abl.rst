@@ -15,7 +15,6 @@ The directory holds two inputs:
    The Ekman variant: the same box and grid, driven by a geostrophic wind on a
    rotating frame instead (see `Ekman variant`_).
 
-``plot_profiles.py`` plots the mean profiles both runs write.
 The model and its equations are described in :ref:`abl-theory`, and every
 parameter in :doc:`../input_file`.
 
@@ -84,29 +83,16 @@ The run writes:
 ``abl_checkpoint_*.bp``
    A restart file every 12500 steps (the latest one is kept).
 
-To plot the mean profiles once the run has finished:
-
-.. code-block:: bash
-
-   python3 /path/to/x3d2/examples/abl/plot_profiles.py --profile abl_profile.csv
-
-The script needs NumPy and Matplotlib, and writes ``abl_neutral_profiles.png``.
-
 Results
 -------
 
-.. figure:: abl_neutral_profiles.png
-   :width: 100%
-
-   Left: mean streamwise velocity against the log law. Right: non-dimensional
-   shear :math:`\Phi`.
-
-The left panel shows the mean wind :math:`\langle u\rangle/u_*` against
-:math:`y/H`. Above about :math:`0.07H` it follows the log law
-:math:`(1/\kappa)\ln(y/z_0)` within about 2%. Below that it falls under it:
+The mean wind :math:`\langle u\rangle/u_*` in ``abl_profile.csv`` can be
+compared with the log law :math:`(1/\kappa)\ln(y/z_0)`, which the file also
+holds (``u_log``). Above about :math:`0.07H` it follows the log law within
+about 2%. Below that it falls under it:
 by 12% at the second grid point and 31% at the first.
 
-The right panel shows the non-dimensional shear
+The non-dimensional shear
 
 .. math::
 
@@ -115,8 +101,8 @@ The right panel shows the non-dimensional shear
 which is 1 for an exact log law. :math:`\Phi` is close to 1 between
 :math:`0.12H` and :math:`0.3H`, and rises slowly towards the lid. Near the
 wall it overshoots, to about 2.3 at the second grid point (:math:`y = 31` m).
-The point at the first grid point is not shown, because the central difference
-there spans the floor.
+Leave out the first grid point when computing :math:`\Phi`: a central
+difference there spans the floor, where :math:`u = 0`.
 
 An overshoot of :math:`\Phi` near the wall is a known feature of
 wall-modelled LES. Its size depends on the wall model, the SGS model and the
@@ -152,18 +138,8 @@ holds the flow there close to a reference wind. In the damping layer,
 towards :math:`(u_*/\kappa)\ln(H/z_0)`, which is why ``u_star`` is still
 set. The friction velocity is now a result of the run, not an input.
 
-Run it like the neutral case, then:
-
-.. code-block:: bash
-
-   python3 /path/to/x3d2/examples/abl/plot_profiles.py \
-       --ekman-profile abl_ekman_profile.csv
-
-.. figure:: abl_ekman_profiles.png
-   :width: 100%
-
-   Left: mean wind speed. Right: wind direction, measured from the
-   geostrophic wind (:math:`x`).
+Run it like the neutral case. The mean profiles go to
+``abl_ekman_profile.csv``, in the same format as ``abl_profile.csv``.
 
 The wall stress slows the wind near the ground, and the Coriolis force then
 turns it towards lower pressure: the wind direction turns with height, the
