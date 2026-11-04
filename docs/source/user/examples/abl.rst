@@ -111,6 +111,67 @@ deskos_phd_19`, so the peak value here applies to this grid and wall model.
 The friction velocity diagnosed from the mean wall stress is 0.430 m/s,
 4.5% below the imposed 0.45 m/s.
 
+Grid sensitivity
+~~~~~~~~~~~~~~~~
+
+The results depend mainly on the grid aspect ratio :math:`\Delta x/\Delta y`,
+not on the number of points. The same case run on other grids, all in the
+same box, gives:
+
+.. list-table::
+   :header-rows: 1
+   :widths: 22 14 18 16 16 14
+
+   * - Grid
+     - :math:`\Delta x/\Delta y`
+     - Diagnosed :math:`u_*` (m/s)
+     - Peak :math:`\Phi`
+     - :math:`\Phi`, :math:`0.12`--:math:`0.3H`
+     - Largest log-law error above :math:`0.07H`
+   * - :math:`64 \times 65 \times 64`
+     - 3.1
+     - 0.430
+     - 2.30
+     - 0.98
+     - 2%
+   * - :math:`96 \times 97 \times 96`
+     - 3.1
+     - 0.432
+     - 2.23
+     - 1.00
+     - 3%
+   * - :math:`128 \times 65 \times 128`
+     - 1.6
+     - 0.406
+     - 2.38
+     - 1.06
+     - 8%
+   * - :math:`192 \times 97 \times 192`
+     - 1.6
+     - 0.415
+     - 2.35
+     - 1.10
+     - 6%
+   * - :math:`192 \times 65 \times 192`
+     - 1.05
+     - 0.400
+     - 2.44
+     - 1.09
+     - 11%
+
+The log-law error is taken between :math:`0.07H` and :math:`0.5H`. At a fixed
+aspect ratio, a finer grid gives nearly the same profile. Refining only
+horizontally, so that :math:`\Delta x/\Delta y` falls towards 1, lowers the
+friction velocity and moves the mean wind further below the log law, and
+:math:`\Phi` rises. The Smagorinsky model with a log-law wall stress is known
+to work best at large aspect ratios :cite:`mason_jfm_92`, which is why the
+example uses :math:`\Delta x/\Delta y \approx 3`.
+
+The peak of :math:`\Phi` always sits at the second grid point, so its height
+scales with :math:`\Delta y` rather than staying at a fixed height. For the
+refined grids, set ``dt`` and ``n_iters`` so the run still covers 100000 s,
+and ``profile_start_iter`` to its halfway step.
+
 Ekman variant
 -------------
 
