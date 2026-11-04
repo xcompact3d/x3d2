@@ -3,11 +3,11 @@
 flow_case_name = 'abl'
 
 ! Global domain length (Lx x Ly x Lz), wall-normal is y.
-! Neutral ABL box: pi*H x H x pi*H, H = 1000 m.
-L_global = 3141.592653589793d0, 1000d0, 3141.592653589793d0
+! Neutral ABL box of Deskos (2019), case C1: pi*H x H x pi*H, H = 1000 m.
+L_global = 3140d0, 1000d0, 3140d0
 
 ! Global number of cells in each direction
-dims_global = 32, 33, 32
+dims_global = 64, 65, 64
 
 ! Domain decomposition in each direction
 nproc_dir = 1, 1, 1
@@ -20,11 +20,12 @@ BC_z = 'periodic', 'periodic'
 /End
 
 &solver_params
-Re = 1000d0
+! 125000 steps of 0.8 s = 100000 s, about 45 H/u_star.
+Re = 66667d0
 time_intg = 'AB3' ! 'AB[1-4]' | 'RK[1-4]'
-dt = 0.05d0
-n_iters = 10
-n_output = 5
+dt = 0.8d0
+n_iters = 125000
+n_output = 50
 ! Explicit low-pass filter on the velocity, as Incompact3d does for ABL runs.
 ! Removes the 2*dx mode the compact schemes cannot dissipate and the staggered
 ! projection cannot see; without it the skew-symmetric convection leaks mean
@@ -39,8 +40,7 @@ stagder_scheme = 'compact6'
 /End
 
 &les_params
-! Static Smagorinsky closure with the Mason-Thomson rough-wall damping used
-! by the neutral ABL validation case.
+! Static Smagorinsky closure with the Mason-Thomson rough-wall damping.
 model = 'smagorinsky'
 smagorinsky_constant = 0.14d0
 wall_damping = T
@@ -52,13 +52,27 @@ wall_damping_n = 3d0
 z0 = 0.1d0
 u_star = 0.45d0
 delta = 1000d0
-kappa = 0.41d0
+kappa = 0.4d0
+! Wall-model sampling height, in grid spacings above the floor
+dsampling = 3d0
+! Log-law initial profile with 50% noise on u and 0.5 m/s on v and w
+init_noise = 0.5d0, 0.5d0, 0.5d0
 
 ! Driving mechanism toggles (at least one must be enabled)
 pressure_gradient = T
 coriolis = F
 mass_conserve = F
 damping = F
+
+! Average the mean profile over the second half of the run
+profile_start_iter = 62500
+profile_file = 'abl_profile.csv'
+/End
+
+&checkpoint_params
+checkpoint_freq = 12500
+keep_checkpoint = F
+checkpoint_prefix = 'abl_checkpoint'
 /End
 
 &inflow_nml
