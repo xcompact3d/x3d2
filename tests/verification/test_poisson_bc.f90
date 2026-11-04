@@ -7,9 +7,9 @@ program test_poisson
   !!   pdp     : y-dirichlet           (128 x 65 x 128)
   !!   dpp     : x-dirichlet           (129 x 64 x 128)
   !!   ddp     : x,y-dirichlet         (129 x 257 x 64)
-  !!   pdp_odd : y-dirichlet, odd      (128 x 66 x 128)
-  !!   dpp_odd : x-dirichlet, odd      (130 x 64 x 128)
-  !!   ddp_odd : x,y-dirichlet, odd    (130 x 130 x 64)
+  !!   pdp_odd : y-dirichlet, odd      (128 x 82 x 128)
+  !!   dpp_odd : x-dirichlet, odd      (82 x 64 x 128)
+  !!   ddp_odd : x,y-dirichlet, odd    (82 x 82 x 64)
   !! The code is one letter per direction in x,y,z order: d = dirichlet,
   !! n = neumann, p = periodic. The solver works on cells, and a
   !! non-periodic direction has one cell fewer than vertices, so the _odd
@@ -114,14 +114,17 @@ program test_poisson
               [character(len=9) :: 'dirichlet', 'dirichlet', 'periodic']), &
     ! The rows above have even cell counts in their non-periodic directions.
     ! These have odd ones, the odd-size branch of the fold that lets an FFT
-    ! stand in for the cosine transform. 129 cells, not 257: a prime length
-    ! FFT has a higher roundoff floor, which div(grad(p)) amplifies past
-    ! DIVGRAD_TOLERANCE.
-    bc_case_t('y-dirichlet, odd', [128, 66, 128], &
+    ! stand in for the cosine transform. An FFT length with a large prime
+    ! factor has a higher roundoff floor, so the odd count is 81 = 3^4 cells.
+    ! In single precision 129 = 3*43 cells reach a Poisson error of 2.1e-5,
+    ! past ERROR_TOLERANCE, and 65 = 5*13 and 135 = 3^3*5 cells up to
+    ! 2.7e-6, above the maxima ERROR_TOLERANCE is set from; in double
+    ! precision 257 (prime) puts div(grad(p)) past DIVGRAD_TOLERANCE.
+    bc_case_t('y-dirichlet, odd', [128, 82, 128], &
               [character(len=9) :: 'periodic', 'dirichlet', 'periodic']), &
-    bc_case_t('x-dirichlet, odd', [130, 64, 128], &
+    bc_case_t('x-dirichlet, odd', [82, 64, 128], &
               [character(len=9) :: 'dirichlet', 'periodic', 'periodic']), &
-    bc_case_t('x,y-dirichlet, odd', [130, 130, 64], &
+    bc_case_t('x,y-dirichlet, odd', [82, 82, 64], &
               [character(len=9) :: 'dirichlet', 'dirichlet', 'periodic'])]
 
   ! One cosine test: the directions that carry cos(n*pi*x_d) and the wavenumber
