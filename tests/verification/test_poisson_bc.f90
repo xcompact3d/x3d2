@@ -26,12 +26,13 @@ program test_poisson
   !!            (relative L2 norm). This holds on a stretched mesh too.
   !!
   !! Every configuration also runs a random test: f = div(u) for a random
-  !! vertex velocity u, with its mean removed (the mean mode is singular, and
-  !! a random u has a net flux through non-periodic faces), must survive the
-  !! div(grad(p)) round trip. It covers every mode at once, the way the
-  !! pressure projection uses the solver; a genuinely singular mode (zero
-  !! div-grad eigenvalue) is one where div(u) vanishes too, so no mode needs
-  !! special casing.
+  !! vertex velocity u, with its weighted mean removed (the mean mode is
+  !! singular, and a random u has a net flux through non-periodic faces),
+  !! must survive the div(grad(p)) round trip. The weight of a cell is its
+  !! y width. On a uniform grid, the weighted mean is the index mean. The
+  !! test covers every mode at once, the way the pressure projection uses
+  !! the solver; a genuinely singular mode (zero div-grad eigenvalue) is one
+  !! where div(u) vanishes too, so no mode needs special casing.
   !!
   !! Configurations with a non-periodic x also run a mode test (#465): the
   !! RHS is the x cosine mode N/2 times the z Nyquist mode, built from the
@@ -1076,14 +1077,14 @@ contains
 
   function run_random_test(ctx) result(res)
     !! Round trip of f = div(u) for a random vertex velocity u, with the
-    !! mean of f removed (see the header).
+    !! cell-width weighted mean of f removed (see the header).
     type(poisson_ctx_t), target, intent(in) :: ctx
     type(test_result_t) :: res
 
     class(field_t), pointer :: u, v, w, f_div, f_device, f_reference
     class(field_t), pointer :: host_field, temp
-    integer :: dims(3), gdims(3), ierr
-    real(dp) :: f_mean
+    integer :: dims(3), j, ierr
+    real(dp) :: f_mean, f_sums(2)
 
     u => ctx%backend%allocator%get_block(DIR_X, VERT)
     v => ctx%backend%allocator%get_block(DIR_X, VERT)
@@ -1103,16 +1104,24 @@ contains
     call ctx%backend%allocator%release_block(v)
     call ctx%backend%allocator%release_block(w)
 
-    ! Remove the mean on the host, then hand f to the solver in DIR_C
+    ! Remove the weighted mean on the host, then hand f to the solver in DIR_C
     dims = ctx%mesh%get_dims(CELL)
-    gdims = ctx%mesh%get_global_dims(CELL)
     host_field => ctx%host_allocator%get_block(DIR_C)
     call ctx%backend%get_field_data(host_field%data, f_div)
     call ctx%backend%allocator%release_block(f_div)
-    f_mean = sum(host_field%data(1:dims(1), 1:dims(2), 1:dims(3)))
-    call MPI_Allreduce(MPI_IN_PLACE, f_mean, 1, MPI_X3D2_DP, MPI_SUM, &
+    ! The weight of the y cell j is 1/midp_ds(j, 2). This weight is the
+    ! cell width divided by d(2), and it is 1 on a uniform grid.
+    f_sums = 0._dp
+    do j = 1, dims(2)
+      f_sums(1) = f_sums(1) &
+                  + sum(host_field%data(1:dims(1), j, 1:dims(3))) &
+                  /ctx%mesh%geo%midp_ds(j, 2)
+      f_sums(2) = f_sums(2) &
+                  + real(dims(1)*dims(3), dp)/ctx%mesh%geo%midp_ds(j, 2)
+    end do
+    call MPI_Allreduce(MPI_IN_PLACE, f_sums, 2, MPI_X3D2_DP, MPI_SUM, &
                        MPI_COMM_WORLD, ierr)
-    f_mean = f_mean/real(product(gdims), dp)
+    f_mean = f_sums(1)/f_sums(2)
     host_field%data = host_field%data - f_mean
 
     f_device => ctx%backend%allocator%get_block(DIR_C, CELL)
