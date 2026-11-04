@@ -604,10 +604,13 @@ contains
     class(omp_poisson_000_t) :: self
 
     call process_spectral_000( &
-      self%c_x, self%waves, self%nx_spec, self%ny_spec, self%nz_spec, &
-      self%sp_st(1), self%sp_st(2), self%sp_st(3), &
-      self%nx_glob, self%ny_glob, self%nz_glob, &
-      self%ax, self%bx, self%ay, self%by, self%az, self%bz &
+      div_u=self%c_x, waves=self%waves, &
+      nx_spec=self%nx_spec, ny_spec=self%ny_spec, nz_spec=self%nz_spec, &
+      x_sp_st=self%sp_st(1), y_sp_st=self%sp_st(2), &
+      z_sp_st=self%sp_st(3), &
+      nx=self%nx_glob, ny=self%ny_glob, nz=self%nz_glob, &
+      ax=self%ax, bx=self%bx, ay=self%ay, by=self%by, &
+      az=self%az, bz=self%bz &
       )
 
   end subroutine fft_postprocess_000_omp
@@ -622,19 +625,25 @@ contains
       ! y-pencil, where y is whole, pair there, and hop back.
       call transpose_z_to_y(self%c_x, self%c_pair, self%sp)
       call process_spectral_010( &
-        self%c_pair, self%waves_pair, self%sp%ysz(1), self%sp%ysz(2), &
-        self%sp%ysz(3), self%sp%yst(1) - 1, self%sp%yst(2) - 1, &
-        self%sp%yst(3) - 1, &
-        self%nx_glob, self%ny_glob, self%nz_glob, &
-        self%ax, self%bx, self%ay, self%by, self%az, self%bz &
+        div_u=self%c_pair, waves=self%waves_pair, &
+        nx_spec=self%sp%ysz(1), ny_spec=self%sp%ysz(2), &
+        nz_spec=self%sp%ysz(3), &
+        x_sp_st=self%sp%yst(1) - 1, y_sp_st=self%sp%yst(2) - 1, &
+        z_sp_st=self%sp%yst(3) - 1, &
+        nx=self%nx_glob, ny=self%ny_glob, nz=self%nz_glob, &
+        ax=self%ax, bx=self%bx, ay=self%ay, by=self%by, &
+        az=self%az, bz=self%bz &
         )
       call transpose_y_to_z(self%c_pair, self%c_x, self%sp)
     else
       call process_spectral_010( &
-        self%c_x, self%waves, self%nx_spec, self%ny_spec, self%nz_spec, &
-        self%sp_st(1), self%sp_st(2), self%sp_st(3), &
-        self%nx_glob, self%ny_glob, self%nz_glob, &
-        self%ax, self%bx, self%ay, self%by, self%az, self%bz &
+        div_u=self%c_x, waves=self%waves, &
+        nx_spec=self%nx_spec, ny_spec=self%ny_spec, nz_spec=self%nz_spec, &
+        x_sp_st=self%sp_st(1), y_sp_st=self%sp_st(2), &
+        z_sp_st=self%sp_st(3), &
+        nx=self%nx_glob, ny=self%ny_glob, nz=self%nz_glob, &
+        ax=self%ax, bx=self%bx, ay=self%ay, by=self%by, &
+        az=self%az, bz=self%bz &
         )
     end if
 
@@ -659,19 +668,25 @@ contains
       ! Hop to the y-pencil, where dim2 is whole, pair there, and hop back.
       call transpose_z_to_y(self%c_x, self%c_pair, self%sp)
       call process_spectral_100( &
-        self%c_pair, self%waves_pair, self%sp%ysz(1), self%sp%ysz(2), &
-        self%sp%ysz(3), self%sp%yst(1) - 1, self%sp%yst(2) - 1, &
-        self%sp%yst(3) - 1, &
-        self%nx_glob, self%ny_glob, self%nz_glob, &
-        self%ax, self%bx, self%ay, self%by, self%az, self%bz &
+        div_u=self%c_pair, waves=self%waves_pair, &
+        nx_spec=self%sp%ysz(1), ny_spec=self%sp%ysz(2), &
+        nz_spec=self%sp%ysz(3), &
+        x_sp_st=self%sp%yst(1) - 1, y_sp_st=self%sp%yst(2) - 1, &
+        z_sp_st=self%sp%yst(3) - 1, &
+        nx=self%nx_glob, ny=self%ny_glob, nz=self%nz_glob, &
+        ax=self%ax, bx=self%bx, ay=self%ay, by=self%by, &
+        az=self%az, bz=self%bz &
         )
       call transpose_y_to_z(self%c_pair, self%c_x, self%sp)
     else
       call process_spectral_100( &
-        self%c_x, self%waves, self%nx_spec, self%ny_spec, self%nz_spec, &
-        self%sp_st(1), self%sp_st(2), self%sp_st(3), &
-        self%nx_glob, self%ny_glob, self%nz_glob, &
-        self%ax, self%bx, self%ay, self%by, self%az, self%bz &
+        div_u=self%c_x, waves=self%waves, &
+        nx_spec=self%nx_spec, ny_spec=self%ny_spec, nz_spec=self%nz_spec, &
+        x_sp_st=self%sp_st(1), y_sp_st=self%sp_st(2), &
+        z_sp_st=self%sp_st(3), &
+        nx=self%nx_glob, ny=self%ny_glob, nz=self%nz_glob, &
+        ax=self%ax, bx=self%bx, ay=self%ay, by=self%by, &
+        az=self%az, bz=self%bz &
         )
     end if
 
