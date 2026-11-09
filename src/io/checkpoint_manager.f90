@@ -16,7 +16,7 @@ module m_checkpoint_manager
   !! prevent corrupted checkpoints.
   !! - Optional cleanup of old checkpoint files to conserve disk space.
   use m_mpi, only: MPI_COMM_WORLD, MPI_Comm_rank
-  use m_common, only: dp, i8, DIR_X, get_argument
+  use m_common, only: dp, i8, DIR_C, DIR_X, get_argument
   use m_field, only: field_t
   use m_solver, only: solver_t
   use m_io_session, only: reader_session_t, writer_session_t
@@ -408,27 +408,39 @@ contains
     call solver%w%set_data_loc(data_loc)
 
     block
-      real(dp), allocatable, target :: field_data_u(:, :, :)
-      real(dp), allocatable, target :: field_data_v(:, :, :)
-      real(dp), allocatable, target :: field_data_w(:, :, :)
+      real(dp), allocatable :: field_read(:, :, :)
+      real(dp), allocatable :: field_padded(:, :, :)
+      integer :: padded(3)
 
       ! Zero velocity fields before restoring to ensure padding is initialized
       call solver%u%fill(0.0_dp)
       call solver%v%fill(0.0_dp)
       call solver%w%fill(0.0_dp)
 
-      allocate (field_data_u(count_dims(1), count_dims(2), count_dims(3)))
-      allocate (field_data_v(count_dims(1), count_dims(2), count_dims(3)))
-      allocate (field_data_w(count_dims(1), count_dims(2), count_dims(3)))
-      call reader_session%read_data("u", field_data_u, start_dims=start_dims, &
+      padded = solver%backend%allocator%get_padded_dims(DIR_C)
+      allocate (field_read(count_dims(1), count_dims(2), count_dims(3)))
+      allocate (field_padded(padded(1), padded(2), padded(3)))
+
+      call reader_session%read_data("u", field_read, start_dims=start_dims, &
                                     count_dims=count_dims)
-      call reader_session%read_data("v", field_data_v, start_dims=start_dims, &
+      field_padded = 0.0_dp
+      field_padded(1:count_dims(1), 1:count_dims(2), 1:count_dims(3)) &
+        = field_read
+      call solver%backend%set_field_data(solver%u, field_padded)
+
+      call reader_session%read_data("v", field_read, start_dims=start_dims, &
                                     count_dims=count_dims)
-      call reader_session%read_data("w", field_data_w, start_dims=start_dims, &
+      field_padded = 0.0_dp
+      field_padded(1:count_dims(1), 1:count_dims(2), 1:count_dims(3)) &
+        = field_read
+      call solver%backend%set_field_data(solver%v, field_padded)
+
+      call reader_session%read_data("w", field_read, start_dims=start_dims, &
                                     count_dims=count_dims)
-      call solver%backend%set_field_data(solver%u, field_data_u)
-      call solver%backend%set_field_data(solver%v, field_data_v)
-      call solver%backend%set_field_data(solver%w, field_data_w)
+      field_padded = 0.0_dp
+      field_padded(1:count_dims(1), 1:count_dims(2), 1:count_dims(3)) &
+        = field_read
+      call solver%backend%set_field_data(solver%w, field_padded)
     end block
 
     ! restore AB derivative history if metadata indicates AB and order>1
