@@ -73,7 +73,8 @@ program test_poisson
   !!   --dump-matrix                rank 0 writes the stretching matrices of
   !!                                each stretched case to x3d2_<stretch>.dump
   !!                                (the format of the Incompact3d dumps)
-  !! The stretched cases need the CUDA backend and 1 rank for BC code pdp. The
+  !! The stretched cases need the CUDA backend for BC code pdp. Top-bottom
+  !! stretching runs on 1 or 2 ranks, centred and bottom need 1 rank. The
   !! other BC codes with stretching in y, and every stretched case on the
   !! OpenMP backend, end in the abort of the solver. On a stretched case Check
   !! 1 is printed and not judged, because cos(n*pi*y) is not an eigenfunction
