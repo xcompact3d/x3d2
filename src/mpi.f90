@@ -43,9 +43,8 @@ module m_mpi
 
   implicit none
 
-  external :: MPI_Allgather, MPI_Allreduce, MPI_Alltoall, MPI_Bcast, &
-    MPI_Cart_coords, MPI_Irecv, MPI_Isend, MPI_Reduce, MPI_Sendrecv, &
-    MPI_Waitall
+  external :: MPI_Allreduce, MPI_Alltoall, MPI_Bcast, MPI_Cart_coords, &
+    MPI_Irecv, MPI_Isend, MPI_Reduce, MPI_Sendrecv, MPI_Waitall
 #else
   use mpi
 
@@ -68,7 +67,6 @@ module m_mpi
   public :: MPI_Comm_rank, MPI_Comm_size, MPI_Barrier, MPI_Wtime
   public :: MPI_Bcast, MPI_Allreduce, MPI_Reduce
   public :: MPI_Isend, MPI_Irecv, MPI_Waitall, MPI_Sendrecv, MPI_Alltoall
-  public :: MPI_Allgather
 
   !> Handles are opaque in MPI, so the values only have to be distinct.
   integer, parameter :: MPI_COMM_NULL = 0
@@ -340,20 +338,5 @@ contains
 
     error stop 'MPI_Alltoall called, but this build was configured without MPI'
   end subroutine MPI_Alltoall
-
-  subroutine MPI_Allgather(sendbuf, sendcount, sendtype, recvbuf, recvcount, &
-                           recvtype, comm, ierror)
-    !! Not reachable: the 010 slab gather in the CUDA Poisson solver calls it
-    !! only in a build with MPI. It exists so that callers can name it in a
-    !! `use m_mpi, only:` list that has to compile in both builds.
-    type(*), dimension(..), intent(in) :: sendbuf
-    type(*), dimension(..), intent(inout) :: recvbuf
-    integer, intent(in) :: sendcount, sendtype
-    integer, intent(in) :: recvcount, recvtype, comm
-    integer, intent(out) :: ierror
-
-    error stop 'MPI_Allgather called, but this build was configured &
-               &without MPI'
-  end subroutine MPI_Allgather
 #endif
 end module m_mpi
