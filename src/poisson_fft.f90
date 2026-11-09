@@ -418,6 +418,7 @@ contains
       nrows = self%ny_spec/2; iy_scale = 2; iy_off = 0; shift = 2
     case default
       call abort_run('fill_stretched_diagonals: unknown matrix kind')
+      nrows = 0; iy_scale = 0; iy_off = 0; shift = 0
     end select
 
     is_even = matrix_kind == STRETCH_MAT_EVEN
