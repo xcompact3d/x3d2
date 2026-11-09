@@ -331,7 +331,8 @@ contains
         end if
       end if
     case (BC_DIRICHLET)
-      if (.not. self%pentadiag) then
+      select case (scheme)
+      case ('compact6')
         ! first line (compact6 tridiag)
         self%dist_sa(1) = 0._dp
         self%dist_sc(1) = 2._dp
@@ -346,7 +347,7 @@ contains
                                0._dp, &
                                0.75_dp, 0._dp, 0._dp, 0._dp]
         self%coeffs_s(:, 2) = self%coeffs_s(:, 2)/delta
-      else
+      case ('compact10penta')
         ! compact10_penta: rows 1-2 use compact one-sided closures (same α,β as
         ! interior; 4th-order). Ghost halos unused for Dirichlet (u_s=0).
         self%coeffs_s(:, 1) = [0._dp, 0._dp, 0._dp, 0._dp, &
@@ -359,7 +360,13 @@ contains
                                -3._dp/40._dp, 13._dp/24._dp, &
                                -17._dp/240._dp, 0._dp]
         self%coeffs_s(:, 2) = self%coeffs_s(:, 2)/delta
-      end if
+      case ('compact2')
+        ! first line (compact2 tridiag)
+        ! TODO: Is there a better choice for these? Go through the Thomas and distributed algorithms to check.
+        self%dist_sa(1) = 0._dp
+        self%dist_sc(1) = 0._dp
+        ! self%coeffs_s(:, 1) = [0._dp, 0._dp, 0._dp, ]
+      end select
     end select
 
     select case (bc_end)
