@@ -47,9 +47,10 @@ stages:
     - cmake -S . -B build-debug -DCMAKE_Fortran_COMPILER=${FORTRAN_COMPILER} -DCMAKE_BUILD_TYPE=Debug -DENABLE_BACKEND=${ENABLE_BACKEND} -DBACKEND_ARCH=${BACKEND_ARCH} -DWITH_MPI=${WITH_MPI} -DWITH_ADIOS2=ON -DUSE_SYSTEM_ADIOS2=ON -DSINGLE_PREC=${SINGLE_PREC}
     - echo "Build tests"
     - make -j12 -C build-debug
-    # The regression cases are the slow part of the suite and diff the
-    # optimised build users run against goldens blessed from Release, so they
-    # run in the Release pass only. Unit and verification tests run in both.
+    # The regression cases are the slow part of the suite, so they run once,
+    # in the Release pass, which is the optimised build users run. Debug and
+    # Release builds both match the goldens to the regression tolerances.
+    # Unit and verification tests run in both passes.
     - echo "Run the tests"
     - if [ "${RUN_TEST}" == "ON" ]; then ctest --test-dir build-debug -L "unit|verification" --output-on-failure --output-junit ctest-junit.xml; fi
     - echo "Configure Release build"
