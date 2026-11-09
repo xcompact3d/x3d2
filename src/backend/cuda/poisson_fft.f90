@@ -7,6 +7,9 @@ module m_cuda_poisson_fft
   use m_mpi, only: MPI_COMM_WORLD, MPI_COMPLEX, MPI_DOUBLE_COMPLEX, &
                    MPI_STATUS_IGNORE, MPI_Sendrecv, &
                    MPI_Alltoall
+#ifdef MPI
+  use m_mpi, only: MPI_Allgather
+#endif
 
   use m_common, only: dp, CELL, is_sp, MPI_X3D2_DP
   use m_field, only: field_t
@@ -118,6 +121,12 @@ module m_cuda_poisson_fft
     real(dp), device, allocatable, dimension(:, :, :, :) :: &
       a_odd_re_dev, a_odd_im_dev, a_even_re_dev, a_even_im_dev, &
       a_re_dev, a_im_dev
+    !> On multiple ranks the stretched y solve runs on the full spectral
+    !> field (nx/2+1, ny, nz). c_gather_dev receives the y-slab of every
+    !> rank, sized (nx_spec, ny_spec, nz_spec, nproc), and c_full_dev holds
+    !> them unpacked in y order.
+    complex(dp), device, allocatable, dimension(:, :, :, :) :: c_gather_dev
+    complex(dp), device, allocatable, dimension(:, :, :) :: c_full_dev
   contains
     procedure :: init_case => init_case_010
     procedure :: fft_postprocess => fft_postprocess_010_cuda
@@ -528,6 +537,7 @@ contains
     character(len=110) :: reason
 
     integer :: dims_glob(3), dims_loc(3), n_spec(3), n_sp_st(3)
+    integer :: n_blk(3), blk_st(3)
     integer :: fft_n(3), fft_n_loc(2)
     integer :: fw_plan_type, bw_plan_type
     integer :: fft_bc
@@ -555,14 +565,28 @@ contains
                                 mesh%par%nproc_dir, mesh%par%nrank_dir, &
                                 n_spec, n_sp_st)
 
-    call self%base_init(mesh, xdirps, ydirps, zdirps, n_spec, n_sp_st)
-
-    ! The staged y pairing of the 010 case does not handle y stretching
-    if (self%bc_code == '010' .and. self%stretched_y &
-        .and. mesh%par%nproc > 1) then
-      call abort_run('The 010 case on multiple ranks does not yet support &
-                     &y stretching.')
+    ! On multiple ranks the 010 case gathers the full spectral field to solve
+    ! the stretched y system, and only top-bottom stretching is checked there.
+    ! Stop ahead of base_init, which builds the stretching matrices.
+    if (self%bc_code == '010' .and. mesh%geo%stretched(2) &
+        .and. mesh%par%nproc > 1 &
+        .and. trim(mesh%geo%stretching(2)) /= 'top-bottom') then
+      call abort_run('The 010 case on multiple ranks supports only &
+                     &top-bottom y stretching.')
     end if
+
+    ! The stretching matrices cover the local spectral pencil. On multiple
+    ! ranks they cover the full spectral domain, where the gathered stretched
+    ! y solve runs.
+    n_blk = n_spec
+    blk_st = n_sp_st
+    if (mesh%par%nproc > 1) then
+      n_blk = [n_spec(1), dims_glob(2), dims_glob(3)]
+      blk_st = 0
+    end if
+
+    call self%base_init(mesh, xdirps, ydirps, zdirps, n_spec, n_sp_st, &
+                        n_blk, blk_st)
 
     nx = self%nx_glob
     ny = self%ny_glob
@@ -625,6 +649,12 @@ contains
     type(mesh_t), intent(in) :: mesh
 
     call self%init_dim2_mirror(mesh)
+
+    if (self%stretched_y .and. mesh%par%nproc > 1) then
+      allocate (self%c_gather_dev(self%nx_spec, self%ny_spec, self%nz_spec, &
+                                  mesh%par%nproc))
+      allocate (self%c_full_dev(self%nx_spec, self%ny_glob, self%nz_spec))
+    end if
 
     ! if stretching in y is 'centred' or 'top-bottom'
     if (self%stretched_y .and. self%stretched_y_sym) then
@@ -1522,9 +1552,10 @@ contains
 
     type(cudaXtDesc), pointer :: descriptor
 
-    complex(dp), device, dimension(:, :, :), pointer :: c_dev
+    complex(dp), device, dimension(:, :, :), pointer :: c_dev, c_slab
     type(dim3) :: blocks, threads
     integer :: tsize, off, inc
+    integer :: ny_solve, y_st_solve, m, r, n_slab, mpi_cplx, ierr_mpi, ierr
 
     ! tsize is different than SZ, because here we work on a 3D Cartesian
     ! data structure, and free to specify any suitable thread/block size.
@@ -1563,8 +1594,56 @@ contains
                                    self%ay_dev, self%by_dev, &  ! dim2, Y
                                    self%az_dev, self%bz_dev)  ! dim3, Z
     else
+      ny_solve = self%ny_spec
+      y_st_solve = self%sp_st(2)
+
+      ! On multiple ranks each rank holds a y-slab, but the stretched y
+      ! system couples the whole y line. Gather the full spectral field on
+      ! every rank, and run the single rank solve on it.
+      if (self%mesh%par%nproc > 1) then
+        m = self%ny_spec
+
+        ! Copy the slab out of the descriptor allocation before MPI sees it,
+        ! see the comment on c_slab_send_dev
+        self%c_slab_send_dev = c_dev
+
+        if (is_sp) then
+          mpi_cplx = MPI_COMPLEX
+        else
+          mpi_cplx = MPI_DOUBLE_COMPLEX
+        end if
+        n_slab = self%nx_spec*self%ny_spec*self%nz_spec
+
+        call sync_or_abort('010 spectral gather')
+#ifdef MPI
+        call MPI_Allgather(self%c_slab_send_dev, n_slab, mpi_cplx, &
+                           self%c_gather_dev, n_slab, mpi_cplx, &
+                           MPI_COMM_WORLD, ierr_mpi)
+#else
+        call abort_run('The 010 spectral gather needs more than one rank, &
+                       &but this build was configured without MPI')
+#endif
+        call check_mpi(ierr_mpi, 'The 010 spectral gather')
+
+        ! Rank r holds the global y modes [r*m + 1, (r + 1)*m]. Each z plane
+        ! of its slab is one contiguous row of nx_spec*m elements.
+        do r = 0, self%mesh%par%nproc - 1
+          ierr = cudaMemcpy2D(self%c_full_dev(1, r*m + 1, 1), &
+                              self%nx_spec*self%ny_glob, &
+                              self%c_gather_dev(1, 1, 1, r + 1), &
+                              self%nx_spec*m, self%nx_spec*m, self%nz_spec)
+          call check_cuda(ierr, 'The 010 spectral gather unpack')
+        end do
+
+        c_slab => c_dev
+        call c_f_pointer(c_loc(self%c_full_dev), c_dev, &
+                         [self%nx_spec, self%ny_glob, self%nz_spec])
+        ny_solve = self%ny_glob
+        y_st_solve = 0
+      end if
+
       call process_spectral_010_fw<<<blocks, threads>>>( & !&
-        c_dev, self%nx_spec, self%ny_spec, self%sp_st(2), &
+        c_dev, self%nx_spec, ny_solve, y_st_solve, &
         self%nx_glob, self%ny_glob, self%nz_glob, &
         self%ax_dev, self%bx_dev, self%ay_dev, self%by_dev, &
         self%az_dev, self%bz_dev &
@@ -1589,14 +1668,14 @@ contains
         inc = 2
         call process_spectral_010_poisson<<<blocks, threads>>>( & !&
           c_dev, self%a_odd_re_dev, self%a_odd_im_dev, off, inc, &
-          self%nx_spec, self%ny_spec/2, &
+          self%nx_spec, ny_solve/2, &
           self%nx_glob, self%ny_glob, self%nz_glob &
           )
         ! start from the first even entry and continue with even ones
         off = 1
         call process_spectral_010_poisson<<<blocks, threads>>>( & !&
           c_dev, self%a_even_re_dev, self%a_even_im_dev, off, inc, &
-          self%nx_spec, self%ny_spec/2, &
+          self%nx_spec, ny_solve/2, &
           self%nx_glob, self%ny_glob, self%nz_glob &
           )
       !! if stretching in y is 'bottom'
@@ -1614,17 +1693,26 @@ contains
         inc = 1
         call process_spectral_010_poisson<<<blocks, threads>>>( & !&
           c_dev, self%a_re_dev, self%a_im_dev, off, inc, &
-          self%nx_spec, self%ny_spec, &
+          self%nx_spec, ny_solve, &
           self%nx_glob, self%ny_glob, self%nz_glob &
           )
       end if
 
       call process_spectral_010_bw<<<blocks, threads>>>( & !&
-        c_dev, self%nx_spec, self%ny_spec, self%sp_st(2), &
+        c_dev, self%nx_spec, ny_solve, y_st_solve, &
         self%nx_glob, self%ny_glob, self%nz_glob, &
         self%ax_dev, self%bx_dev, self%ay_dev, self%by_dev, &
         self%az_dev, self%bz_dev &
         )
+
+      ! Copy this rank's y-slab of the solution back into the descriptor
+      if (self%mesh%par%nproc > 1) then
+        ierr = cudaMemcpy2D(c_slab(1, 1, 1), self%nx_spec*m, &
+                            self%c_full_dev(1, self%sp_st(2) + 1, 1), &
+                            self%nx_spec*self%ny_glob, self%nx_spec*m, &
+                            self%nz_spec)
+        call check_cuda(ierr, 'The 010 spectral copy back')
+      end if
     end if
 
   end subroutine fft_postprocess_010_cuda

@@ -464,12 +464,27 @@ function(define_backend_tests backend)
       define_verification_test(verification/test_poisson_bc.f90 1 ${backend} --bc ${bc})
     endforeach()
     # Stretching in y is specific to the pdp (010) solver and needs the CUDA
-    # backend on 1 rank, so these cases are registered for CUDA only
+    # backend, so these cases are registered for CUDA only. On 2 ranks only
+    # top-bottom is supported, the other stretchings stop at the abort of the
+    # solver.
     if(${backend} STREQUAL cuda)
       foreach(stretch bottom centred top-bottom)
         set(X3D2_TEST_NAME_SUFFIX _pdp_${stretch})
         define_verification_test(verification/test_poisson_bc.f90 1 ${backend} --bc pdp --stretch ${stretch})
       endforeach()
+      set(X3D2_TEST_NAME_SUFFIX _pdp_top-bottom)
+      define_verification_test(verification/test_poisson_bc.f90 2 ${backend} --bc pdp --stretch top-bottom)
+      if(WITH_MPI)
+        foreach(stretch bottom centred)
+          set(X3D2_TEST_NAME_SUFFIX _pdp_${stretch}_abort)
+          define_verification_test(verification/test_poisson_bc.f90 2 ${backend} --bc pdp --stretch ${stretch})
+          set_tests_properties(
+            test_poisson_bc_${backend}_2_pdp_${stretch}_abort PROPERTIES
+            PASS_REGULAR_EXPRESSION "supports only top-bottom y stretching"
+            FAIL_REGULAR_EXPRESSION "must never be reached"
+            TIMEOUT 60)
+        endforeach()
+      endif()
       # The other BC codes stop at the abort of the solver
       foreach(bc ppp dpp ddp)
         set(X3D2_TEST_NAME_SUFFIX _${bc}_centred_abort)
@@ -854,7 +869,8 @@ endif()
 
 # CUDA regression cases. The channel cases run the 010 FFT Poisson solver with
 # a stretched y grid, one case per stretching operator. Only the CUDA backend
-# supports y stretching in the FFT solver, and only on one rank. Their goldens
+# supports y stretching in the FFT solver, and on more than one rank only
+# top-bottom stretching. The channel cases run on one rank. Their goldens
 # are blessed from a double precision NVHPC build, and a single precision
 # build checks against them too.
 if(${ENABLE_BACKEND} STREQUAL "CUDA")
