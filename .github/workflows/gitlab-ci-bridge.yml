@@ -138,7 +138,10 @@ jobs:
           api="${GITLAB_BASE}/api/v4/projects/${GITLAB_PROJECT_ID}/pipelines/${PIPELINE_ID}"
           previous=""
           while true; do
-            status=$(curl -sS --fail-with-body --retry 3 --retry-connrefused \
+            # The loop polls for as long as the pipeline runs, so one dropped
+            # connection must not fail the job: retry every error, including
+            # the TLS read failures --retry alone does not cover.
+            status=$(curl -sS --fail-with-body --retry 5 --retry-all-errors --retry-delay 10 \
               -H "PRIVATE-TOKEN: ${GITLAB_TOKEN}" "$api" | jq -r '.status')
             if [ "$status" != "$previous" ]; then
               echo "pipeline ${PIPELINE_ID}: ${status}"
