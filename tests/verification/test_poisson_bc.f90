@@ -122,6 +122,7 @@ program test_poisson
   ! beta of examples/channel/input.x3d
   real(dp), parameter :: stretch_beta = 0.259065151_dp
 
+  !&<
   type(bc_case_t), parameter :: cases(*) = [ &
     bc_case_t('all periodic', [128, 64, 32], &
               [character(len=9) :: 'periodic', 'periodic', 'periodic'], &
@@ -181,6 +182,7 @@ program test_poisson
     bc_case_t('x,y-dirichlet, odd', [82, 82, 64], &
               [character(len=9) :: 'dirichlet', 'dirichlet', 'periodic'], &
               'uniform', 0.0_dp)]
+  !&>
 
   ! One cosine test: the directions that carry cos(n*pi*x_d) and the wavenumber
   type :: cosine_test_t
@@ -190,6 +192,7 @@ program test_poisson
   end type cosine_test_t
 
   ! The n=2 block first, then the n=3 block, as the summary lists them
+  !&<
   type(cosine_test_t), parameter :: tests(*) = [ &
     cosine_test_t('COS_X', [.true., .false., .false.], 2), &
     cosine_test_t('COS_Y', [.false., .true., .false.], 2), &
@@ -205,6 +208,7 @@ program test_poisson
     cosine_test_t('COS_XZ', [.true., .false., .true.], 3), &
     cosine_test_t('COS_YZ', [.false., .true., .true.], 3), &
     cosine_test_t('COS_XYZ', [.true., .true., .true.], 3)]
+  !&>
 
   ! The outcome of the checks that run once for each BC configuration. The
   ! default is what a skipped configuration keeps
@@ -607,7 +611,7 @@ contains
     type(bc_case_t), intent(in) :: c
     character(len=7) :: code
 
-    code = c%bc(1)(1:1)//c%bc(2)(1:1)//c%bc(3)(1:1)
+    code = c%bc(1) (1:1)//c%bc(2) (1:1)//c%bc(3) (1:1)
     if (any(c%bc /= 'periodic' .and. mod(c%dims, 2) == 0)) then
       code = trim(code)//'_odd'
     end if
