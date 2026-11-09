@@ -18,6 +18,7 @@ program test_memcheck_stretched_y
   call test_centred_equals_top_bottom()
   call test_odd_ny_spec()
   call test_ng2_halves_ny_spec()
+  call test_nproc2_zslab()
 
   if (.not. test_pass) then
     error stop "FAIL"
@@ -92,6 +93,24 @@ contains
     expect = 4_i8*257_i8*64_i8*256_i8*5_i8*int(nbytes, i8)
     call check("num_gpus=2 slab, ny_spec=128", bytes, expect)
   end subroutine test_ng2_halves_ny_spec
+
+  subroutine test_nproc2_zslab()
+    !! nproc=2: the matrices cover the z-slab (nx_spec, ny, nz/2), plus
+    !! three complex z-slab buffers. n_spec (9,3,8) has an odd ny/nproc.
+    integer(i8) :: bytes, expect
+
+    bytes = stretched_y_matrix_bytes(.true., 'top-bottom', .false., &
+                                     [33, 32, 64], nproc=2)
+    expect = (2_i8*4_i8*33_i8*32_i8*32_i8*5_i8 &
+              + 3_i8*33_i8*64_i8*32_i8*2_i8)*int(nbytes, i8)
+    call check("nproc=2, top-bottom, z-slab", bytes, expect)
+
+    bytes = stretched_y_matrix_bytes(.true., 'top-bottom', .true., &
+                                     [9, 3, 8], nproc=2)
+    expect = (4_i8*9_i8*3_i8*4_i8*5_i8 &
+              + 3_i8*9_i8*6_i8*4_i8*2_i8)*int(nbytes, i8)
+    call check("nproc=2, odd ny/nproc, top-bottom", bytes, expect)
+  end subroutine test_nproc2_zslab
 
   subroutine check(label, actual, expect)
     character(*), intent(in) :: label
