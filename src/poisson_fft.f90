@@ -283,9 +283,8 @@ contains
     type(geo_t), intent(in) :: geo
     type(dirps_t), intent(in) :: xdirps, ydirps, zdirps
 
-    real(dp) :: temp, a0, a1, c1_od, c2_od, c1_ev, c2_ev
-    complex(dp) :: km_a1, km_a1_od, km_a1_ev
-    integer :: i, j, k, ix, iy, iz, iy_od, iy_ev
+    real(dp) :: temp, a0, a1
+    integer :: i, j, k, ix, iz
 
     do i = 1, self%nx_spec
       temp = real(self%exs(i), kind=dp)*geo%d(1)
@@ -328,103 +327,8 @@ contains
       a0 = (geo%alpha(2)/pi + 1._dp/(2*pi*geo%beta(2)))*geo%L(2)
       a1 = -1._dp/(4*pi*geo%beta(2))*geo%L(2)
 
-      ! diagonal
-      do k = 1, self%nz_spec
-        do j = 1, self%ny_spec
-          do i = 1, self%nx_spec
-            ix = i + self%sp_st(1); iy = j + self%sp_st(2); iz = k + self%sp_st(3)
-            if (iy == 1) then
-              km_a1 = self%get_km(ix, 2, iz)
-            else if (iy == self%ny_spec) then
-              km_a1 = self%get_km(ix, self%ny_spec - 1, iz)
-            else
-              km_a1 = self%get_km(ix, iy - 1, iz) + self%get_km(ix, iy + 1, iz)
-            end if
-
-            self%a_re(i, j, k, 3) = &
-              -(get_real(self%kx(ix)) &
-                *self%trans_y_re(iy)*self%trans_z_re(iz))**2 &
-              - (get_real(self%kz(iz)) &
-                 *self%trans_y_re(iy)*self%trans_x_re(ix))**2 &
-              - a0**2*self%get_km_re(ix, iy, iz)**2 &
-              - a1**2*self%get_km_re(ix, iy, iz)*get_real(km_a1)
-            self%a_im(i, j, k, 3) = &
-              -(get_imag(self%kx(ix)) &
-                *self%trans_y_im(iy)*self%trans_z_im(iz))**2 &
-              - (get_imag(self%kz(iz)) &
-                 *self%trans_y_im(iy)*self%trans_x_im(ix))**2 &
-              - a0**2*self%get_km_im(ix, iy, iz)**2 &
-              - a1**2*self%get_km_im(ix, iy, iz)*get_imag(km_a1)
-          end do
-        end do
-      end do
-
-      ! diagonal + 1
-      do k = 1, self%nz_spec
-        do j = 1, self%ny_spec - 1
-          do i = 1, self%nx_spec
-            ix = i + self%sp_st(1); iy = j + self%sp_st(2); iz = k + self%sp_st(3)
-
-            self%a_re(i, j, k, 4) = &
-              a0*a1*self%get_km_re(ix, iy + 1, iz) &
-              *(self%get_km_re(ix, iy, iz) + self%get_km_re(ix, iy + 1, iz))
-            self%a_im(i, j, k, 4) = &
-              a0*a1*self%get_km_im(ix, iy + 1, iz) &
-              *(self%get_km_im(ix, iy, iz) + self%get_km_im(ix, iy + 1, iz))
-          end do
-        end do
-      end do
-
-      ! diagonal + 2
-      do k = 1, self%nz_spec
-        do j = 1, self%ny_spec - 2
-          do i = 1, self%nx_spec
-            ix = i + self%sp_st(1); iy = j + self%sp_st(2); iz = k + self%sp_st(3)
-
-            self%a_re(i, j, k, 5) = -a1*a1*self%get_km_re(ix, iy + 1, iz) &
-                                    *self%get_km_re(ix, iy + 2, iz)
-            self%a_im(i, j, k, 5) = -a1*a1*self%get_km_im(ix, iy + 1, iz) &
-                                    *self%get_km_im(ix, iy + 2, iz)
-          end do
-        end do
-      end do
-
-      ! The ky=0 cosine mode has half the weight of the other modes. Double the
-      ! off-diagonals of the first row, as the odd system of the symmetric branch does.
-      if (self%sp_st(2) == 0) then
-        self%a_re(:, 1, :, 4:5) = 2*self%a_re(:, 1, :, 4:5)
-        self%a_im(:, 1, :, 4:5) = 2*self%a_im(:, 1, :, 4:5)
-      end if
-
-      ! diagonal - 1
-      do k = 1, self%nz_spec
-        do j = 2, self%ny_spec
-          do i = 1, self%nx_spec
-            ix = i + self%sp_st(1); iy = j + self%sp_st(2); iz = k + self%sp_st(3)
-
-            self%a_re(i, j, k, 2) = a0*a1*self%get_km_re(ix, iy - 1, iz) &
-                                    *(self%get_km_re(ix, iy, iz) &
-                                      + self%get_km_re(ix, iy - 1, iz))
-            self%a_im(i, j, k, 2) = a0*a1*self%get_km_im(ix, iy - 1, iz) &
-                                    *(self%get_km_im(ix, iy, iz) &
-                                      + self%get_km_im(ix, iy - 1, iz))
-          end do
-        end do
-      end do
-
-      ! diagonal - 2
-      do k = 1, self%nz_spec
-        do j = 3, self%ny_spec
-          do i = 1, self%nx_spec
-            ix = i + self%sp_st(1); iy = j + self%sp_st(2); iz = k + self%sp_st(3)
-
-            self%a_re(i, j, k, 1) = -a1*a1*self%get_km_re(ix, iy - 1, iz) &
-                                    *self%get_km_re(ix, iy - 2, iz)
-            self%a_im(i, j, k, 1) = -a1*a1*self%get_km_im(ix, iy - 1, iz) &
-                                    *self%get_km_im(ix, iy - 2, iz)
-          end do
-        end do
-      end do
+      call fill_stretched_diagonals(self, self%a_re, self%a_im, self%ny_spec, &
+                                    1, 0, 1, a0, a1, 'bottom')
 
       ! tweak the matrix to make it not singular
       self%a_re(1, 1, 1, 3) = 1._dp; self%a_im(1, 1, 1, 3) = 1._dp
@@ -452,196 +356,10 @@ contains
         a1 = 0._dp
       end select
 
-      ! diagonal
-      do k = 1, self%nz_spec
-        do j = 1, self%ny_spec/2
-          do i = 1, self%nx_spec
-            ix = i + self%sp_st(1); iy = j + self%sp_st(2); iz = k + self%sp_st(3)
-            iy_od = 2*iy - 1
-            iy_ev = 2*iy
-            c1_od = a0*a0
-            c2_od = a1*a1
-            c1_ev = a0*a0
-            c2_ev = a1*a1
-            if (iy == 1) then
-              c1_ev = a0*a0 - a1*a1
-              km_a1_od = self%get_km(ix, 3, iz)
-              km_a1_ev = self%get_km(ix, 4, iz)
-            else if (iy == self%ny_spec/2) then
-              c1_ev = (a0 + a1)*(a0 + a1)
-              km_a1_od = self%get_km(ix, iy_od - 2, iz)
-              km_a1_ev = self%get_km(ix, iy_ev - 2, iz)
-            else
-              km_a1_od = self%get_km(ix, iy_od - 2, iz) &
-                         + self%get_km(ix, iy_od + 2, iz)
-              km_a1_ev = self%get_km(ix, iy_ev - 2, iz) &
-                         + self%get_km(ix, iy_ev + 2, iz)
-            end if
-
-            self%a_odd_re(i, j, k, 3) = &
-              -(get_real(self%kx(ix)) &
-                *self%trans_y_re(iy_od)*self%trans_z_re(iz))**2 &
-              - (get_real(self%kz(iz)) &
-                 *self%trans_y_re(iy_od)*self%trans_x_re(ix))**2 &
-              - c1_od*self%get_km_re(ix, iy_od, iz)**2 &
-              - c2_od*self%get_km_re(ix, iy_od, iz)*get_real(km_a1_od)
-            self%a_odd_im(i, j, k, 3) = &
-              -(get_imag(self%kx(ix)) &
-                *self%trans_y_im(iy_od)*self%trans_z_im(iz))**2 &
-              - (get_imag(self%kz(iz)) &
-                 *self%trans_y_im(iy_od)*self%trans_x_im(ix))**2 &
-              - c1_od*self%get_km_im(ix, iy_od, iz)**2 &
-              - c2_od*self%get_km_im(ix, iy_od, iz)*get_imag(km_a1_od)
-            self%a_even_re(i, j, k, 3) = &
-              -(get_real(self%kx(ix)) &
-                *self%trans_y_re(iy_ev)*self%trans_z_re(iz))**2 &
-              - (get_real(self%kz(iz)) &
-                 *self%trans_y_re(iy_ev)*self%trans_x_re(ix))**2 &
-              - c1_ev*self%get_km_re(ix, iy_ev, iz)**2 &
-              - c2_ev*self%get_km_re(ix, iy_ev, iz)*get_real(km_a1_ev)
-            self%a_even_im(i, j, k, 3) = &
-              -(get_imag(self%kx(ix)) &
-                *self%trans_y_im(iy_ev)*self%trans_z_im(iz))**2 &
-              - (get_imag(self%kz(iz)) &
-                 *self%trans_y_im(iy_ev)*self%trans_x_im(ix))**2 &
-              - c1_ev*self%get_km_im(ix, iy_ev, iz)**2 &
-              - c2_ev*self%get_km_im(ix, iy_ev, iz)*get_imag(km_a1_ev)
-          end do
-        end do
-      end do
-
-      ! diagonal + 1
-      do k = 1, self%nz_spec
-        do j = 1, self%ny_spec/2
-          do i = 1, self%nx_spec
-            ix = i + self%sp_st(1); iy = j + self%sp_st(2); iz = k + self%sp_st(3)
-            iy_od = 2*iy - 1
-            iy_ev = 2*iy
-            c1_od = a0*a1
-            c2_od = a0*a1
-            c1_ev = a0*a1
-            c2_ev = a0*a1
-            if (iy == 1) then
-              c1_od = 2*a0*a1
-              c2_od = 2*a0*a1
-              c1_ev = a0*a1 - a1*a1
-              c2_ev = a0*a1
-            else if (iy == self%ny_spec/2 - 1) then
-              c1_ev = a0*a1
-              c2_ev = (a0 + a1)*a1
-            else if (iy == self%ny_spec/2) then
-              c1_ev = 0; c2_ev = 0
-            end if
-            self%a_odd_re(i, j, k, 4) = &
-              c1_od*(self%get_km_re(ix, iy_od, iz) &
-                     *self%get_km_re(ix, iy_od + 2, iz)) &
-              + c2_od*self%get_km_re(ix, iy_od + 2, iz)**2
-            self%a_odd_im(i, j, k, 4) = &
-              c1_od*(self%get_km_im(ix, iy_od, iz) &
-                     *self%get_km_im(ix, iy_od + 2, iz)) &
-              + c2_od*self%get_km_im(ix, iy_od + 2, iz)**2
-            self%a_even_re(i, j, k, 4) = &
-              c1_ev*(self%get_km_re(ix, iy_ev, iz) &
-                     *self%get_km_re(ix, iy_ev + 2, iz)) &
-              + c2_ev*self%get_km_re(ix, iy_ev + 2, iz)**2
-            self%a_even_im(i, j, k, 4) = &
-              c1_ev*(self%get_km_im(ix, iy_ev, iz) &
-                     *self%get_km_im(ix, iy_ev + 2, iz)) &
-              + c2_ev*self%get_km_im(ix, iy_ev + 2, iz)**2
-          end do
-        end do
-      end do
-
-      ! diagonal + 2
-      do k = 1, self%nz_spec
-        do j = 1, self%ny_spec/2 - 2
-          do i = 1, self%nx_spec
-            ix = i + self%sp_st(1); iy = j + self%sp_st(2); iz = k + self%sp_st(3)
-            iy_od = 2*iy - 1
-            iy_ev = 2*iy
-            c1_od = a1*a1
-            c1_ev = a1*a1
-            if (iy == 1) then
-              c1_od = 2*a1*a1
-            end if
-            self%a_odd_re(i, j, k, 5) = &
-              -(c1_od*self%get_km_re(ix, iy_od + 2, iz) &
-                *self%get_km_re(ix, iy_od + 4, iz))
-            self%a_odd_im(i, j, k, 5) = &
-              -(c1_od*self%get_km_im(ix, iy_od + 2, iz) &
-                *self%get_km_im(ix, iy_od + 4, iz))
-            self%a_even_re(i, j, k, 5) = &
-              -(c1_ev*self%get_km_re(ix, iy_ev + 2, iz) &
-                *self%get_km_re(ix, iy_ev + 4, iz))
-            self%a_even_im(i, j, k, 5) = &
-              -(c1_ev*self%get_km_im(ix, iy_ev + 2, iz) &
-                *self%get_km_im(ix, iy_ev + 4, iz))
-          end do
-        end do
-      end do
-
-      ! diagonal - 1
-      do k = 1, self%nz_spec
-        do j = 2, self%ny_spec/2
-          do i = 1, self%nx_spec
-            ix = i + self%sp_st(1); iy = j + self%sp_st(2); iz = k + self%sp_st(3)
-            iy_od = 2*iy - 1
-            iy_ev = 2*iy
-            c1_od = a0*a1
-            c2_od = a0*a1
-            c1_ev = a0*a1
-            c2_ev = a0*a1
-            if (iy == 1) then
-              c1_od = 0; c2_od = 0; c1_ev = 0; c2_ev = 0
-            else if (iy == 2) then
-              c1_ev = a0*a1
-              c2_ev = (a0 + a1)*a1
-            else if (iy == self%ny_spec/2) then
-              c1_ev = (a0 + a1)*a1
-              c2_ev = a0*a1
-            end if
-            self%a_odd_re(i, j, k, 2) = &
-              c1_od*(self%get_km_re(ix, iy_od, iz) &
-                     *self%get_km_re(ix, iy_od - 2, iz)) &
-              + c2_od*self%get_km_re(ix, iy_od - 2, iz)**2
-            self%a_odd_im(i, j, k, 2) = &
-              c1_od*(self%get_km_im(ix, iy_od, iz) &
-                     *self%get_km_im(ix, iy_od - 2, iz)) &
-              + c2_od*self%get_km_im(ix, iy_od - 2, iz)**2
-            self%a_even_re(i, j, k, 2) = &
-              c1_ev*(self%get_km_re(ix, iy_ev, iz) &
-                     *self%get_km_re(ix, iy_ev - 2, iz)) &
-              + c2_ev*self%get_km_re(ix, iy_ev - 2, iz)**2
-            self%a_even_im(i, j, k, 2) = &
-              c1_ev*(self%get_km_im(ix, iy_ev, iz) &
-                     *self%get_km_im(ix, iy_ev - 2, iz)) &
-              + c2_ev*self%get_km_im(ix, iy_ev - 2, iz)**2
-          end do
-        end do
-      end do
-
-      ! diagonal - 2
-      do k = 1, self%nz_spec
-        do j = 3, self%ny_spec/2
-          do i = 1, self%nx_spec
-            ix = i + self%sp_st(1); iy = j + self%sp_st(2); iz = k + self%sp_st(3)
-            iy_od = 2*iy - 1
-            iy_ev = 2*iy
-            self%a_odd_re(i, j, k, 1) = &
-              -(a1*a1*self%get_km_re(ix, iy_od - 2, iz) &
-                *self%get_km_re(ix, iy_od - 4, iz))
-            self%a_odd_im(i, j, k, 1) = &
-              -(a1*a1*self%get_km_im(ix, iy_od - 2, iz) &
-                *self%get_km_im(ix, iy_od - 4, iz))
-            self%a_even_re(i, j, k, 1) = &
-              -(a1*a1*self%get_km_re(ix, iy_ev - 2, iz) &
-                *self%get_km_re(ix, iy_ev - 4, iz))
-            self%a_even_im(i, j, k, 1) = &
-              -(a1*a1*self%get_km_im(ix, iy_ev - 2, iz) &
-                *self%get_km_im(ix, iy_ev - 4, iz))
-          end do
-        end do
-      end do
+      call fill_stretched_diagonals(self, self%a_odd_re, self%a_odd_im, &
+                                    self%ny_spec/2, 2, -1, 2, a0, a1, 'odd')
+      call fill_stretched_diagonals(self, self%a_even_re, self%a_even_im, &
+                                    self%ny_spec/2, 2, 0, 2, a0, a1, 'even')
 
       do k = 1, self%nz_spec
         do i = 1, self%nx_spec
@@ -660,6 +378,131 @@ contains
     end if
 
   end subroutine stretching_matrix
+
+  subroutine fill_stretched_diagonals(self, a_re, a_im, nrows, iy_scale, iy_off, &
+                                      shift, a0, a1, edge)
+    !! Fill the five diagonals of one stretching matrix. Row j of the matrix
+    !! couples the cosine modes iy_scale*iy + iy_off + (-2:2)*shift, with
+    !! iy = j + sp_st(2). The caller zeroes a_re and a_im beforehand.
+    !! The edge rule selects the first and last rows: 'bottom' and 'odd' double
+    !! the off-diagonals of row 1, as the ky=0 cosine mode has half the weight
+    !! of the other modes. 'even' has its own edge coefficients and no doubling.
+    !! 'bottom' has no diagonal + 1 on its last row, as there is no mode above.
+    implicit none
+
+    class(poisson_fft_t), intent(in) :: self
+    real(dp), intent(inout) :: a_re(:, :, :, :), a_im(:, :, :, :)
+    integer, intent(in) :: nrows, iy_scale, iy_off, shift
+    real(dp), intent(in) :: a0, a1
+    character(len=*), intent(in) :: edge
+
+    real(dp) :: c1, c2, c_first
+    complex(dp) :: km_a1
+    integer :: i, j, k, ix, iy, iz, r, nup1
+    logical :: is_even
+
+    is_even = trim(edge) == 'even'
+    ! First-row coefficient of the even diagonal + 1. Compute it outside the loop
+    ! to keep the rounding of the old code (no fused multiply-add in the loop).
+    c_first = a0*a1 - a1*a1
+    nup1 = nrows
+    if (trim(edge) == 'bottom') nup1 = nrows - 1
+
+    do k = 1, self%nz_spec
+      do j = 1, nrows
+        do i = 1, self%nx_spec
+          ix = i + self%sp_st(1); iy = j + self%sp_st(2); iz = k + self%sp_st(3)
+          r = iy_scale*iy + iy_off
+
+          ! diagonal
+          c1 = a0*a0
+          c2 = a1*a1
+          if (iy == 1) then
+            if (is_even) c1 = a0*a0 - a1*a1
+            km_a1 = self%get_km(ix, r + shift, iz)
+          else if (iy == nrows) then
+            if (is_even) c1 = (a0 + a1)*(a0 + a1)
+            km_a1 = self%get_km(ix, r - shift, iz)
+          else
+            km_a1 = self%get_km(ix, r - shift, iz) + self%get_km(ix, r + shift, iz)
+          end if
+          a_re(i, j, k, 3) = &
+            -(get_real(self%kx(ix))*self%trans_y_re(r)*self%trans_z_re(iz))**2 &
+            - (get_real(self%kz(iz))*self%trans_y_re(r)*self%trans_x_re(ix))**2 &
+            - c1*self%get_km_re(ix, r, iz)**2 &
+            - c2*self%get_km_re(ix, r, iz)*get_real(km_a1)
+          a_im(i, j, k, 3) = &
+            -(get_imag(self%kx(ix))*self%trans_y_im(r)*self%trans_z_im(iz))**2 &
+            - (get_imag(self%kz(iz))*self%trans_y_im(r)*self%trans_x_im(ix))**2 &
+            - c1*self%get_km_im(ix, r, iz)**2 &
+            - c2*self%get_km_im(ix, r, iz)*get_imag(km_a1)
+
+          ! diagonal + 1
+          if (j <= nup1) then
+            c1 = a0*a1
+            c2 = a0*a1
+            if (iy == 1) then
+              if (is_even) then
+                c1 = c_first
+              else
+                c1 = 2*a0*a1
+                c2 = 2*a0*a1
+              end if
+            else if (is_even .and. iy == nrows - 1) then
+              c2 = (a0 + a1)*a1
+            else if (is_even .and. iy == nrows) then
+              c1 = 0; c2 = 0
+            end if
+            a_re(i, j, k, 4) = &
+              c1*(self%get_km_re(ix, r, iz)*self%get_km_re(ix, r + shift, iz)) &
+              + c2*self%get_km_re(ix, r + shift, iz)**2
+            a_im(i, j, k, 4) = &
+              c1*(self%get_km_im(ix, r, iz)*self%get_km_im(ix, r + shift, iz)) &
+              + c2*self%get_km_im(ix, r + shift, iz)**2
+          end if
+
+          ! diagonal + 2
+          if (j <= nrows - 2) then
+            c1 = a1*a1
+            if (iy == 1 .and. .not. is_even) c1 = 2*a1*a1
+            a_re(i, j, k, 5) = &
+              -(c1*self%get_km_re(ix, r + shift, iz) &
+                *self%get_km_re(ix, r + 2*shift, iz))
+            a_im(i, j, k, 5) = &
+              -(c1*self%get_km_im(ix, r + shift, iz) &
+                *self%get_km_im(ix, r + 2*shift, iz))
+          end if
+
+          ! diagonal - 1
+          if (j >= 2) then
+            c1 = a0*a1
+            c2 = a0*a1
+            if (is_even .and. iy == 2) then
+              c2 = (a0 + a1)*a1
+            else if (is_even .and. iy == nrows) then
+              c1 = (a0 + a1)*a1
+            end if
+            a_re(i, j, k, 2) = &
+              c1*(self%get_km_re(ix, r, iz)*self%get_km_re(ix, r - shift, iz)) &
+              + c2*self%get_km_re(ix, r - shift, iz)**2
+            a_im(i, j, k, 2) = &
+              c1*(self%get_km_im(ix, r, iz)*self%get_km_im(ix, r - shift, iz)) &
+              + c2*self%get_km_im(ix, r - shift, iz)**2
+          end if
+
+          ! diagonal - 2
+          if (j >= 3) then
+            a_re(i, j, k, 1) = &
+              -(a1*a1*self%get_km_re(ix, r - shift, iz) &
+                *self%get_km_re(ix, r - 2*shift, iz))
+            a_im(i, j, k, 1) = &
+              -(a1*a1*self%get_km_im(ix, r - shift, iz) &
+                *self%get_km_im(ix, r - 2*shift, iz))
+          end if
+        end do
+      end do
+    end do
+  end subroutine fill_stretched_diagonals
 
   subroutine waves_set(self, geo, xdirps, ydirps, zdirps)
   !! Spectral equivalence constants
