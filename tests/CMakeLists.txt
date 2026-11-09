@@ -818,8 +818,12 @@ endif()
 # because it sets what the suite can detect. The golden is double precision for
 # both. The single-precision tolerances leave roughly an order of magnitude or
 # more above the largest observed cross-build differences while retaining useful
-# regression sensitivity. If a CI compiler drifts past these, the failure prints
-# the observed |diff| so the tolerance can be revisited empirically.
+# regression sensitivity. Measured with gfortran 13.3 (Debug), the worst
+# columns are smoke kinetic_energy at 7.6e-7 and nightly enstrophy at 8.4e-6
+# relative, which grows over the run, so the nightly case cannot share the smoke
+# rtol. The ceilings sit 7-30x above the observed div_u. If a CI compiler drifts
+# past these, the failure prints the observed |diff| so the tolerance can be
+# revisited empirically.
 if(SINGLE_PREC)
   set(_smoke_cmp_args --rtol 1e-5
       --ceiling div_u_max=1e-4 --ceiling div_u_mean=1e-5)
