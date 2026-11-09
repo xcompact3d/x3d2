@@ -6,10 +6,7 @@ module m_cuda_poisson_fft
   use cufft
   use m_mpi, only: MPI_COMM_WORLD, MPI_COMPLEX, MPI_DOUBLE_COMPLEX, &
                    MPI_STATUS_IGNORE, MPI_Sendrecv, &
-                   MPI_Alltoall
-#ifdef MPI
-  use m_mpi, only: MPI_Allgather
-#endif
+                   MPI_Alltoall, MPI_Allgather
 
   use m_common, only: dp, CELL, is_sp, MPI_X3D2_DP
   use m_field, only: field_t
