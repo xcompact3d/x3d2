@@ -41,9 +41,6 @@ module m_tdsops
     !! marginally diagonally dominant as alpha approaches 0.5. Thomas is
     !! serial along the line, so this is only valid when the direction is not
     !! decomposed.
-    logical :: second_order_tds = .false. !! .true. The tridiagonal system that is solved at the boundaries is different
-    !! for the second-order scheme compared to the default sixth-order scheme. In this case, these lines of the TDS need
-    !! to be updated accordingly.
     logical :: prefer_thomas = .false.
     integer :: n_tds !! Tridiagonal system size
     integer :: n_rhs !! Right-hand-side builder size
@@ -270,7 +267,6 @@ contains
       bfi = 101._dp/600._dp/delta ! b/(4h): b=101/150
       cfi = 1._dp/600._dp/delta   ! c/(6h): c=1/100
     case ('compact2')
-      self%second_order_tds = .true.
       alpha = 0._dp
       afi = 0.5_dp / delta
       bfi = 0._dp
@@ -361,11 +357,14 @@ contains
                                -17._dp/240._dp, 0._dp]
         self%coeffs_s(:, 2) = self%coeffs_s(:, 2)/delta
       case ('compact2')
-        ! first line (compact2 tridiag)
+        ! First line: The Dirichlet BC with second-order constraints as detailed in Lele, 1992, equation 4.1.1.
         ! TODO: Is there a better choice for these? Go through the Thomas and distributed algorithms to check.
         self%dist_sa(1) = 0._dp
         self%dist_sc(1) = 0._dp
-        ! self%coeffs_s(:, 1) = [0._dp, 0._dp, 0._dp, ]
+        self%coeffs_s(:, 1) = [0._dp, 0._dp, 0._dp, 0._dp, &
+                              0._dp, &
+                              -1.5_dp, 2._dp, -0.5_dp, 0._dp]
+        self%coeffs_s(:, 1) = self%coeffs_s(:, 1) / delta
       end select
     end select
 
@@ -399,7 +398,8 @@ contains
         end if
       end if
     case (BC_DIRICHLET)
-      if (.not. self%pentadiag) then
+      select case (scheme)
+      case ('compact6')
         ! last line (compact6 tridiag)
         self%dist_sa(n) = 2._dp
         self%dist_sc(n) = 0._dp
@@ -414,7 +414,7 @@ contains
                                         0._dp, &
                                         0.75_dp, 0._dp, 0._dp, 0._dp]
         self%coeffs_e(:, n_halo - 1) = self%coeffs_e(:, n_halo - 1)/delta
-      else
+      case ('compact10penta')
         ! compact10_penta: rows N, N-1 use compact one-sided closures (mirrored).
         self%coeffs_e(:, n_halo) = [17._dp/80._dp, -67._dp/60._dp, &
                                     9._dp/4._dp, -71._dp/20._dp, &
@@ -426,7 +426,16 @@ contains
                                         -103._dp/120._dp, &
                                         301._dp/240._dp, 0._dp, 0._dp, 0._dp]
         self%coeffs_e(:, n_halo - 1) = self%coeffs_e(:, n_halo - 1)/delta
-      end if
+      case ('compact2')
+        ! Last line: The Dirichlet BC with second-order constraints as detailed in Lele, 1992, equation 4.1.1.
+        ! TODO: Is there a better choice for these? Go through the Thomas and distributed algorithms to check.
+        self%dist_sa(n) = 0._dp
+        self%dist_sc(n) = 0._dp
+        self%coeffs_e(:, n_halo) = [0._dp, 0._dp, -1._dp/6._dp, -2._dp/3._dp, &
+                                    1._dp, &
+                                    0._dp, 0._dp, 0._dp, 0._dp]
+        self%coeffs_e(:, n_halo) = self%coeffs_e(:, n_halo)/delta
+      end select
     end select
 
     if (self%pentadiag) then
@@ -671,7 +680,6 @@ contains
         call abort_run('compact6-hyperviscous requires c_nu and nu0_nu')
       end if
     case ('compact2')
-      self%second_order_tds = .true.
       alpha = 0._dp
       asi = 1._dp / d2
       bsi = 0._dp
@@ -874,7 +882,6 @@ contains
       cici = (3._dp - 10._dp*alpha)/256._dp
       dici = 0._dp
     case ('classic2')
-      self%second_order_tds = .true.
       alpha = 0._dp
       aici = 0.5_dp
       bici = 0._dp
@@ -1018,7 +1025,6 @@ contains
       aci = 63._dp/62._dp/delta
       bci = 17._dp/62._dp/3._dp/delta
     case ('compact2')
-      self%second_order_tds = .true.
       alpha = 0._dp
       aci = 1._dp / delta
       bci = 0._dp
