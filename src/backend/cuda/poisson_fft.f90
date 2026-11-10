@@ -73,8 +73,9 @@ module m_cuda_poisson_fft
     real(dp), device, allocatable, dimension(:, :, :) :: r_dev
     !> dim2 mirror of the local spectral slab, used by the 010, 100 and 110
     !> cases to reach the paired split partner that lives on another rank.
-    !> Only init_dim2_mirror allocates it, and init_cuda reads its allocation
-    !> status as "this case needs cuFFTMp".
+    !> Only init_dim2_mirror allocates it. The stretched 010 case on multiple
+    !> ranks does not allocate it. init_cuda decides the cuFFTMp requirement
+    !> from the case and the rank count, not from the allocation status.
     complex(dp), device, allocatable, dimension(:, :, :) :: c_mirror_dev
     !> Staging copy of the local slab, sent in place of c_dev itself.
     !> In the cuFFTMp path c_dev is a c_f_pointer onto descriptor%data(1),
@@ -624,7 +625,7 @@ contains
     self%use_cufftmp = .true.
 
     ! init_case must run before create_plans: the 010, 100 and 110 cases set up
-    ! the dim2 mirror there, and the cuFFTMp check below reads it.
+    ! their device state there.
     call self%init_case(mesh)
 
     call self%create_plans(mesh, fft_n, fft_n_loc, fw_plan_type, &
@@ -632,10 +633,11 @@ contains
 
     ! use_cufftmp is only settled once create_fft_plan has run, because plain
     ! cuFFT is a fallback taken inside it, so unlike the decomposition checks
-    ! above this one cannot move ahead of the plans. c_mirror_dev is
-    ! allocated only by init_dim2_mirror, so it is allocated exactly on the
-    ! multi-rank paths of the 010, 100 and 110 cases.
-    if (allocated(self%c_mirror_dev) .and. (.not. self%use_cufftmp)) then
+    ! above this one cannot move ahead of the plans. The 010, 100 and 110
+    ! cases need cuFFTMp on more than one rank.
+    if ((self%bc_code == '010' .or. self%bc_code == '100' &
+         .or. self%bc_code == '110') &
+        .and. mesh%par%nproc > 1 .and. (.not. self%use_cufftmp)) then
       call abort_run('The 010, 100 and 110 cases on multiple ranks need &
                      &cuFFTMp, plain cuFFT cannot decompose the transform.')
     end if
@@ -720,9 +722,7 @@ contains
     !! dim2 modes [r*m + 1, (r + 1)*m] with m = ny_spec, and the mirror of
     !! that range is slab P - 1 - r shifted up by one plane, so the extra
     !! plane comes from slab P - r. Both partners are symmetric. A single
-    !! rank holds every partner itself and allocates nothing. This is the
-    !! only place c_mirror_dev is allocated, see the cuFFTMp check in
-    !! init_cuda.
+    !! rank holds every partner itself and allocates nothing.
     implicit none
 
     class(cuda_poisson_fft_t) :: self
