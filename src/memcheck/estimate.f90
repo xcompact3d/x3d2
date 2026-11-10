@@ -16,6 +16,7 @@ module m_memcheck_estimate
   private
   public :: to_gib, classify, num_gpus_unsupported_reason, &
             requested_unsupported_reason, estimate_for_num_gpus, &
+            spectral_plus_mirror_bytes, &
             prepare_probe, fields_plus_halo_bytes_n, n_halo, basis_measured, &
             basis_extrapolated, basis_formula, basis_predicted, basis_name
 

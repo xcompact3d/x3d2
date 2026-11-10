@@ -782,6 +782,10 @@ if(${ENABLE_BACKEND} STREQUAL "CUDA" AND WITH_MPI)
   define_verification_test(verification/test_fft_query_only.f90 1 cuda)
   target_link_libraries(test_fft_query_only_cuda_1 PRIVATE x3d2_memcheck)
 
+  # The 010 terms of the memcheck estimate, through its caller at 2 GPUs.
+  define_test(unit/test_memcheck_estimate_010.f90 1 cuda)
+  target_link_libraries(test_memcheck_estimate_010_cuda_1 PRIVATE x3d2_memcheck)
+
   # GPU-aware ADIOS2 device writes hold one extra unpadded local field on the
   # device while a snapshot/checkpoint field is packed (src/io/adios2/io.f90);
   # x3d2-memcheck adds that analytically. Only meaningful when the build has
