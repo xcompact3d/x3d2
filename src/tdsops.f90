@@ -749,30 +749,68 @@ contains
                                asi, bsi, csi, dsi]
       end if
     case (BC_DIRICHLET)
-      ! first line
-      self%dist_sa(1) = 0._dp
-      self%dist_sc(1) = 11._dp
-      self%coeffs_s(:, 1) = [0._dp, 0._dp, 0._dp, 0._dp, &
-                             13._dp/d2, &
-                             -27._dp/d2, 15._dp/d2, -1._dp/d2, 0._dp]
-      ! second line
-      self%dist_sa(2) = 0.1_dp
-      self%dist_sc(2) = 0.1_dp
-      self%coeffs_s(:, 2) = [0._dp, 0._dp, 0._dp, 1.2_dp/d2, &
-                             -2.4_dp/d2, &
-                             1.2_dp/d2, 0._dp, 0._dp, 0._dp]
-      ! third line
-      self%dist_sa(3) = 2._dp/11._dp
-      self%dist_sc(3) = 2._dp/11._dp
-      temp1 = 3._dp/44._dp/d2; temp2 = 12._dp/11._dp/d2
-      self%coeffs_s(:, 3) = [0._dp, 0._dp, temp1, temp2, &
-                             -2._dp*(temp1 + temp2), &
-                             temp2, temp1, 0._dp, 0._dp]
-      ! fourth line is same as third
-      self%dist_sa(4) = 2._dp/11._dp
-      self%dist_sc(4) = 2._dp/11._dp
-      self%coeffs_s(:, 4) = self%coeffs_s(:, 3)
+      select case (scheme)
+        case ('compact6')
+          ! first line
+          self%dist_sa(1) = 0._dp
+          self%dist_sc(1) = 11._dp
+          self%coeffs_s(:, 1) = [0._dp, 0._dp, 0._dp, 0._dp, &
+                                13._dp/d2, &
+                                -27._dp/d2, 15._dp/d2, -1._dp/d2, 0._dp]
+          ! second line
+          self%dist_sa(2) = 0.1_dp
+          self%dist_sc(2) = 0.1_dp
+          self%coeffs_s(:, 2) = [0._dp, 0._dp, 0._dp, 1.2_dp/d2, &
+                                -2.4_dp/d2, &
+                                1.2_dp/d2, 0._dp, 0._dp, 0._dp]
+          ! third line
+          self%dist_sa(3) = 2._dp/11._dp
+          self%dist_sc(3) = 2._dp/11._dp
+          temp1 = 3._dp/44._dp/d2; temp2 = 12._dp/11._dp/d2
+          self%coeffs_s(:, 3) = [0._dp, 0._dp, temp1, temp2, &
+                                -2._dp*(temp1 + temp2), &
+                                temp2, temp1, 0._dp, 0._dp]
+          ! fourth line is same as third
+          self%dist_sa(4) = 2._dp/11._dp
+          self%dist_sc(4) = 2._dp/11._dp
+          self%coeffs_s(:, 4) = self%coeffs_s(:, 3)
+        case ('compact2')
+          ! first line
+          ! Using equation 4.3.2 as seen in Lele, 1992.
+          self%dist_sa(1) = 0._dp
+          self%dist_sc(1) = 0._dp
+          self%coeffs_s(:, 1) = [0._dp, 0._dp, 0._dp, 0._dp, &
+                                2._dp/d2, &
+                                -5._dp/d2, 4._dp/d2, -1._dp/d2, 0._dp]
+        case ('compact10penta')
+          ! Note: In the absence of having seen an alternative formulation for the pentadiagonal case, this has been included.
+          ! TODO: Check whether these are in fact correct.
+          ! first line
+          self%dist_sa(1) = 0._dp
+          self%dist_sc(1) = 11._dp
+          self%coeffs_s(:, 1) = [0._dp, 0._dp, 0._dp, 0._dp, &
+                                13._dp/d2, &
+                                -27._dp/d2, 15._dp/d2, -1._dp/d2, 0._dp]
+          ! second line
+          self%dist_sa(2) = 0.1_dp
+          self%dist_sc(2) = 0.1_dp
+          self%coeffs_s(:, 2) = [0._dp, 0._dp, 0._dp, 1.2_dp/d2, &
+                                -2.4_dp/d2, &
+                                1.2_dp/d2, 0._dp, 0._dp, 0._dp]
+          ! third line
+          self%dist_sa(3) = 2._dp/11._dp
+          self%dist_sc(3) = 2._dp/11._dp
+          temp1 = 3._dp/44._dp/d2; temp2 = 12._dp/11._dp/d2
+          self%coeffs_s(:, 3) = [0._dp, 0._dp, temp1, temp2, &
+                                -2._dp*(temp1 + temp2), &
+                                temp2, temp1, 0._dp, 0._dp]
+          ! fourth line is same as third
+          self%dist_sa(4) = 2._dp/11._dp
+          self%dist_sc(4) = 2._dp/11._dp
+          self%coeffs_s(:, 4) = self%coeffs_s(:, 3)
+      end select
     end select
+
 
     select case (bc_end)
     case (BC_NEUMANN)
@@ -814,29 +852,63 @@ contains
                                asi, bsi - dsi, -csi, 0._dp]
       end if
     case (BC_DIRICHLET)
-      ! last line
-      self%dist_sa(n) = 11._dp
-      self%dist_sc(n) = 0._dp
-      self%coeffs_e(:, 4) = [0._dp, -1._dp/d2, 15._dp/d2, -27._dp/d2, &
-                             13._dp/d2, &
-                             0._dp, 0._dp, 0._dp, 0._dp]
-      ! second last line
-      self%dist_sa(n - 1) = 0.1_dp
-      self%dist_sc(n - 1) = 0.1_dp
-      self%coeffs_e(:, 3) = [0._dp, 0._dp, 0._dp, 1.2_dp/d2, &
-                             -2.4_dp/d2, &
-                             1.2_dp/d2, 0._dp, 0._dp, 0._dp]
-      ! third last line
-      self%dist_sa(n - 2) = 2._dp/11._dp
-      self%dist_sc(n - 2) = 2._dp/11._dp
-      temp1 = 3._dp/44._dp/d2; temp2 = 12._dp/11._dp/d2
-      self%coeffs_e(:, 2) = [0._dp, 0._dp, temp1, temp2, &
-                             -2._dp*(temp1 + temp2), &
-                             temp2, temp1, 0._dp, 0._dp]
-      ! fourth last line is same as third last
-      self%dist_sa(n - 3) = 2._dp/11._dp
-      self%dist_sc(n - 3) = 2._dp/11._dp
-      self%coeffs_e(:, 1) = self%coeffs_e(:, 2)
+      select case (scheme)
+        case ('compact6')
+          ! last line
+          self%dist_sa(n) = 11._dp
+          self%dist_sc(n) = 0._dp
+          self%coeffs_e(:, 4) = [0._dp, -1._dp/d2, 15._dp/d2, -27._dp/d2, &
+                                13._dp/d2, &
+                                0._dp, 0._dp, 0._dp, 0._dp]
+          ! second last line
+          self%dist_sa(n - 1) = 0.1_dp
+          self%dist_sc(n - 1) = 0.1_dp
+          self%coeffs_e(:, 3) = [0._dp, 0._dp, 0._dp, 1.2_dp/d2, &
+                                -2.4_dp/d2, &
+                                1.2_dp/d2, 0._dp, 0._dp, 0._dp]
+          ! third last line
+          self%dist_sa(n - 2) = 2._dp/11._dp
+          self%dist_sc(n - 2) = 2._dp/11._dp
+          temp1 = 3._dp/44._dp/d2; temp2 = 12._dp/11._dp/d2
+          self%coeffs_e(:, 2) = [0._dp, 0._dp, temp1, temp2, &
+                                -2._dp*(temp1 + temp2), &
+                                temp2, temp1, 0._dp, 0._dp]
+          ! fourth last line is same as third last
+          self%dist_sa(n - 3) = 2._dp/11._dp
+          self%dist_sc(n - 3) = 2._dp/11._dp
+          self%coeffs_e(:, 1) = self%coeffs_e(:, 2)
+        case ('compact2')
+          ! last line
+          self%dist_sa(n) = 0._dp
+          self%dist_sc(n) = 0._dp
+          self%coeffs_e(:, 4) = [0._dp, -1._dp/d2, 14._dp/d2, -5._dp/d2, &
+                                2._dp/d2, &
+                                0._dp, 0._dp, 0._dp, 0._dp]
+        case ('compact10penta')
+          ! last line
+          self%dist_sa(n) = 11._dp
+          self%dist_sc(n) = 0._dp
+          self%coeffs_e(:, 4) = [0._dp, -1._dp/d2, 15._dp/d2, -27._dp/d2, &
+                                13._dp/d2, &
+                                0._dp, 0._dp, 0._dp, 0._dp]
+          ! second last line
+          self%dist_sa(n - 1) = 0.1_dp
+          self%dist_sc(n - 1) = 0.1_dp
+          self%coeffs_e(:, 3) = [0._dp, 0._dp, 0._dp, 1.2_dp/d2, &
+                                -2.4_dp/d2, &
+                                1.2_dp/d2, 0._dp, 0._dp, 0._dp]
+          ! third last line
+          self%dist_sa(n - 2) = 2._dp/11._dp
+          self%dist_sc(n - 2) = 2._dp/11._dp
+          temp1 = 3._dp/44._dp/d2; temp2 = 12._dp/11._dp/d2
+          self%coeffs_e(:, 2) = [0._dp, 0._dp, temp1, temp2, &
+                                -2._dp*(temp1 + temp2), &
+                                temp2, temp1, 0._dp, 0._dp]
+          ! fourth last line is same as third last
+          self%dist_sa(n - 3) = 2._dp/11._dp
+          self%dist_sc(n - 3) = 2._dp/11._dp
+          self%coeffs_e(:, 1) = self%coeffs_e(:, 2)
+      end select
     end select
 
     call self%preprocess_thom(dist_b)
