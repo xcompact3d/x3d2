@@ -661,7 +661,11 @@ contains
 
     integer :: nz_l
 
-    call self%init_dim2_mirror(mesh)
+    ! The stretched solve on multiple ranks uses the z-slabs and the all to
+    ! all buffers below, never the dim2 mirror.
+    if (.not. (self%stretched_y .and. mesh%par%nproc > 1)) then
+      call self%init_dim2_mirror(mesh)
+    end if
 
     if (self%stretched_y .and. mesh%par%nproc > 1) then
       nz_l = self%nz_glob/mesh%par%nproc
