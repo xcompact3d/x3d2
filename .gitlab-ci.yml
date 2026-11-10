@@ -22,6 +22,10 @@ stages:
   timeout: 1h
   script:
     - echo "Setup environment"
+    # A dropped connection to the Ubuntu mirror fails the job with apt's exit
+    # code 100 before anything is built. Retry each download a few times
+    # instead, for every apt and apt-get call below.
+    - echo 'Acquire::Retries "5";' > /etc/apt/apt.conf.d/80-retries
     - apt update
     - apt install -y environment-modules
     - echo "/apps/modules" >> /etc/environment-modules/modulespath
