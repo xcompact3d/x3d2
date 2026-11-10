@@ -151,7 +151,7 @@ contains
     else if (ctx%bc_is_010) then
       nbytes8 = nbytes8 + stretched_y_matrix_bytes( &
                 ctx%bc_is_010, ctx%domain_cfg%stretching(2), &
-                ctx%solver_cfg%lowmem_fft, n_spec)
+                ctx%solver_cfg%lowmem_fft, n_spec, nproc=num_gpus)
     end if
   end function spectral_plus_mirror_bytes
 
