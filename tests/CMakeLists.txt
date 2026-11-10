@@ -332,6 +332,7 @@ define_test(unit/test_output_scalars.f90 ${serial} omp)
 define_test(unit/test_les.f90 ${serial} omp)
 define_test(unit/test_abl_diagnostics.f90 ${serial} omp)
 define_test(unit/test_memcheck_stretched_y.f90 ${serial} omp)
+define_test(unit/test_memcheck_mirror_010.f90 ${serial} omp)
 define_test(unit/test_gpu_io_staging.f90 ${serial} omp)
 define_test(unit/test_logger.f90 ${serial} omp)
 # A serial build sets np to 1, which would register the same test twice.
