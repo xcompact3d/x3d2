@@ -1478,26 +1478,14 @@ contains
     real(dp), device, intent(in), dimension(:, :, :) :: f_in
     integer, value, intent(in) :: nx
 
-    integer :: i, j, k, n2
+    integer :: i, j, k
 
     j = threadIdx%x
     k = blockIdx%x
-    n2 = nx/2
 
-    do i = 1, n2
-      f_out(i, j, k) = f_in(2*i - 1, j, k)
+    do i = 1, nx
+      f_out(i, j, k) = f_in(fold_index(i, nx), j, k)
     end do
-    if (mod(nx, 2) == 1) then
-      ! odd-size center entry
-      f_out(n2 + 1, j, k) = f_in(nx, j, k)
-      do i = n2 + 2, nx
-        f_out(i, j, k) = f_in(2*nx - 2*i + 2, j, k)
-      end do
-    else
-      do i = n2 + 1, nx
-        f_out(i, j, k) = f_in(2*nx - 2*i + 2, j, k)
-      end do
-    end if
 
   end subroutine enforce_periodicity_x
 
@@ -1508,20 +1496,14 @@ contains
     real(dp), device, intent(in), dimension(:, :, :) :: f_in
     integer, value, intent(in) :: nx
 
-    integer :: i, j, k, n2
+    integer :: i, j, k
 
     j = threadIdx%x
     k = blockIdx%x
-    n2 = nx/2
 
-    do i = 1, n2
-      f_out(2*i - 1, j, k) = f_in(i, j, k)
-      f_out(2*i, j, k) = f_in(nx - i + 1, j, k)
+    do i = 1, nx
+      f_out(fold_index(i, nx), j, k) = f_in(i, j, k)
     end do
-    if (mod(nx, 2) == 1) then
-      ! odd-size center entry
-      f_out(nx, j, k) = f_in(n2 + 1, j, k)
-    end if
 
   end subroutine undo_periodicity_x
 
@@ -1532,26 +1514,14 @@ contains
     real(dp), device, intent(in), dimension(:, :, :) :: f_in
     integer, value, intent(in) :: ny
 
-    integer :: i, j, k, n2
+    integer :: i, j, k
 
     i = threadIdx%x
     k = blockIdx%x
-    n2 = ny/2
 
-    do j = 1, n2
-      f_out(i, j, k) = f_in(i, 2*j - 1, k)
+    do j = 1, ny
+      f_out(i, j, k) = f_in(i, fold_index(j, ny), k)
     end do
-    if (mod(ny, 2) == 1) then
-      ! odd-size center entry
-      f_out(i, n2 + 1, k) = f_in(i, ny, k)
-      do j = n2 + 2, ny
-        f_out(i, j, k) = f_in(i, 2*ny - 2*j + 2, k)
-      end do
-    else
-      do j = n2 + 1, ny
-        f_out(i, j, k) = f_in(i, 2*ny - 2*j + 2, k)
-      end do
-    end if
 
   end subroutine enforce_periodicity_y
 
@@ -1562,20 +1532,14 @@ contains
     real(dp), device, intent(in), dimension(:, :, :) :: f_in
     integer, value, intent(in) :: ny
 
-    integer :: i, j, k, n2
+    integer :: i, j, k
 
     i = threadIdx%x
     k = blockIdx%x
-    n2 = ny/2
 
-    do j = 1, n2
-      f_out(i, 2*j - 1, k) = f_in(i, j, k)
-      f_out(i, 2*j, k) = f_in(i, ny - j + 1, k)
+    do j = 1, ny
+      f_out(i, fold_index(j, ny), k) = f_in(i, j, k)
     end do
-    if (mod(ny, 2) == 1) then
-      ! odd-size center entry
-      f_out(i, ny, k) = f_in(i, n2 + 1, k)
-    end if
 
   end subroutine undo_periodicity_y
 
@@ -1587,35 +1551,15 @@ contains
     real(dp), device, intent(in), dimension(:, :, :) :: f_in
     integer, value, intent(in) :: nx, ny
 
-    integer :: i, j, k
-    integer :: n2x, n2y
-    integer :: src_i, src_j
-
-    n2x = nx/2
-    n2y = ny/2
+    integer :: i, j, k, src_j
 
     k = blockIdx%x
     j = (blockIdx%y - 1)*blockDim%x + threadIdx%x
     if (j > ny) return
 
-    if (j <= n2y) then
-      src_j = 2*j - 1
-    else if (mod(ny, 2) == 1 .and. j == n2y + 1) then
-      src_j = ny
-    else
-      src_j = 2*ny - 2*j + 2
-    end if
-
+    src_j = fold_index(j, ny)
     do i = 1, nx
-      if (i <= n2x) then
-        src_i = 2*i - 1
-      else if (mod(nx, 2) == 1 .and. i == n2x + 1) then
-        src_i = nx
-      else
-        src_i = 2*nx - 2*i + 2
-      end if
-
-      f_out(i, j, k) = f_in(src_i, src_j, k)
+      f_out(i, j, k) = f_in(fold_index(i, nx), src_j, k)
     end do
 
   end subroutine enforce_periodicity_xy
@@ -1628,37 +1572,40 @@ contains
     real(dp), device, intent(in), dimension(:, :, :) :: f_in
     integer, value, intent(in) :: nx, ny
 
-    integer :: i, j, k
-    integer :: n2x, n2y
-    integer :: src_i, src_j
-
-    n2x = nx/2
-    n2y = ny/2
+    integer :: i, j, k, dst_j
 
     k = blockIdx%x
     j = (blockIdx%y - 1)*blockDim%x + threadIdx%x
     if (j > ny) return
 
-    if (mod(ny, 2) == 1 .and. j == ny) then
-      src_j = n2y + 1
-    else if (mod(j, 2) == 1) then
-      src_j = (j + 1)/2
-    else
-      src_j = ny - j/2 + 1
-    end if
-
+    dst_j = fold_index(j, ny)
     do i = 1, nx
-      if (mod(nx, 2) == 1 .and. i == nx) then
-        src_i = n2x + 1
-      else if (mod(i, 2) == 1) then
-        src_i = (i + 1)/2
-      else
-        src_i = nx - i/2 + 1
-      end if
-
-      f_out(i, j, k) = f_in(src_i, src_j, k)
+      f_out(fold_index(i, nx), dst_j, k) = f_in(i, j, k)
     end do
 
   end subroutine undo_periodicity_xy
+
+  attributes(device) integer function fold_index(i, n) result(src)
+    !! Source index of entry i of a non-periodic line of n points gathered
+    !! into a periodic one: the odd entries ascending, then the even
+    !! entries descending, so that a plain FFT can stand in for the cosine
+    !! transform. For an odd n the last entry lands at the centre, n/2 + 1.
+    !! The single definition of the fold for the periodicity kernels: the
+    !! enforce kernels gather through it and the undo kernels scatter
+    !! through it, which keeps their reads contiguous. The OpenMP backend
+    !! has the same function.
+    implicit none
+
+    integer, value, intent(in) :: i, n
+
+    if (i <= n/2) then
+      src = 2*i - 1
+    else if (mod(n, 2) == 1 .and. i == n/2 + 1) then
+      src = n
+    else
+      src = 2*n - 2*i + 2
+    end if
+
+  end function fold_index
 
 end module m_cuda_spectral
