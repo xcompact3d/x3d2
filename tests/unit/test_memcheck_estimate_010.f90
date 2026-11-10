@@ -9,6 +9,7 @@ program test_memcheck_estimate_010
   use m_memory_estimate, only: spectral_slab_bytes
   use m_memcheck_context, only: memcheck_ctx_t
   use m_memcheck_estimate, only: spectral_plus_mirror_bytes
+  use m_test_utils, only: check_i8
 
   implicit none
 
@@ -37,32 +38,20 @@ program test_memcheck_estimate_010
   ctx%domain_cfg%stretching(2) = 'top-bottom'
   expect = slab + (2_i8*4_i8*33_i8*16_i8*32_i8*5_i8 &
                    + 3_i8*33_i8*32_i8*32_i8*2_i8)*int(nbytes, i8)
-  call check("stretched 010, 2 GPUs", spectral_plus_mirror_bytes(ctx, 2), &
-             expect)
+  call check_i8("stretched 010, 2 GPUs", spectral_plus_mirror_bytes(ctx, 2), &
+                expect, test_pass)
 
   ! Uniform y: the c_mirror_dev, c_slab_send_dev and two plane buffers
   ctx%domain_cfg%stretching(2) = 'uniform'
   expect = slab + (2_i8*33_i8*16_i8*64_i8 + 2_i8*33_i8*64_i8)*2_i8 &
            *int(nbytes, i8)
-  call check("uniform 010, 2 GPUs", spectral_plus_mirror_bytes(ctx, 2), &
-             expect)
+  call check_i8("uniform 010, 2 GPUs", spectral_plus_mirror_bytes(ctx, 2), &
+                expect, test_pass)
 
   if (.not. test_pass) then
     error stop "FAIL"
   end if
 
 contains
-
-  subroutine check(label, actual, expect)
-    character(*), intent(in) :: label
-    integer(i8), intent(in) :: actual, expect
-
-    print *, label
-    print *, "- Expect: ", expect
-    print *, "- Got: ", actual
-    if (actual /= expect) then
-      test_pass = .false.
-    end if
-  end subroutine check
 
 end program test_memcheck_estimate_010
