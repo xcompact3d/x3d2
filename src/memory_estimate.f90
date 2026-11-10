@@ -18,7 +18,8 @@ module m_memory_estimate
 
   private
   public :: padded_dim, padded_cells, spectral_slab_bytes, &
-            mirror_buffer_bytes_100, spectral_extra_bytes_110, &
+            mirror_buffer_bytes_100, mirror_buffer_bytes_010, &
+            spectral_extra_bytes_110, &
             stretched_y_matrix_bytes, output_field_active, &
             peak_fields_lookup, halo_bytes, padded_halo_bytes, &
             gpu_io_staging_parts, gpu_io_staging_bytes, &
@@ -105,6 +106,25 @@ contains
               *2_i8*int(nbytes, i8) + &
               2_i8*int(n_spec(1), i8)*int(n_spec(3), i8)*2_i8*int(nbytes, i8)
   end function mirror_buffer_bytes_100
+
+  pure function mirror_buffer_bytes_010(n_spec, num_gpus, stretched_y) &
+    result(nbytes8)
+    !! 010-case dim2 mirror buffers of init_dim2_mirror,
+    !! src/backend/cuda/poisson_fft.f90. They have the shapes and the kind of
+    !! the 100 buffers, see mirror_buffer_bytes_100. A single rank allocates
+    !! nothing. The stretched solve on num_gpus > 1 skips init_dim2_mirror
+    !! and holds none of them.
+    integer, intent(in) :: n_spec(3)
+    integer, intent(in) :: num_gpus
+    logical, intent(in) :: stretched_y
+    integer(i8) :: nbytes8
+
+    if (num_gpus <= 1 .or. stretched_y) then
+      nbytes8 = 0_i8
+      return
+    end if
+    nbytes8 = mirror_buffer_bytes_100(n_spec, num_gpus)
+  end function mirror_buffer_bytes_010
 
   pure function spectral_extra_bytes_110(n_spec, cdims) result(nbytes8)
     !! 110-case bytes on top of the waves_dev slab (never runs at num_gpus>1 in
