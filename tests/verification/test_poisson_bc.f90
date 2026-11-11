@@ -83,8 +83,8 @@ program test_poisson
   !! process and some cases still stop on more than one rank. What the solver
   !! accepts is left to its own checks. Grids stay per case, so keep at least
   !! 32 cells per rank in a split direction (see the warning in
-  !! src/tdsops.f90); the dpp case (129 x 64 x 128) carries a y split on 2
-  !! ranks, not on 4.
+  !! src/tdsops.f90); the dpp case (129 x 64 x 128) carries a y or a z split
+  !! on 2 ranks, but a y split not on 4.
   !!
   !! Adding a BC scenario is one row in cases, and a new run is one
   !! define_verification_test line in tests/CMakeLists.txt.

@@ -485,6 +485,10 @@ function(define_backend_tests backend)
     set(X3D2_TEST_NAME_SUFFIX _dpp)
     if(is_omp)
       define_verification_test(verification/test_poisson_bc.f90 2 ${backend} --bc dpp --nproc_dir 1,2,1)
+      # Splitting z (p_col > 1) sends the 100 case through the paired branch
+      # of fft_postprocess_100_omp, which the y split above does not reach
+      set(X3D2_TEST_NAME_SUFFIX _dpp_zsplit)
+      define_verification_test(verification/test_poisson_bc.f90 2 ${backend} --bc dpp --nproc_dir 1,1,2)
       set(X3D2_TEST_NAME_SUFFIX _pdp)
       define_verification_test(verification/test_poisson_bc.f90 2 ${backend} --bc pdp)
     else()
