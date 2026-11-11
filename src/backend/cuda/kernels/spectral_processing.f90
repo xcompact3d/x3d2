@@ -1370,12 +1370,13 @@ contains
   ! threads = dim3(min(ny_l, tpb), 1, 1), modelled on transpose_xyz_to_zxy.
   ! ------------------------------------------------------------------
 
-  attributes(global) subroutine pack_110_xyz_to_yslab( &
+  attributes(global) subroutine pack_zslab_to_alltoall( &
     sendbuf, src, nx, ny_l, nz_l, nproc &
     )
     !! Packs the physical Z-slab field block (nx, ny, nz_l) into the
     !! MPI_Alltoall send buffer, selecting for each destination rank s the
-    !! Y range [s*ny_l+1, (s+1)*ny_l] it owns in the Y-slab layout.
+    !! Y range [s*ny_l+1, (s+1)*ny_l] it owns after the redistribution.
+    !! Shared by the 110 and 010 multi-rank paths.
     implicit none
 
     real(dp), device, intent(out), dimension(:, :, :, :) :: sendbuf ! (nz_l, nx, ny_l, nproc)
@@ -1395,7 +1396,7 @@ contains
       end do
     end if
 
-  end subroutine pack_110_xyz_to_yslab
+  end subroutine pack_zslab_to_alltoall
 
   attributes(global) subroutine unpack_110_yslab( &
     dst, recvbuf, nx, ny_l, nz_l, nproc &
@@ -1452,10 +1453,10 @@ contains
 
   end subroutine pack_110_yslab
 
-  attributes(global) subroutine unpack_110_yslab_to_xyz( &
+  attributes(global) subroutine unpack_alltoall_to_zslab( &
     dst, recvbuf, nx, ny_l, nz_l, nproc &
     )
-    !! Inverse of pack_110_xyz_to_yslab: unpacks into the physical Z-slab
+    !! Inverse of pack_zslab_to_alltoall: unpacks into the physical Z-slab
     !! field block (nx, ny, nz_l). dst must be zeroed by the caller first,
     !! as fft_backward_110_cuda already does for the single rank path.
     implicit none
@@ -1477,7 +1478,7 @@ contains
       end do
     end if
 
-  end subroutine unpack_110_yslab_to_xyz
+  end subroutine unpack_alltoall_to_zslab
 
   ! ------------------------------------------------------------------
   ! 010 MULTI-RANK SPECTRAL REDISTRIBUTION
@@ -1487,7 +1488,7 @@ contains
   ! Y. The field moves to a Z-slab (nx_spec, ny, nz_l) and back through the
   ! same MPI_Alltoall buffer (nz_l, nx, ny_l, nproc) as the 110 case, with
   ! nx = 2*nx_spec on the real view. The Z-slab side reuses
-  ! pack_110_xyz_to_yslab and unpack_110_yslab_to_xyz. These two kernels
+  ! pack_zslab_to_alltoall and unpack_alltoall_to_zslab. These two kernels
   ! handle the Y-slab side, which has the order (x, y_l, z).
   !
   ! Launch config: the same as the 110 slab redistribution.

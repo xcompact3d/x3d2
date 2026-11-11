@@ -39,8 +39,8 @@ module m_cuda_poisson_fft
                              process_spectral_pair_fw, &
                              process_spectral_pair_bw, &
                              pack_spectral_plane, &
-                             pack_110_xyz_to_yslab, unpack_110_yslab, &
-                             pack_110_yslab, unpack_110_yslab_to_xyz, &
+                             pack_zslab_to_alltoall, unpack_110_yslab, &
+                             pack_110_yslab, unpack_alltoall_to_zslab, &
                              pack_010_yslab, unpack_010_yslab
   use m_logger, only: log_info, log_warn, abort_run, check_mpi, str
   use m_cuda_errors, only: check_cuda, check_cufft
@@ -1013,7 +1013,7 @@ contains
   subroutine redistribute_110_to_yslab(self, zslab, yslab)
     !! Redistributes the 110 field from the physical Z-slab (nx, ny, nz_l)
     !! to the cuFFTMp Y-slab real view (2*(nz/2+1), nx, ny_l), ahead of the
-    !! forward transform. See the comment above pack_110_xyz_to_yslab.
+    !! forward transform. See the comment above pack_zslab_to_alltoall.
     implicit none
 
     class(cuda_poisson_110_t) :: self
@@ -1030,7 +1030,7 @@ contains
 
     call redistribution_launch_config(ny_l, nz_l, blocks, threads)
 
-    call pack_110_xyz_to_yslab<<<blocks, threads>>>( & !&
+    call pack_zslab_to_alltoall<<<blocks, threads>>>( & !&
       self%r_a2a_send_dev, zslab, nx, ny_l, nz_l, nproc &
       )
 
@@ -1066,7 +1066,7 @@ contains
 
     call redistribution_alltoall(self, nz_l*nx*ny_l, 'Z')
 
-    call unpack_110_yslab_to_xyz<<<blocks, threads>>>( & !&
+    call unpack_alltoall_to_zslab<<<blocks, threads>>>( & !&
       zslab, self%r_a2a_recv_dev, nx, ny_l, nz_l, nproc &
       )
 
@@ -1634,7 +1634,7 @@ contains
           nproc &
           )
         call redistribution_alltoall(self, count, 'Z')
-        call unpack_110_yslab_to_xyz<<<r_blocks, r_threads>>>( & !&
+        call unpack_alltoall_to_zslab<<<r_blocks, r_threads>>>( & !&
           r_zslab, self%r_a2a_recv_dev, 2*self%nx_spec, self%ny_spec, nz_l, &
           nproc &
           )
@@ -1711,7 +1711,7 @@ contains
 
       ! Move the solution back to the y-slab in the descriptor
       if (self%mesh%par%nproc > 1) then
-        call pack_110_xyz_to_yslab<<<r_blocks, r_threads>>>( & !&
+        call pack_zslab_to_alltoall<<<r_blocks, r_threads>>>( & !&
           self%r_a2a_send_dev, r_zslab, 2*self%nx_spec, self%ny_spec, nz_l, &
           nproc &
           )
