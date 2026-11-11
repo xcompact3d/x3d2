@@ -138,6 +138,8 @@ module m_cuda_poisson_fft
     procedure :: fft_postprocess => fft_postprocess_010_cuda
     procedure :: enforce_periodicity => enforce_periodicity_y_cuda
     procedure :: undo_periodicity => undo_periodicity_y_cuda
+    procedure :: redistribute_010_to_zslab
+    procedure :: redistribute_010_to_yslab
   end type cuda_poisson_010_t
 
   type, extends(cuda_poisson_fft_t) :: cuda_poisson_100_t
@@ -188,6 +190,7 @@ module m_cuda_poisson_fft
 
   private :: sync_or_abort, yslab_view_110, &
              redistribution_launch_config, redistribution_alltoall, &
+             redistribute_010_to_zslab, redistribute_010_to_yslab, &
              init_cuda, postprocess_dim2_mirror
 
   !> create_fft_plan is deliberately public: the static memory estimator
@@ -1072,6 +1075,68 @@ contains
 
   end subroutine redistribute_110_to_zslab
 
+  subroutine redistribute_010_to_zslab(self, yslab, zslab)
+    !! Redistributes the stretched 010 spectral field from the cuFFTMp
+    !! Y-slab real view (2*nx_spec, ny_l, nz) to the Z-slab
+    !! (2*nx_spec, ny, nz_l), ahead of the stretched y solve.
+    implicit none
+
+    class(cuda_poisson_010_t) :: self
+    real(dp), device, dimension(:, :, :), intent(in) :: yslab
+    real(dp), device, dimension(:, :, :), intent(inout) :: zslab
+
+    type(dim3) :: blocks, threads
+    integer :: nx, ny_l, nz_l, nproc
+
+    nx = 2*self%nx_spec
+    ny_l = self%ny_spec
+    nproc = self%mesh%par%nproc
+    nz_l = self%nz_glob/nproc
+
+    call redistribution_launch_config(ny_l, nz_l, blocks, threads)
+
+    call pack_010_yslab<<<blocks, threads>>>( & !&
+      self%r_a2a_send_dev, yslab, nx, ny_l, nz_l, nproc &
+      )
+
+    call redistribution_alltoall(self, nz_l*nx*ny_l, 'Z')
+
+    call unpack_alltoall_to_zslab<<<blocks, threads>>>( & !&
+      zslab, self%r_a2a_recv_dev, nx, ny_l, nz_l, nproc &
+      )
+
+  end subroutine redistribute_010_to_zslab
+
+  subroutine redistribute_010_to_yslab(self, zslab, yslab)
+    !! Inverse of redistribute_010_to_zslab, after the stretched y solve.
+    implicit none
+
+    class(cuda_poisson_010_t) :: self
+    real(dp), device, dimension(:, :, :), intent(in) :: zslab
+    real(dp), device, dimension(:, :, :), intent(inout) :: yslab
+
+    type(dim3) :: blocks, threads
+    integer :: nx, ny_l, nz_l, nproc
+
+    nx = 2*self%nx_spec
+    ny_l = self%ny_spec
+    nproc = self%mesh%par%nproc
+    nz_l = self%nz_glob/nproc
+
+    call redistribution_launch_config(ny_l, nz_l, blocks, threads)
+
+    call pack_zslab_to_alltoall<<<blocks, threads>>>( & !&
+      self%r_a2a_send_dev, zslab, nx, ny_l, nz_l, nproc &
+      )
+
+    call redistribution_alltoall(self, nz_l*nx*ny_l, 'Y')
+
+    call unpack_010_yslab<<<blocks, threads>>>( & !&
+      yslab, self%r_a2a_recv_dev, nx, ny_l, nz_l, nproc &
+      )
+
+  end subroutine redistribute_010_to_yslab
+
   subroutine fft_forward_100_cuda(self, f)
   !! Forward FFT for non-periodic-X case
   !! We transpose X<->Y so that the non-periodic direction becomes the
@@ -1567,9 +1632,9 @@ contains
 
     complex(dp), device, dimension(:, :, :), pointer :: c_dev
     real(dp), device, dimension(:, :, :), pointer :: r_yslab, r_zslab
-    type(dim3) :: blocks, threads, r_blocks, r_threads
+    type(dim3) :: blocks, threads
     integer :: tsize, off, inc
-    integer :: ny_solve, y_st_solve, z_off, nz_l, nproc, count
+    integer :: ny_solve, y_st_solve, z_off, nz_l
 
     ! tsize is different than SZ, because here we work on a 3D Cartesian
     ! data structure, and free to specify any suitable thread/block size.
@@ -1617,27 +1682,15 @@ contains
       ! z-slab (nx_spec, ny, nz/nproc) of each rank, and run the single rank
       ! solve on it. The slab redistribution works on the real views.
       if (self%mesh%par%nproc > 1) then
-        nproc = self%mesh%par%nproc
-        nz_l = self%nz_glob/nproc
+        nz_l = self%nz_glob/self%mesh%par%nproc
         z_off = nz_l*self%mesh%par%nrank
-        count = nz_l*2*self%nx_spec*self%ny_spec
 
         call c_f_pointer(descriptor%data(1), r_yslab, &
                          [2*self%nx_spec, self%ny_spec, self%nz_spec])
         call c_f_pointer(c_loc(self%c_zslab_dev), r_zslab, &
                          [2*self%nx_spec, self%ny_glob, nz_l])
-        call redistribution_launch_config(self%ny_spec, nz_l, r_blocks, &
-                                          r_threads)
 
-        call pack_010_yslab<<<r_blocks, r_threads>>>( & !&
-          self%r_a2a_send_dev, r_yslab, 2*self%nx_spec, self%ny_spec, nz_l, &
-          nproc &
-          )
-        call redistribution_alltoall(self, count, 'Z')
-        call unpack_alltoall_to_zslab<<<r_blocks, r_threads>>>( & !&
-          r_zslab, self%r_a2a_recv_dev, 2*self%nx_spec, self%ny_spec, nz_l, &
-          nproc &
-          )
+        call redistribute_010_to_zslab(self, r_yslab, r_zslab)
 
         call c_f_pointer(c_loc(self%c_zslab_dev), c_dev, &
                          [self%nx_spec, self%ny_glob, nz_l])
@@ -1711,15 +1764,7 @@ contains
 
       ! Move the solution back to the y-slab in the descriptor
       if (self%mesh%par%nproc > 1) then
-        call pack_zslab_to_alltoall<<<r_blocks, r_threads>>>( & !&
-          self%r_a2a_send_dev, r_zslab, 2*self%nx_spec, self%ny_spec, nz_l, &
-          nproc &
-          )
-        call redistribution_alltoall(self, count, 'Y')
-        call unpack_010_yslab<<<r_blocks, r_threads>>>( & !&
-          r_yslab, self%r_a2a_recv_dev, 2*self%nx_spec, self%ny_spec, nz_l, &
-          nproc &
-          )
+        call redistribute_010_to_yslab(self, r_zslab, r_yslab)
       end if
     end if
 
