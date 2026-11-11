@@ -4,12 +4,13 @@ module m_case_channel
   use m_base_backend, only: base_backend_t
   use m_base_case, only: base_case_t
   use m_common, only: dp, get_argument, DIR_C, DIR_X, &
-                      VERT, CELL, Y_FACE, BC_DIRICHLET
+                      VERT, CELL, Y_FACE, BC_DIRICHLET, MPI_X3D2_DP
   use m_config, only: channel_config_t
   use m_field, only: field_t
   use m_mesh, only: mesh_t
   use m_solver, only: init
   use m_logger, only: log_info, str
+  use m_mpi, only: MPI_COMM_WORLD, MPI_IN_PLACE, MPI_SUM, MPI_Allreduce
 
   implicit none
 
@@ -64,12 +65,31 @@ contains
                                               v_end, w_start, w_end
     real(dp) :: can, ub
     real(dp) :: noise(3)
-    integer :: i, k, dims(3)
+    real(dp), allocatable :: sums(:)
+    integer :: i, j, k, dims(3), global_dims(3), ierr
 
-    ! field_volume_integral is already reduced over all ranks.
-    ub = self%solver%backend%field_volume_integral(self%solver%u)
+    if (self%solver%mesh%geo%stretched(2)) then
+      ! Bulk velocity as Incompact3d channel_cfr computes it: every y plane
+      ! mean is weighted by its cell width dy/ppy, with ppy = vert_ds. The
+      ! local planes carry their own vert_ds, so only the sum is reduced.
+      dims = self%solver%mesh%get_dims(VERT)
+      global_dims = self%solver%mesh%get_global_dims(VERT)
+      allocate (sums(dims(2)))
+      call self%solver%backend%field_plane_sums(sums, self%solver%u)
+      ub = 0._dp
+      do j = 1, dims(2)
+        ub = ub + sums(j)/self%solver%mesh%geo%vert_ds(j, 2)
+      end do
+      ub = ub*self%solver%mesh%geo%d(2)/self%solver%mesh%geo%L(2) &
+           /real(global_dims(1)*global_dims(3), dp)
+      call MPI_Allreduce(MPI_IN_PLACE, ub, 1, MPI_X3D2_DP, &
+                         MPI_SUM, MPI_COMM_WORLD, ierr)
+    else
+      ! field_volume_integral is already reduced over all ranks.
+      ub = self%solver%backend%field_volume_integral(self%solver%u)
 
-    ub = ub/(product(self%solver%mesh%get_global_dims(CELL)))
+      ub = ub/(product(self%solver%mesh%get_global_dims(CELL)))
+    end if
 
     can = 2._dp/3._dp - ub
 
