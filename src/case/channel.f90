@@ -144,7 +144,7 @@ contains
     call random_number(v_init%data(1:dims(1), 1:dims(2), 1:dims(3)))
     call random_number(w_init%data(1:dims(1), 1:dims(2), 1:dims(3)))
 
-    noise = self%channel_cfg%inlet_noise(3)
+    noise = self%channel_cfg%init_noise
     do k = 1, dims(3)
       do j = 1, dims(2)
         do i = 1, dims(1)

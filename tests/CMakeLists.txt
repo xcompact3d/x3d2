@@ -860,7 +860,7 @@ if(SINGLE_PREC)
   set(_nightly_cmp_args --rtol 1e-4
       --ceiling div_u_max=1e-4 --ceiling div_u_mean=1e-5)
   # The channel's enstrophy drifts up to 3.6e-5 from the double precision
-  # golden over its 50 noisy steps, past the smoke rtol.
+  # golden over its 50 steps from zero initial noise, past the smoke rtol.
   set(_channel_cmp_args --rtol 1e-4
       --ceiling div_u_max=1e-4 --ceiling div_u_mean=1e-5)
 else()
