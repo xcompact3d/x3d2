@@ -3,7 +3,10 @@ module m_cuda_exec_dist
 
   use m_common, only: dp
   use m_cuda_common, only: SZ
+  use m_dist_reduced, only: solve_reduced_exact
+  use m_mesh_content, only: par_t
   use m_cuda_kernels_dist, only: der_univ_dist, der_univ_subs, &
+                                 der_univ_subs_exact, &
                                  der_penta_full, der_penta_periodic, &
                                  transeq_3fused_dist, transeq_3fused_subs
   use m_cuda_sendrecv, only: sendrecv_fields, sendrecv_3fields
@@ -54,6 +57,59 @@ contains
       )
 
   end subroutine exec_dist_tds_compact
+
+  subroutine exec_dist_tds_compact_exact( &
+    du, u, u_recv_s, u_recv_e, du_send_s, du_send_e, du_recv_s, du_recv_e, &
+    tdsops, par, dir, blocks, threads &
+    )
+    !! As exec_dist_tds_compact, but with the reduced system that couples the
+    !! ranks solved exactly (see m_dist_reduced and tdsops%dist_exact). Its
+    !! right-hand sides, two planes per field, go through the host.
+    implicit none
+
+    real(dp), device, dimension(:, :, :), intent(out) :: du
+    real(dp), device, dimension(:, :, :), intent(in) :: u, u_recv_s, u_recv_e
+    real(dp), device, dimension(:, :, :), intent(out) :: &
+      du_send_s, du_send_e, du_recv_s, du_recv_e
+    type(cuda_tdsops_t), intent(in) :: tdsops
+    type(par_t), intent(in) :: par
+    integer, intent(in) :: dir
+    type(dim3), intent(in) :: blocks, threads
+
+    real(dp), allocatable :: d_s(:, :, :), d_e(:, :, :), x_s(:), x_e(:)
+    integer :: n, n_groups, n_data
+
+    n = tdsops%n_tds
+    n_groups = blocks%x
+    n_data = SZ*n_groups
+
+    call der_univ_dist<<<blocks, threads>>>( & !&
+      du, du_send_s, du_send_e, u, u_recv_s, u_recv_e, &
+      tdsops%n_tds, tdsops%n_rhs, &
+      tdsops%coeffs_s_dev, tdsops%coeffs_e_dev, tdsops%coeffs_dev, &
+      tdsops%dist_fw_dev, tdsops%dist_bw_dev, tdsops%dist_af_dev &
+      )
+
+    ! Device to host copies on the default stream wait for the kernel
+    allocate (d_s(SZ, 1, n_groups), d_e(SZ, 1, n_groups))
+    d_s = du_send_s(:, :, 1:n_groups)
+    d_e = du_send_e(:, :, 1:n_groups)
+    allocate (x_s(n_data), x_e(n_data))
+    call solve_reduced_exact( &
+      x_s, x_e, reshape(d_s, [n_data]), reshape(d_e, [n_data]), &
+      tdsops%dist_sa(1), tdsops%dist_sc(1), tdsops%dist_sa(n), &
+      tdsops%dist_sc(n), par, dir)
+    d_s = reshape(x_s, [SZ, 1, n_groups])
+    d_e = reshape(x_e, [SZ, 1, n_groups])
+    du_recv_s(:, :, 1:n_groups) = d_s
+    du_recv_e(:, :, 1:n_groups) = d_e
+
+    call der_univ_subs_exact<<<blocks, threads>>>( & !&
+      du, du_recv_s, du_recv_e, tdsops%n_tds, &
+      tdsops%dist_sa_dev, tdsops%dist_sc_dev, tdsops%stretch_dev &
+      )
+
+  end subroutine exec_dist_tds_compact_exact
 
   subroutine exec_dist_transeq_3fused( &
     r_du, u, u_recv_s, u_recv_e, v, v_recv_s, v_recv_e, &

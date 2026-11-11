@@ -42,6 +42,11 @@ module m_tdsops
     !! serial along the line, so this is only valid when the direction is not
     !! decomposed.
     logical :: prefer_thomas = .false.
+    !! Where the direction is decomposed, solve the reduced system of the
+    !! distributed solver exactly instead (m_dist_reduced) rather than with
+    !! the neighbour-only approximation. It costs a gather along the
+    !! direction, so it is kept for the operators that need it.
+    logical :: dist_exact = .false.
     integer :: n_tds !! Tridiagonal system size
     integer :: n_rhs !! Right-hand-side builder size
     integer :: move = 0 !! move between vertices and cell centres

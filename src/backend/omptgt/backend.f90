@@ -39,7 +39,8 @@ module m_omptgt_backend
   use m_omptgt_common, only: SZ, dev_alloc, dev_free, dev_upload, &
                              dev_clone, dev_download, device_sync, memcpy_d2d
   use m_omptgt_exec_dist, only: exec_dist_transeq_3fused, &
-                                exec_dist_tds_compact
+                                exec_dist_tds_compact, &
+                                exec_dist_tds_compact_exact
   use m_omptgt_exec_thom, only: exec_thom_tds_compact
   use m_omptgt_sendrecv, only: sendrecv_fields, sendrecv_3fields
   use m_omptgt_tdsops, only: omptgt_tdsops_t, omptgt_tdsops_init
@@ -566,14 +567,24 @@ contains
                            self%mesh%par%pprev(dir), &
                            self%mesh%par%pnext(dir))
 
-      call exec_dist_tds_compact( &
-        du_dev, u_dev, &
-        self%u_recv_s_dev, self%u_recv_e_dev, &
-        self%du_send_s_dev, self%du_send_e_dev, &
-        self%du_recv_s_dev, self%du_recv_e_dev, &
-        tdsops, self%mesh%par%nproc_dir(dir), &
-        self%mesh%par%pprev(dir), self%mesh%par%pnext(dir), n_groups &
-        )
+      if (tdsops%dist_exact .and. self%mesh%par%nproc_dir(dir) > 1) then
+        call exec_dist_tds_compact_exact( &
+          du_dev, u_dev, &
+          self%u_recv_s_dev, self%u_recv_e_dev, &
+          self%du_send_s_dev, self%du_send_e_dev, &
+          self%du_recv_s_dev, self%du_recv_e_dev, &
+          tdsops, self%mesh%par, dir, n_groups &
+          )
+      else
+        call exec_dist_tds_compact( &
+          du_dev, u_dev, &
+          self%u_recv_s_dev, self%u_recv_e_dev, &
+          self%du_send_s_dev, self%du_send_e_dev, &
+          self%du_recv_s_dev, self%du_recv_e_dev, &
+          tdsops, self%mesh%par%nproc_dir(dir), &
+          self%mesh%par%pprev(dir), self%mesh%par%pnext(dir), n_groups &
+          )
+      end if
     class default
       call abort_run('Expected omptgt_tdsops_t in tds_solve_dist.')
     end select

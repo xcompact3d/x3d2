@@ -2,7 +2,10 @@ module m_omp_exec_dist
 
   use m_common, only: dp
   use m_omp_common, only: SZ
+  use m_dist_reduced, only: solve_reduced_exact
+  use m_mesh_content, only: par_t
   use m_omp_kernels_dist, only: der_univ_dist, der_univ_subs, &
+                                der_univ_subs_exact, &
                                 der_univ_fused_subs, der_penta_full, &
                                 der_penta_periodic
   use m_tdsops, only: tdsops_t
@@ -62,6 +65,59 @@ contains
     !$omp end parallel do
 
   end subroutine exec_dist_tds_compact
+
+  subroutine exec_dist_tds_compact_exact( &
+    du, u, u_recv_s, u_recv_e, du_send_s, du_send_e, du_recv_s, du_recv_e, &
+    tdsops, par, dir, n_groups)
+    !! As exec_dist_tds_compact, but with the reduced system that couples the
+    !! ranks solved exactly (see m_dist_reduced and tdsops%dist_exact).
+    implicit none
+
+    real(dp), dimension(:, :, :), intent(out) :: du
+    real(dp), dimension(:, :, :), intent(in) :: u, u_recv_s, u_recv_e
+    real(dp), dimension(:, :, :), intent(out) :: &
+      du_send_s, du_send_e, du_recv_s, du_recv_e
+    type(tdsops_t), intent(in) :: tdsops
+    type(par_t), intent(in) :: par
+    integer, intent(in) :: dir, n_groups
+
+    real(dp), allocatable :: x_s(:), x_e(:)
+    integer :: k, n, n_data
+
+    n = tdsops%n_tds
+    n_data = SZ*n_groups
+
+    !$omp parallel do
+    do k = 1, n_groups
+      call der_univ_dist( &
+        du(:, :, k), du_send_s(:, :, k), du_send_e(:, :, k), &
+        u(:, :, k), u_recv_s(:, :, k), u_recv_e(:, :, k), &
+        tdsops%n_tds, tdsops%n_rhs, &
+        tdsops%coeffs_s, tdsops%coeffs_e, tdsops%coeffs, &
+        tdsops%dist_fw, tdsops%dist_bw, tdsops%dist_af &
+        )
+    end do
+    !$omp end parallel do
+
+    allocate (x_s(n_data), x_e(n_data))
+    call solve_reduced_exact( &
+      x_s, x_e, reshape(du_send_s(:, 1, 1:n_groups), [n_data]), &
+      reshape(du_send_e(:, 1, 1:n_groups), [n_data]), &
+      tdsops%dist_sa(1), tdsops%dist_sc(1), tdsops%dist_sa(n), &
+      tdsops%dist_sc(n), par, dir)
+    du_recv_s(:, 1, 1:n_groups) = reshape(x_s, [SZ, n_groups])
+    du_recv_e(:, 1, 1:n_groups) = reshape(x_e, [SZ, n_groups])
+
+    !$omp parallel do
+    do k = 1, n_groups
+      call der_univ_subs_exact( &
+        du(:, :, k), du_recv_s(:, :, k), du_recv_e(:, :, k), &
+        n, tdsops%dist_sa, tdsops%dist_sc, tdsops%stretch &
+        )
+    end do
+    !$omp end parallel do
+
+  end subroutine exec_dist_tds_compact_exact
 
   subroutine exec_dist_transeq_compact( &
     rhs_du, dud, d2u, &

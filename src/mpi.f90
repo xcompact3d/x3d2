@@ -43,8 +43,9 @@ module m_mpi
 
   implicit none
 
-  external :: MPI_Allreduce, MPI_Alltoall, MPI_Bcast, MPI_Cart_coords, &
-    MPI_Irecv, MPI_Isend, MPI_Reduce, MPI_Sendrecv, MPI_Waitall
+  external :: MPI_Allgather, MPI_Allreduce, MPI_Alltoall, MPI_Bcast, &
+    MPI_Cart_coords, MPI_Comm_split, MPI_Irecv, MPI_Isend, MPI_Reduce, &
+    MPI_Sendrecv, MPI_Waitall
 #else
   use mpi
 
@@ -64,8 +65,9 @@ module m_mpi
   public :: mpi_in_place_t, MPI_IN_PLACE
   public :: MPI_Init, MPI_Finalize, MPI_Initialized, MPI_Finalized, MPI_Abort
   public :: MPI_MAX_ERROR_STRING, MPI_Error_string
-  public :: MPI_Comm_rank, MPI_Comm_size, MPI_Barrier, MPI_Wtime
-  public :: MPI_Bcast, MPI_Allreduce, MPI_Reduce
+  public :: MPI_Comm_rank, MPI_Comm_size, MPI_Comm_split, MPI_Barrier, &
+            MPI_Wtime
+  public :: MPI_Bcast, MPI_Allreduce, MPI_Allgather, MPI_Reduce
   public :: MPI_Isend, MPI_Irecv, MPI_Waitall, MPI_Sendrecv, MPI_Alltoall
 
   !> Handles are opaque in MPI, so the values only have to be distinct.
@@ -185,6 +187,27 @@ contains
     size = 1
     ierror = MPI_SUCCESS
   end subroutine MPI_Comm_size
+
+  subroutine MPI_Comm_split(comm, color, key, newcomm, ierror)
+    !! The one rank is the whole of its own group.
+    integer, intent(in) :: comm, color, key
+    integer, intent(out) :: newcomm, ierror
+
+    newcomm = MPI_COMM_SELF
+    ierror = MPI_SUCCESS
+  end subroutine MPI_Comm_split
+
+  subroutine MPI_Allgather(sendbuf, sendcount, sendtype, recvbuf, &
+                           recvcount, recvtype, comm, ierror)
+    !! Gathering from the one rank is a copy.
+    real(real64), intent(in) :: sendbuf(*)
+    real(real64), intent(inout) :: recvbuf(*)
+    integer, intent(in) :: sendcount, sendtype, recvcount, recvtype, comm
+    integer, intent(out) :: ierror
+
+    recvbuf(1:sendcount) = sendbuf(1:sendcount)
+    ierror = MPI_SUCCESS
+  end subroutine MPI_Allgather
 
   subroutine MPI_Barrier(comm, ierror)
     integer, intent(in) :: comm

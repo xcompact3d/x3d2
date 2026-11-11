@@ -21,7 +21,8 @@ module m_omptgt_kernels_dist
   implicit none
 
   private
-  public :: der_univ_dist, der_univ_subs, transeq_3fused_dist, &
+  public :: der_univ_dist, der_univ_subs, der_univ_subs_exact, &
+            transeq_3fused_dist, &
             transeq_3fused_subs, der_penta_full, der_penta_periodic
 
 contains
@@ -261,6 +262,51 @@ contains
     du(i, n_tds, b) = du_e*strch(n_tds)
 
   end subroutine der_univ_subs_line
+
+  subroutine der_univ_subs_exact(du, x_s, x_e, n_tds, dist_sa, dist_sc, &
+                                 strch, n, n_groups)
+    !! Second phase of the distributed solve with the block's first and last
+    !! unknowns already known exactly (m_dist_reduced), in place of the 2x2
+    !! approximation of der_univ_subs.
+    integer, intent(in) :: n_tds, n, n_groups
+    real(dp), intent(inout) :: du(SZ, n, n_groups)
+    real(dp), intent(in) :: x_s(SZ, 1, n_groups), x_e(SZ, 1, n_groups)
+    real(dp), intent(in) :: dist_sa(n_tds), dist_sc(n_tds), strch(n_tds)
+
+    integer :: i, b
+
+    !$omp target teams distribute parallel do collapse(2) &
+    !$omp OMP_DEVICE_ADDR(du, x_s, x_e, dist_sa, dist_sc, strch)
+    do b = 1, n_groups
+      do i = 1, SZ
+        call der_univ_subs_exact_line(i, b, n, du, x_s, x_e, n_tds, &
+                                      dist_sa, dist_sc, strch)
+      end do
+    end do
+    !$omp end target teams distribute parallel do
+
+  end subroutine der_univ_subs_exact
+
+  subroutine der_univ_subs_exact_line(i, b, n, du, x_s, x_e, n_tds, &
+                                      dist_sa, dist_sc, strch)
+    !$omp declare target
+    integer, intent(in) :: i, b, n, n_tds
+    real(dp), intent(inout) :: du(SZ, n, *)
+    real(dp), intent(in) :: x_s(SZ, 1, *), x_e(SZ, 1, *)
+    real(dp), intent(in) :: dist_sa(*), dist_sc(*), strch(*)
+
+    integer :: j
+    real(dp) :: du_s, du_e
+
+    du_s = x_s(i, 1, b)
+    du_e = x_e(i, 1, b)
+    du(i, 1, b) = du_s*strch(1)
+    do j = 2, n_tds - 1
+      du(i, j, b) = (du(i, j, b) - dist_sa(j)*du_s - dist_sc(j)*du_e)*strch(j)
+    end do
+    du(i, n_tds, b) = du_e*strch(n_tds)
+
+  end subroutine der_univ_subs_exact_line
 
   ! --------------------------------------------------------------------------
   ! Fused transport equation kernels
