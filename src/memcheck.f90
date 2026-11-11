@@ -58,7 +58,7 @@ program x3d2_memcheck
   ! nproc > 1 through cuFFTMp, but x3d2-memcheck keeps 110 single GPU until
   ! the multi-rank buffers of #417 are in the estimate. Sharing the solver
   ! rule now would print supported rows with under-estimated figures.
-  ctx%multi_gpu_supported = .not. (ctx%bc_is_010 .or. ctx%bc_is_110)
+  ctx%multi_gpu_supported = .not. ctx%bc_is_110
 
   call report(ctx)
   if (trim(ctx%run_mode) == 'BUILD') call run_build_mode(ctx)

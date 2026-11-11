@@ -4,6 +4,7 @@ program test_memcheck_stretched_y
 
   use m_common, only: i8, nbytes
   use m_memory_estimate, only: stretched_y_matrix_bytes
+  use m_test_utils, only: check_i8
 
   implicit none
 
@@ -18,6 +19,7 @@ program test_memcheck_stretched_y
   call test_centred_equals_top_bottom()
   call test_odd_ny_spec()
   call test_ng2_halves_ny_spec()
+  call test_nproc2_zslab()
 
   if (.not. test_pass) then
     error stop "FAIL"
@@ -30,7 +32,7 @@ contains
 
     bytes = stretched_y_matrix_bytes(.true., 'uniform', .false., &
                                      [257, 256, 256])
-    call check("uniform, 010, is zero", bytes, 0_i8)
+    call check_i8("uniform, 010, is zero", bytes, 0_i8, test_pass)
   end subroutine test_uniform_is_zero
 
   subroutine test_non_010_is_zero()
@@ -38,7 +40,7 @@ contains
 
     bytes = stretched_y_matrix_bytes(.false., 'top-bottom', .false., &
                                      [257, 256, 256])
-    call check("top-bottom, not 010, is zero", bytes, 0_i8)
+    call check_i8("top-bottom, not 010, is zero", bytes, 0_i8, test_pass)
   end subroutine test_non_010_is_zero
 
   subroutine test_top_bottom_not_lowmem()
@@ -47,7 +49,7 @@ contains
     bytes = stretched_y_matrix_bytes(.true., 'top-bottom', .false., &
                                      [257, 256, 256])
     expect = 20_i8*257_i8*256_i8*256_i8*int(nbytes, i8)
-    call check("top-bottom, lowmem_fft=F", bytes, expect)
+    call check_i8("top-bottom, lowmem_fft=F", bytes, expect, test_pass)
   end subroutine test_top_bottom_not_lowmem
 
   subroutine test_top_bottom_lowmem()
@@ -56,7 +58,7 @@ contains
     bytes = stretched_y_matrix_bytes(.true., 'top-bottom', .true., &
                                      [257, 256, 256])
     expect = 10_i8*257_i8*256_i8*256_i8*int(nbytes, i8)
-    call check("top-bottom, lowmem_fft=T", bytes, expect)
+    call check_i8("top-bottom, lowmem_fft=T", bytes, expect, test_pass)
   end subroutine test_top_bottom_lowmem
 
   subroutine test_centred_equals_top_bottom()
@@ -66,7 +68,8 @@ contains
                                              [257, 256, 256])
     bytes_top_bottom = stretched_y_matrix_bytes(.true., 'top-bottom', .true., &
                                                 [257, 256, 256])
-    call check("centred equals top-bottom", bytes_centred, bytes_top_bottom)
+    call check_i8("centred equals top-bottom", bytes_centred, &
+                  bytes_top_bottom, test_pass)
   end subroutine test_centred_equals_top_bottom
 
   subroutine test_odd_ny_spec()
@@ -76,12 +79,12 @@ contains
 
     bytes = stretched_y_matrix_bytes(.true., 'bottom', .true., [9, 9, 8])
     expect = 2_i8*9_i8*9_i8*8_i8*5_i8*int(nbytes, i8)
-    call check("odd ny_spec, bottom", bytes, expect)
+    call check_i8("odd ny_spec, bottom", bytes, expect, test_pass)
 
     bytes = stretched_y_matrix_bytes(.true., 'top-bottom', .true., &
                                      [9, 9, 8])
     expect = 4_i8*9_i8*4_i8*8_i8*5_i8*int(nbytes, i8)
-    call check("odd ny_spec, top-bottom", bytes, expect)
+    call check_i8("odd ny_spec, top-bottom", bytes, expect, test_pass)
   end subroutine test_odd_ny_spec
 
   subroutine test_ng2_halves_ny_spec()
@@ -90,19 +93,26 @@ contains
     bytes = stretched_y_matrix_bytes(.true., 'top-bottom', .true., &
                                      [257, 128, 256])
     expect = 4_i8*257_i8*64_i8*256_i8*5_i8*int(nbytes, i8)
-    call check("num_gpus=2 slab, ny_spec=128", bytes, expect)
+    call check_i8("num_gpus=2 slab, ny_spec=128", bytes, expect, test_pass)
   end subroutine test_ng2_halves_ny_spec
 
-  subroutine check(label, actual, expect)
-    character(*), intent(in) :: label
-    integer(i8), intent(in) :: actual, expect
+  subroutine test_nproc2_zslab()
+    !! nproc=2: the matrices cover the z-slab (nx_spec, ny, nz/2), plus
+    !! three complex z-slab buffers. n_spec (9,3,8) has an odd ny/nproc.
+    integer(i8) :: bytes, expect
 
-    print *, label
-    print *, "- Expect: ", expect
-    print *, "- Got: ", actual
-    if (actual /= expect) then
-      test_pass = .false.
-    end if
-  end subroutine check
+    bytes = stretched_y_matrix_bytes(.true., 'top-bottom', .false., &
+                                     [33, 32, 64], nproc=2)
+    expect = (2_i8*4_i8*33_i8*32_i8*32_i8*5_i8 &
+              + 3_i8*33_i8*64_i8*32_i8*2_i8)*int(nbytes, i8)
+    call check_i8("nproc=2, top-bottom, z-slab", bytes, expect, test_pass)
+
+    bytes = stretched_y_matrix_bytes(.true., 'top-bottom', .true., &
+                                     [9, 3, 8], nproc=2)
+    expect = (4_i8*9_i8*3_i8*4_i8*5_i8 &
+              + 3_i8*9_i8*6_i8*4_i8*2_i8)*int(nbytes, i8)
+    call check_i8("nproc=2, odd ny/nproc, top-bottom", bytes, expect, &
+                  test_pass)
+  end subroutine test_nproc2_zslab
 
 end program test_memcheck_stretched_y

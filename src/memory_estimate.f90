@@ -18,7 +18,8 @@ module m_memory_estimate
 
   private
   public :: padded_dim, padded_cells, spectral_slab_bytes, &
-            mirror_buffer_bytes_100, spectral_extra_bytes_110, &
+            mirror_buffer_bytes_100, mirror_buffer_bytes_010, &
+            spectral_extra_bytes_110, &
             stretched_y_matrix_bytes, output_field_active, &
             peak_fields_lookup, halo_bytes, padded_halo_bytes, &
             gpu_io_staging_parts, gpu_io_staging_bytes, &
@@ -106,6 +107,25 @@ contains
               2_i8*int(n_spec(1), i8)*int(n_spec(3), i8)*2_i8*int(nbytes, i8)
   end function mirror_buffer_bytes_100
 
+  pure function mirror_buffer_bytes_010(n_spec, num_gpus, stretched_y) &
+    result(nbytes8)
+    !! 010-case dim2 mirror buffers of init_dim2_mirror,
+    !! src/backend/cuda/poisson_fft.f90. They have the shapes and the kind of
+    !! the 100 buffers, see mirror_buffer_bytes_100. A single rank allocates
+    !! nothing. The stretched solve on num_gpus > 1 skips init_dim2_mirror
+    !! and holds none of them.
+    integer, intent(in) :: n_spec(3)
+    integer, intent(in) :: num_gpus
+    logical, intent(in) :: stretched_y
+    integer(i8) :: nbytes8
+
+    if (num_gpus <= 1 .or. stretched_y) then
+      nbytes8 = 0_i8
+      return
+    end if
+    nbytes8 = mirror_buffer_bytes_100(n_spec, num_gpus)
+  end function mirror_buffer_bytes_010
+
   pure function spectral_extra_bytes_110(n_spec, cdims) result(nbytes8)
     !! 110-case bytes on top of the waves_dev slab (never runs at num_gpus>1 in
     !! this solver): a SECOND complex array of the same spectral shape n_spec,
@@ -121,31 +141,39 @@ contains
   end function spectral_extra_bytes_110
 
   pure function stretched_y_matrix_bytes(bc_is_010, stretching_y, lowmem_fft, &
-                                         n_spec) result(nbytes8)
+                                         n_spec, nproc) result(nbytes8)
     !! 010-case, non-uniform y-stretching Poisson coefficient matrices,
-    !! src/poisson_fft.f90:176-186 (only 010 sets stretched_y, and only at
-    !! num_gpus=1 since 010 error-stops at nproc>1) and :320-323,424-428
-    !! (allocation shapes), copied to the device at
+    !! src/poisson_fft.f90:176-186 (only 010 sets stretched_y) and
+    !! :320-323,424-428 (allocation shapes), copied to the device at
     !! src/backend/cuda/poisson_fft.f90:390-411:
     !!   'bottom': a_re, a_im, shape (nx_spec, ny_spec, nz_spec, 5), real(dp)
     !!   otherwise ('centred', 'top-bottom'): a_odd_re/im, a_even_re/im,
     !!     shape (nx_spec, ny_spec/2, nz_spec, 5), real(dp)
     !! doubled by the store_a_*_dev copies when lowmem_fft is .false.
     !! (the default).
+    !! On nproc > 1 ranks n_spec is the y-slab (nx_spec, ny/nproc, nz), but
+    !! the matrices cover the z-slab (nx_spec, ny, nz/nproc) of the rank.
+    !! The z-slab c_zslab_dev and the two all-to-all buffers r_a2a_*_dev add
+    !! three complex z-slabs. An absent nproc counts one rank.
     logical, intent(in) :: bc_is_010, lowmem_fft
     character(len=*), intent(in) :: stretching_y
     integer, intent(in) :: n_spec(3)
+    integer, optional, intent(in) :: nproc
     integer(i8) :: nbytes8
-    integer(i8) :: nx_spec, ny_spec, nz_spec
+    integer(i8) :: nx_spec, ny_spec, nz_spec, np
 
     if ((.not. bc_is_010) .or. trim(stretching_y) == 'uniform') then
       nbytes8 = 0_i8
       return
     end if
 
+    np = 1_i8
+    if (present(nproc)) np = int(nproc, i8)
+
+    ! The block the matrices cover, the z-slab on nproc > 1
     nx_spec = n_spec(1)
-    ny_spec = n_spec(2)
-    nz_spec = n_spec(3)
+    ny_spec = n_spec(2)*np
+    nz_spec = n_spec(3)/np
 
     if (trim(stretching_y) == 'bottom') then
       nbytes8 = 2_i8*nx_spec*ny_spec*nz_spec*5_i8*int(nbytes, i8)
@@ -154,6 +182,11 @@ contains
     end if
 
     if (.not. lowmem_fft) nbytes8 = 2_i8*nbytes8
+
+    ! c_zslab_dev, r_a2a_send_dev and r_a2a_recv_dev, one complex z-slab each
+    if (np > 1_i8) then
+      nbytes8 = nbytes8 + 3_i8*nx_spec*ny_spec*nz_spec*2_i8*int(nbytes, i8)
+    end if
   end function stretched_y_matrix_bytes
 
   pure function halo_bytes(padded_dims, sz, n_halo) result(nbytes8)

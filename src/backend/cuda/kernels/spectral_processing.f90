@@ -471,7 +471,8 @@ contains
   end subroutine process_spectral_010
 
   attributes(global) subroutine process_spectral_010_fw( &
-    div_u, nx_spec, ny_spec, y_sp_st, nx, ny, nz, ax, bx, ay, by, az, bz &
+    div_u, nx_spec, ny_spec, y_sp_st, z_off, nx, ny, nz, ax, bx, ay, by, &
+    az, bz &
     )
     !! Post-processes the divergence of velocity in spectral space, including
     !! scaling w.r.t. grid size.
@@ -487,6 +488,8 @@ contains
     integer, value, intent(in) :: nx_spec, ny_spec
     !> Offset in y direction in the permuted slabs in spectral space
     integer, value, intent(in) :: y_sp_st
+    !> Offset in z direction of the block div_u holds
+    integer, value, intent(in) :: z_off
     !> Grid size
     integer, value, intent(in) :: nx, ny, nz
 
@@ -499,7 +502,7 @@ contains
 
     if (i <= nx_spec) then
       do j = 1, ny_spec
-        ix = i; iz = k
+        ix = i; iz = k + z_off
 
         ! normalisation
         div_r = real(div_u(i, j, k), kind=dp)/nx/ny/nz
@@ -530,7 +533,7 @@ contains
   end subroutine process_spectral_010_fw
 
   attributes(global) subroutine process_spectral_010_poisson( &
-    div_u, a_re, a_im, off, inc, nx_spec, n, nx, ny, nz &
+    div_u, a_re, a_im, off, inc, nx_spec, n, z_off, nx, ny, nz &
     )
     !! Solve the Poisson equation at cell centres with non-periodic BC along y
     !!
@@ -545,6 +548,8 @@ contains
     integer, value, intent(in) :: off, inc
     !> Grid size in spectral space
     integer, value, intent(in) :: nx_spec, n, nx, ny, nz
+    !> Offset in z direction of the block div_u holds
+    integer, value, intent(in) :: z_off
 
     integer :: i, j, k, jm, nm
     real(dp) :: tmp_r, tmp_c, div_r, div_c
@@ -652,7 +657,7 @@ contains
         kind=dp &
         )
 
-      if (i == nx/2 + 1 .and. k == nz/2 + 1) then
+      if (i == nx/2 + 1 .and. k + z_off == nz/2 + 1) then
         div_u(i, nm, k) = 0._dp
         div_u(i, nm - inc, k) = 0._dp
       end if
@@ -680,14 +685,15 @@ contains
                  - a_im(i, j, k, 5)*aimag(div_u(i, jm + 2*inc, k))), &
           kind=dp &
           )
-        if (i == nx/2 + 1 .and. k == nz/2 + 1) div_u(i, jm, k) = 0._dp
+        if (i == nx/2 + 1 .and. k + z_off == nz/2 + 1) div_u(i, jm, k) = 0._dp
       end do
     end if
 
   end subroutine process_spectral_010_poisson
 
   attributes(global) subroutine process_spectral_010_bw( &
-    div_u, nx_spec, ny_spec, y_sp_st, nx, ny, nz, ax, bx, ay, by, az, bz &
+    div_u, nx_spec, ny_spec, y_sp_st, z_off, nx, ny, nz, ax, bx, ay, by, &
+    az, bz &
     )
     !! Post-processes the divergence of velocity in spectral space, including
     !! scaling w.r.t. grid size.
@@ -703,6 +709,8 @@ contains
     integer, value, intent(in) :: nx_spec, ny_spec
     !> Offset in y direction in the permuted slabs in spectral space
     integer, value, intent(in) :: y_sp_st
+    !> Offset in z direction of the block div_u holds
+    integer, value, intent(in) :: z_off
     !> Grid size
     integer, value, intent(in) :: nx, ny, nz
 
@@ -730,7 +738,7 @@ contains
 
     if (i <= nx_spec) then
       do j = 1, ny_spec
-        ix = i; iz = k
+        ix = i; iz = k + z_off
 
         div_r = real(div_u(i, j, k), kind=dp)
         div_c = aimag(div_u(i, j, k))
@@ -1362,12 +1370,13 @@ contains
   ! threads = dim3(min(ny_l, tpb), 1, 1), modelled on transpose_xyz_to_zxy.
   ! ------------------------------------------------------------------
 
-  attributes(global) subroutine pack_110_xyz_to_yslab( &
+  attributes(global) subroutine pack_zslab_to_alltoall( &
     sendbuf, src, nx, ny_l, nz_l, nproc &
     )
     !! Packs the physical Z-slab field block (nx, ny, nz_l) into the
     !! MPI_Alltoall send buffer, selecting for each destination rank s the
-    !! Y range [s*ny_l+1, (s+1)*ny_l] it owns in the Y-slab layout.
+    !! Y range [s*ny_l+1, (s+1)*ny_l] it owns after the redistribution.
+    !! Shared by the 110 and 010 multi-rank paths.
     implicit none
 
     real(dp), device, intent(out), dimension(:, :, :, :) :: sendbuf ! (nz_l, nx, ny_l, nproc)
@@ -1387,7 +1396,7 @@ contains
       end do
     end if
 
-  end subroutine pack_110_xyz_to_yslab
+  end subroutine pack_zslab_to_alltoall
 
   attributes(global) subroutine unpack_110_yslab( &
     dst, recvbuf, nx, ny_l, nz_l, nproc &
@@ -1444,10 +1453,10 @@ contains
 
   end subroutine pack_110_yslab
 
-  attributes(global) subroutine unpack_110_yslab_to_xyz( &
+  attributes(global) subroutine unpack_alltoall_to_zslab( &
     dst, recvbuf, nx, ny_l, nz_l, nproc &
     )
-    !! Inverse of pack_110_xyz_to_yslab: unpacks into the physical Z-slab
+    !! Inverse of pack_zslab_to_alltoall: unpacks into the physical Z-slab
     !! field block (nx, ny, nz_l). dst must be zeroed by the caller first,
     !! as fft_backward_110_cuda already does for the single rank path.
     implicit none
@@ -1469,7 +1478,75 @@ contains
       end do
     end if
 
-  end subroutine unpack_110_yslab_to_xyz
+  end subroutine unpack_alltoall_to_zslab
+
+  ! ------------------------------------------------------------------
+  ! 010 MULTI-RANK SPECTRAL REDISTRIBUTION
+  !
+  ! On multiple ranks the stretched y solve of the 010 case needs whole y
+  ! lines, but the cuFFTMp spectral slab (nx_spec, ny_l, nz) is split along
+  ! Y. The field moves to a Z-slab (nx_spec, ny, nz_l) and back through the
+  ! same MPI_Alltoall buffer (nz_l, nx, ny_l, nproc) as the 110 case, with
+  ! nx = 2*nx_spec on the real view. The Z-slab side reuses
+  ! pack_zslab_to_alltoall and unpack_alltoall_to_zslab. These two kernels
+  ! handle the Y-slab side, which has the order (x, y_l, z).
+  !
+  ! Launch config: the same as the 110 slab redistribution.
+  ! ------------------------------------------------------------------
+
+  attributes(global) subroutine pack_010_yslab( &
+    sendbuf, src, nx, ny_l, nz_l, nproc &
+    )
+    !! Packs the real view of the Y-slab (nx, ny_l, nz) into the
+    !! MPI_Alltoall send buffer, selecting for each destination rank s the
+    !! Z range [s*nz_l+1, (s+1)*nz_l] it owns in the Z-slab layout.
+    implicit none
+
+    real(dp), device, intent(out), dimension(:, :, :, :) :: sendbuf ! (nz_l, nx, ny_l, nproc)
+    real(dp), device, intent(in), dimension(:, :, :) :: src ! (nx, ny_l, nz)
+    integer, value, intent(in) :: nx, ny_l, nz_l, nproc
+
+    integer :: i, j, k, s
+
+    k = blockIdx%x                                  ! nz_l
+    j = (blockIdx%y - 1)*blockDim%x + threadIdx%x    ! ny_l
+
+    if (j <= ny_l) then
+      do s = 0, nproc - 1
+        do i = 1, nx
+          sendbuf(k, i, j, s + 1) = src(i, j, s*nz_l + k)
+        end do
+      end do
+    end if
+
+  end subroutine pack_010_yslab
+
+  attributes(global) subroutine unpack_010_yslab( &
+    dst, recvbuf, nx, ny_l, nz_l, nproc &
+    )
+    !! Inverse of pack_010_yslab: unpacks the MPI_Alltoall receive buffer
+    !! into the real view of the Y-slab (nx, ny_l, nz). Data received from
+    !! source rank s fills the global Z range [s*nz_l+1, (s+1)*nz_l].
+    implicit none
+
+    real(dp), device, intent(inout), dimension(:, :, :) :: dst ! (nx, ny_l, nz)
+    real(dp), device, intent(in), dimension(:, :, :, :) :: recvbuf ! (nz_l, nx, ny_l, nproc)
+    integer, value, intent(in) :: nx, ny_l, nz_l, nproc
+
+    integer :: i, j, k, s
+
+    k = blockIdx%x                                  ! nz_l
+    j = (blockIdx%y - 1)*blockDim%x + threadIdx%x    ! ny_l
+
+    if (j <= ny_l) then
+      do s = 0, nproc - 1
+        do i = 1, nx
+          dst(i, j, s*nz_l + k) = recvbuf(k, i, j, s + 1)
+        end do
+      end do
+    end if
+
+  end subroutine unpack_010_yslab
 
   attributes(global) subroutine enforce_periodicity_x(f_out, f_in, nx)
     implicit none

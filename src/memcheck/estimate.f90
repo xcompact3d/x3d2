@@ -7,6 +7,7 @@ module m_memcheck_estimate
                                 cuda_fft_spectral_dims
   use m_memory_estimate, only: padded_cells, padded_halo_bytes, &
                                spectral_slab_bytes, mirror_buffer_bytes_100, &
+                               mirror_buffer_bytes_010, &
                                spectral_extra_bytes_110, &
                                stretched_y_matrix_bytes, &
                                gpu_io_staging_bytes, fft_probe_margin_bytes
@@ -15,6 +16,7 @@ module m_memcheck_estimate
   private
   public :: to_gib, classify, num_gpus_unsupported_reason, &
             requested_unsupported_reason, estimate_for_num_gpus, &
+            spectral_plus_mirror_bytes, &
             prepare_probe, fields_plus_halo_bytes_n, n_halo, basis_measured, &
             basis_extrapolated, basis_formula, basis_predicted, basis_name
 
@@ -70,8 +72,8 @@ contains
     if (num_gpus < 1) then
       reason = 'nproc_dir(3) must be >= 1'
     else if (num_gpus > 1 .and. .not. ctx%multi_gpu_supported) then
-      reason = 'not supported: BC_y is non-periodic - &
-               &src/poisson_fft.f90 error-stops at nproc>1'
+      reason = 'not supported: the 110 case has no multi-rank buffers in &
+               &the estimate yet (#417)'
     else if (mod(ctx%gdims(3), num_gpus) /= 0) then
       write (reason, '(a,i0,a)') 'z=', ctx%gdims(3), ' not divisible'
     else if ((ctx%bc_is_000 .or. ctx%bc_is_010) .and. &
@@ -135,8 +137,9 @@ contains
 
   function spectral_plus_mirror_bytes(ctx, num_gpus) result(nbytes8)
     !! The spectral slab plus the BC specific extra terms: the mirror buffers
-    !! of 100 at num_gpus>1, the second array and the transposed workspace of
-    !! 110, and the Poisson coefficient matrices of 010 with y stretching.
+    !! of 100 and of unstretched 010 at num_gpus>1, the second array and the
+    !! transposed workspace of 110, and the Poisson coefficient matrices of
+    !! 010 with y stretching.
     type(memcheck_ctx_t), intent(in) :: ctx
     integer, intent(in) :: num_gpus
     integer(i8) :: nbytes8
@@ -151,7 +154,10 @@ contains
     else if (ctx%bc_is_010) then
       nbytes8 = nbytes8 + stretched_y_matrix_bytes( &
                 ctx%bc_is_010, ctx%domain_cfg%stretching(2), &
-                ctx%solver_cfg%lowmem_fft, n_spec)
+                ctx%solver_cfg%lowmem_fft, n_spec, nproc=num_gpus) &
+                + mirror_buffer_bytes_010( &
+                n_spec, num_gpus, trim(ctx%domain_cfg%stretching(2)) &
+                /= 'uniform')
     end if
   end function spectral_plus_mirror_bytes
 

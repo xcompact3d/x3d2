@@ -4,13 +4,13 @@ module m_test_utils
                    MPI_Comm_rank, MPI_Comm_size, MPI_Finalize, MPI_Init
   use iso_fortran_env, only: stderr => error_unit
   use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
-  use m_common, only: dp, nbytes, MPI_X3D2_DP
+  use m_common, only: dp, i8, nbytes, MPI_X3D2_DP
   use m_logger, only: abort_run
   implicit none
 
   private
   public :: initialise_mpi, finalise_test, global_all, global_sum, &
-            check_status, checkerr, check_norm, relative_l2_error, &
+            check_status, check_i8, checkerr, check_norm, relative_l2_error, &
             write_perf_metric, write_perf_minmax_metrics, &
             write_perf_summary, write_perf_minmax_summary, &
             write_device_bw_metric, report_perf_minmax
@@ -65,6 +65,21 @@ contains
       allpass = .false.
     end if
   end subroutine check_status
+
+  subroutine check_i8(label, actual, expect, test_pass)
+    !! Print the expected and the actual 64 bit integer under a label and
+    !! mark the test as failed when they differ.
+    character(*), intent(in) :: label
+    integer(i8), intent(in) :: actual, expect
+    logical, intent(inout) :: test_pass
+
+    print *, label
+    print *, "- Expect: ", expect
+    print *, "- Got: ", actual
+    if (actual /= expect) then
+      test_pass = .false.
+    end if
+  end subroutine check_i8
 
   subroutine finalise_test(allpass, nrank, finalize_mpi)
     !! Aggregate and report the test result, then finalise MPI before exiting

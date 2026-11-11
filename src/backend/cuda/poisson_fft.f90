@@ -39,8 +39,9 @@ module m_cuda_poisson_fft
                              process_spectral_pair_fw, &
                              process_spectral_pair_bw, &
                              pack_spectral_plane, &
-                             pack_110_xyz_to_yslab, unpack_110_yslab, &
-                             pack_110_yslab, unpack_110_yslab_to_xyz
+                             pack_zslab_to_alltoall, unpack_110_yslab, &
+                             pack_110_yslab, unpack_alltoall_to_zslab, &
+                             pack_010_yslab, unpack_010_yslab
   use m_logger, only: log_info, log_warn, abort_run, check_mpi, str
   use m_cuda_errors, only: check_cuda, check_cufft
 
@@ -72,8 +73,9 @@ module m_cuda_poisson_fft
     real(dp), device, allocatable, dimension(:, :, :) :: r_dev
     !> dim2 mirror of the local spectral slab, used by the 010, 100 and 110
     !> cases to reach the paired split partner that lives on another rank.
-    !> Only init_dim2_mirror allocates it, and init_cuda reads its allocation
-    !> status as "this case needs cuFFTMp".
+    !> Only init_dim2_mirror allocates it. The stretched 010 case on multiple
+    !> ranks does not allocate it. init_cuda decides the cuFFTMp requirement
+    !> from the case and the rank count, not from the allocation status.
     complex(dp), device, allocatable, dimension(:, :, :) :: c_mirror_dev
     !> Staging copy of the local slab, sent in place of c_dev itself.
     !> In the cuFFTMp path c_dev is a c_f_pointer onto descriptor%data(1),
@@ -89,6 +91,15 @@ module m_cuda_poisson_fft
                                                          c_plane_recv_dev
     !> Ranks holding the mirror slab and the extra mirror plane
     integer :: mirror_slab_rank = 0, mirror_plane_rank = 0
+    !> All-to-all buffers of the slab redistribution, sized
+    !> (nz_l, nx, ny_l, nproc). The 110 case moves the field between the
+    !> physical Z-slab (nx, ny, nz_l) and the cuFFTMp Y-slab
+    !> (2*(nz/2+1), nx, ny_l). The stretched 010 case moves the spectral
+    !> field between the cuFFTMp Y-slab and a Z-slab, with nx = 2*nx_spec
+    !> on the real view. Ordinary device memory, for the same reason as
+    !> c_slab_send_dev.
+    real(dp), device, allocatable, dimension(:, :, :, :) :: r_a2a_send_dev, &
+                                                            r_a2a_recv_dev
   contains
     procedure :: init => init_cuda
     procedure :: init_case
@@ -118,11 +129,17 @@ module m_cuda_poisson_fft
     real(dp), device, allocatable, dimension(:, :, :, :) :: &
       a_odd_re_dev, a_odd_im_dev, a_even_re_dev, a_even_im_dev, &
       a_re_dev, a_im_dev
+    !> On multiple ranks the stretched y solve runs on the Z-slab
+    !> (nx/2+1, ny, nz/nproc) of the spectral field, which holds whole y
+    !> lines. The slab redistribution fills it from the cuFFTMp Y-slab.
+    complex(dp), device, allocatable, dimension(:, :, :) :: c_zslab_dev
   contains
     procedure :: init_case => init_case_010
     procedure :: fft_postprocess => fft_postprocess_010_cuda
     procedure :: enforce_periodicity => enforce_periodicity_y_cuda
     procedure :: undo_periodicity => undo_periodicity_y_cuda
+    procedure :: redistribute_010_to_zslab
+    procedure :: redistribute_010_to_yslab
   end type cuda_poisson_010_t
 
   type, extends(cuda_poisson_fft_t) :: cuda_poisson_100_t
@@ -140,12 +157,6 @@ module m_cuda_poisson_fft
     !! Non-periodic in x and y, periodic in z
     !> Transposed real workspace (nz, nx, ny), single rank only
     real(dp), device, allocatable, dimension(:, :, :) :: r_dev_110
-    !> All-to-all buffers redistributing the field between the physical
-    !> Z-slab (nx, ny, nz_l) and the cuFFTMp Y-slab (2*(nz/2+1), nx, ny_l),
-    !> sized (nz_l, nx, ny_l, nproc). Ordinary device memory, for the same
-    !> reason as c_slab_send_dev.
-    real(dp), device, allocatable, dimension(:, :, :, :) :: r_a2a_send_dev, &
-                                                            r_a2a_recv_dev
   contains
     procedure :: init_case => init_case_110
     procedure :: create_plans => create_plans_110
@@ -179,6 +190,7 @@ module m_cuda_poisson_fft
 
   private :: sync_or_abort, yslab_view_110, &
              redistribution_launch_config, redistribution_alltoall, &
+             redistribute_010_to_zslab, redistribute_010_to_yslab, &
              init_cuda, postprocess_dim2_mirror
 
   !> create_fft_plan is deliberately public: the static memory estimator
@@ -528,6 +540,7 @@ contains
     character(len=110) :: reason
 
     integer :: dims_glob(3), dims_loc(3), n_spec(3), n_sp_st(3)
+    integer :: n_blk(3), blk_st(3)
     integer :: fft_n(3), fft_n_loc(2)
     integer :: fw_plan_type, bw_plan_type
     integer :: fft_bc
@@ -555,14 +568,38 @@ contains
                                 mesh%par%nproc_dir, mesh%par%nrank_dir, &
                                 n_spec, n_sp_st)
 
-    call self%base_init(mesh, xdirps, ydirps, zdirps, n_spec, n_sp_st)
-
-    ! The staged y pairing of the 010 case does not handle y stretching
-    if (self%bc_code == '010' .and. self%stretched_y &
-        .and. mesh%par%nproc > 1) then
-      call abort_run('The 010 case on multiple ranks does not yet support &
-                     &y stretching.')
+    ! On multiple ranks the 010 case moves the spectral field to z-slabs to
+    ! solve the stretched y system, and the tests check only top-bottom
+    ! stretching there. Stop ahead of base_init, which builds the stretching
+    ! matrices.
+    if (self%bc_code == '010' .and. mesh%geo%stretched(2) &
+        .and. mesh%par%nproc > 1 &
+        .and. trim(mesh%geo%stretching(2)) /= 'top-bottom') then
+      call abort_run('The 010 case on multiple ranks supports only &
+                     &top-bottom y stretching.')
     end if
+
+    ! The z-slabs of the stretched y solve split z evenly over the ranks
+    if (self%bc_code == '010' .and. mesh%geo%stretched(2) &
+        .and. mesh%par%nproc > 1 &
+        .and. mod(dims_glob(3), mesh%par%nproc) /= 0) then
+      call abort_run('The 010 case with y stretching on multiple ranks &
+                     &needs the number of z cells to divide by the number &
+                     &of ranks.')
+    end if
+
+    ! The stretching matrices cover the local spectral pencil. On multiple
+    ! ranks they cover the z-slab (nx/2+1, ny, nz/nproc) of this rank, where
+    ! the stretched y solve runs.
+    n_blk = n_spec
+    blk_st = n_sp_st
+    if (mesh%par%nproc > 1) then
+      n_blk = [n_spec(1), dims_glob(2), dims_glob(3)/mesh%par%nproc]
+      blk_st = [0, 0, n_blk(3)*mesh%par%nrank]
+    end if
+
+    call self%base_init(mesh, xdirps, ydirps, zdirps, n_spec, n_sp_st, &
+                        n_blk, blk_st)
 
     nx = self%nx_glob
     ny = self%ny_glob
@@ -591,7 +628,7 @@ contains
     self%use_cufftmp = .true.
 
     ! init_case must run before create_plans: the 010, 100 and 110 cases set up
-    ! the dim2 mirror there, and the cuFFTMp check below reads it.
+    ! their device state there.
     call self%init_case(mesh)
 
     call self%create_plans(mesh, fft_n, fft_n_loc, fw_plan_type, &
@@ -599,10 +636,11 @@ contains
 
     ! use_cufftmp is only settled once create_fft_plan has run, because plain
     ! cuFFT is a fallback taken inside it, so unlike the decomposition checks
-    ! above this one cannot move ahead of the plans. c_mirror_dev is
-    ! allocated only by init_dim2_mirror, so it is allocated exactly on the
-    ! multi-rank paths of the 010, 100 and 110 cases.
-    if (allocated(self%c_mirror_dev) .and. (.not. self%use_cufftmp)) then
+    ! above this one cannot move ahead of the plans. The 010, 100 and 110
+    ! cases need cuFFTMp on more than one rank.
+    if ((self%bc_code == '010' .or. self%bc_code == '100' &
+         .or. self%bc_code == '110') &
+        .and. mesh%par%nproc > 1 .and. (.not. self%use_cufftmp)) then
       call abort_run('The 010, 100 and 110 cases on multiple ranks need &
                      &cuFFTMp, plain cuFFT cannot decompose the transform.')
     end if
@@ -624,7 +662,22 @@ contains
     class(cuda_poisson_010_t) :: self
     type(mesh_t), intent(in) :: mesh
 
-    call self%init_dim2_mirror(mesh)
+    integer :: nz_l
+
+    ! The stretched solve on multiple ranks uses the z-slabs and the all to
+    ! all buffers below, never the dim2 mirror.
+    if (.not. (self%stretched_y .and. mesh%par%nproc > 1)) then
+      call self%init_dim2_mirror(mesh)
+    end if
+
+    if (self%stretched_y .and. mesh%par%nproc > 1) then
+      nz_l = self%nz_glob/mesh%par%nproc
+      allocate (self%c_zslab_dev(self%nx_spec, self%ny_glob, nz_l))
+      allocate (self%r_a2a_send_dev(nz_l, 2*self%nx_spec, self%ny_spec, &
+                                    mesh%par%nproc))
+      allocate (self%r_a2a_recv_dev(nz_l, 2*self%nx_spec, self%ny_spec, &
+                                    mesh%par%nproc))
+    end if
 
     ! if stretching in y is 'centred' or 'top-bottom'
     if (self%stretched_y .and. self%stretched_y_sym) then
@@ -676,9 +729,7 @@ contains
     !! dim2 modes [r*m + 1, (r + 1)*m] with m = ny_spec, and the mirror of
     !! that range is slab P - 1 - r shifted up by one plane, so the extra
     !! plane comes from slab P - r. Both partners are symmetric. A single
-    !! rank holds every partner itself and allocates nothing. This is the
-    !! only place c_mirror_dev is allocated, see the cuFFTMp check in
-    !! init_cuda.
+    !! rank holds every partner itself and allocates nothing.
     implicit none
 
     class(cuda_poisson_fft_t) :: self
@@ -920,8 +971,8 @@ contains
   end subroutine fft_backward_110_cuda
 
   subroutine redistribution_launch_config(ny_l, nz_l, blocks, threads)
-    !! Launch configuration shared by the four pack and unpack kernels of the
-    !! 110 slab redistribution.
+    !! Launch configuration shared by the pack and unpack kernels of the
+    !! 110 and the stretched 010 slab redistribution.
     implicit none
 
     integer, intent(in) :: ny_l, nz_l
@@ -934,43 +985,38 @@ contains
     threads = dim3(tpb, 1, 1)
   end subroutine redistribution_launch_config
 
-  subroutine redistribution_alltoall(self, ny_l, slab)
-    !! Syncs the device, then swaps the packed 110 slab buffers between all
-    !! ranks. The slab text ('Y' or 'Z') names the target in the failure
-    !! message.
+  subroutine redistribution_alltoall(self, count, slab)
+    !! Syncs the device, then swaps the packed slab buffers between all
+    !! ranks, count reals per rank pair. The slab text ('Y' or 'Z') names the
+    !! target in the failure message.
     implicit none
 
-    class(cuda_poisson_110_t) :: self
-    integer, intent(in) :: ny_l
+    class(cuda_poisson_fft_t) :: self
+    integer, intent(in) :: count
     character(len=*), intent(in) :: slab
 
-    integer :: nx, nz_l, count, ierr_mpi
-
-    nx = self%nx_glob
-    nz_l = self%nz_loc
+    integer :: ierr_mpi
 
     ! Ordinary device memory, but still owed a sync before MPI reads it, for
     ! the same reason as the dim2 mirror exchange (see exchange_dim2_mirror).
-    call sync_or_abort('110 slab redistribution')
-
-    count = nz_l*nx*ny_l
+    call sync_or_abort('slab redistribution')
 
 #ifdef MPI
     call MPI_Alltoall(self%r_a2a_send_dev, count, MPI_X3D2_DP, &
                       self%r_a2a_recv_dev, count, MPI_X3D2_DP, &
                       MPI_COMM_WORLD, ierr_mpi)
 #else
-    call abort_run('The 110 slab redistribution needs more than one rank, but &
+    call abort_run('The slab redistribution needs more than one rank, but &
                    &this build was configured without MPI')
 #endif
-    call check_mpi(ierr_mpi, 'The 110 slab redistribution to the ' &
+    call check_mpi(ierr_mpi, 'The slab redistribution to the ' &
                    //slab//'-slab')
   end subroutine redistribution_alltoall
 
   subroutine redistribute_110_to_yslab(self, zslab, yslab)
     !! Redistributes the 110 field from the physical Z-slab (nx, ny, nz_l)
     !! to the cuFFTMp Y-slab real view (2*(nz/2+1), nx, ny_l), ahead of the
-    !! forward transform. See the comment above pack_110_xyz_to_yslab.
+    !! forward transform. See the comment above pack_zslab_to_alltoall.
     implicit none
 
     class(cuda_poisson_110_t) :: self
@@ -987,11 +1033,11 @@ contains
 
     call redistribution_launch_config(ny_l, nz_l, blocks, threads)
 
-    call pack_110_xyz_to_yslab<<<blocks, threads>>>( & !&
+    call pack_zslab_to_alltoall<<<blocks, threads>>>( & !&
       self%r_a2a_send_dev, zslab, nx, ny_l, nz_l, nproc &
       )
 
-    call redistribution_alltoall(self, ny_l, 'Y')
+    call redistribution_alltoall(self, nz_l*nx*ny_l, 'Y')
 
     call unpack_110_yslab<<<blocks, threads>>>( & !&
       yslab, self%r_a2a_recv_dev, nx, ny_l, nz_l, nproc &
@@ -1021,13 +1067,75 @@ contains
       self%r_a2a_send_dev, yslab, nx, ny_l, nz_l, nproc &
       )
 
-    call redistribution_alltoall(self, ny_l, 'Z')
+    call redistribution_alltoall(self, nz_l*nx*ny_l, 'Z')
 
-    call unpack_110_yslab_to_xyz<<<blocks, threads>>>( & !&
+    call unpack_alltoall_to_zslab<<<blocks, threads>>>( & !&
       zslab, self%r_a2a_recv_dev, nx, ny_l, nz_l, nproc &
       )
 
   end subroutine redistribute_110_to_zslab
+
+  subroutine redistribute_010_to_zslab(self, yslab, zslab)
+    !! Redistributes the stretched 010 spectral field from the cuFFTMp
+    !! Y-slab real view (2*nx_spec, ny_l, nz) to the Z-slab
+    !! (2*nx_spec, ny, nz_l), ahead of the stretched y solve.
+    implicit none
+
+    class(cuda_poisson_010_t) :: self
+    real(dp), device, dimension(:, :, :), intent(in) :: yslab
+    real(dp), device, dimension(:, :, :), intent(inout) :: zslab
+
+    type(dim3) :: blocks, threads
+    integer :: nx, ny_l, nz_l, nproc
+
+    nx = 2*self%nx_spec
+    ny_l = self%ny_spec
+    nproc = self%mesh%par%nproc
+    nz_l = self%nz_glob/nproc
+
+    call redistribution_launch_config(ny_l, nz_l, blocks, threads)
+
+    call pack_010_yslab<<<blocks, threads>>>( & !&
+      self%r_a2a_send_dev, yslab, nx, ny_l, nz_l, nproc &
+      )
+
+    call redistribution_alltoall(self, nz_l*nx*ny_l, 'Z')
+
+    call unpack_alltoall_to_zslab<<<blocks, threads>>>( & !&
+      zslab, self%r_a2a_recv_dev, nx, ny_l, nz_l, nproc &
+      )
+
+  end subroutine redistribute_010_to_zslab
+
+  subroutine redistribute_010_to_yslab(self, zslab, yslab)
+    !! Inverse of redistribute_010_to_zslab, after the stretched y solve.
+    implicit none
+
+    class(cuda_poisson_010_t) :: self
+    real(dp), device, dimension(:, :, :), intent(in) :: zslab
+    real(dp), device, dimension(:, :, :), intent(inout) :: yslab
+
+    type(dim3) :: blocks, threads
+    integer :: nx, ny_l, nz_l, nproc
+
+    nx = 2*self%nx_spec
+    ny_l = self%ny_spec
+    nproc = self%mesh%par%nproc
+    nz_l = self%nz_glob/nproc
+
+    call redistribution_launch_config(ny_l, nz_l, blocks, threads)
+
+    call pack_zslab_to_alltoall<<<blocks, threads>>>( & !&
+      self%r_a2a_send_dev, zslab, nx, ny_l, nz_l, nproc &
+      )
+
+    call redistribution_alltoall(self, nz_l*nx*ny_l, 'Y')
+
+    call unpack_010_yslab<<<blocks, threads>>>( & !&
+      yslab, self%r_a2a_recv_dev, nx, ny_l, nz_l, nproc &
+      )
+
+  end subroutine redistribute_010_to_yslab
 
   subroutine fft_forward_100_cuda(self, f)
   !! Forward FFT for non-periodic-X case
@@ -1523,8 +1631,10 @@ contains
     type(cudaXtDesc), pointer :: descriptor
 
     complex(dp), device, dimension(:, :, :), pointer :: c_dev
+    real(dp), device, dimension(:, :, :), pointer :: r_yslab, r_zslab
     type(dim3) :: blocks, threads
     integer :: tsize, off, inc
+    integer :: ny_solve, y_st_solve, z_off, nz_l
 
     ! tsize is different than SZ, because here we work on a 3D Cartesian
     ! data structure, and free to specify any suitable thread/block size.
@@ -1563,8 +1673,34 @@ contains
                                    self%ay_dev, self%by_dev, &  ! dim2, Y
                                    self%az_dev, self%bz_dev)  ! dim3, Z
     else
+      ny_solve = self%ny_spec
+      y_st_solve = self%sp_st(2)
+      z_off = 0
+
+      ! On multiple ranks each rank holds a y-slab, but the stretched y
+      ! system couples the whole y line. Move the spectral field to the
+      ! z-slab (nx_spec, ny, nz/nproc) of each rank, and run the single rank
+      ! solve on it. The slab redistribution works on the real views.
+      if (self%mesh%par%nproc > 1) then
+        nz_l = self%nz_glob/self%mesh%par%nproc
+        z_off = nz_l*self%mesh%par%nrank
+
+        call c_f_pointer(descriptor%data(1), r_yslab, &
+                         [2*self%nx_spec, self%ny_spec, self%nz_spec])
+        call c_f_pointer(c_loc(self%c_zslab_dev), r_zslab, &
+                         [2*self%nx_spec, self%ny_glob, nz_l])
+
+        call redistribute_010_to_zslab(self, r_yslab, r_zslab)
+
+        call c_f_pointer(c_loc(self%c_zslab_dev), c_dev, &
+                         [self%nx_spec, self%ny_glob, nz_l])
+        ny_solve = self%ny_glob
+        y_st_solve = 0
+        blocks = dim3((self%nx_spec - 1)/tsize + 1, nz_l, 1)
+      end if
+
       call process_spectral_010_fw<<<blocks, threads>>>( & !&
-        c_dev, self%nx_spec, self%ny_spec, self%sp_st(2), &
+        c_dev, self%nx_spec, ny_solve, y_st_solve, z_off, &
         self%nx_glob, self%ny_glob, self%nz_glob, &
         self%ax_dev, self%bx_dev, self%ay_dev, self%by_dev, &
         self%az_dev, self%bz_dev &
@@ -1589,14 +1725,14 @@ contains
         inc = 2
         call process_spectral_010_poisson<<<blocks, threads>>>( & !&
           c_dev, self%a_odd_re_dev, self%a_odd_im_dev, off, inc, &
-          self%nx_spec, self%ny_spec/2, &
+          self%nx_spec, ny_solve/2, z_off, &
           self%nx_glob, self%ny_glob, self%nz_glob &
           )
         ! start from the first even entry and continue with even ones
         off = 1
         call process_spectral_010_poisson<<<blocks, threads>>>( & !&
           c_dev, self%a_even_re_dev, self%a_even_im_dev, off, inc, &
-          self%nx_spec, self%ny_spec/2, &
+          self%nx_spec, ny_solve/2, z_off, &
           self%nx_glob, self%ny_glob, self%nz_glob &
           )
       !! if stretching in y is 'bottom'
@@ -1614,17 +1750,22 @@ contains
         inc = 1
         call process_spectral_010_poisson<<<blocks, threads>>>( & !&
           c_dev, self%a_re_dev, self%a_im_dev, off, inc, &
-          self%nx_spec, self%ny_spec, &
+          self%nx_spec, ny_solve, z_off, &
           self%nx_glob, self%ny_glob, self%nz_glob &
           )
       end if
 
       call process_spectral_010_bw<<<blocks, threads>>>( & !&
-        c_dev, self%nx_spec, self%ny_spec, self%sp_st(2), &
+        c_dev, self%nx_spec, ny_solve, y_st_solve, z_off, &
         self%nx_glob, self%ny_glob, self%nz_glob, &
         self%ax_dev, self%bx_dev, self%ay_dev, self%by_dev, &
         self%az_dev, self%bz_dev &
         )
+
+      ! Move the solution back to the y-slab in the descriptor
+      if (self%mesh%par%nproc > 1) then
+        call redistribute_010_to_yslab(self, r_zslab, r_yslab)
+      end if
     end if
 
   end subroutine fft_postprocess_010_cuda

@@ -162,17 +162,21 @@ contains
     end select
   end function spectral_dirs
 
-  subroutine base_init(self, mesh, xdirps, ydirps, zdirps, n_spec, n_sp_st)
+  subroutine base_init(self, mesh, xdirps, ydirps, zdirps, n_spec, n_sp_st, &
+                       n_blk, blk_st)
     !! Sets up the state every case shares. The backend's init calls it
     !! once it has set bc_code, which the spectral extents it passes in
     !! already depend on. The supported BC codes are the cases of the
     !! backend factories, create_omp_poisson_fft and create_cuda_poisson_fft.
+    !! n_blk and blk_st are passed on to stretching_matrix.
     implicit none
     class(poisson_fft_t) :: self
     type(mesh_t), intent(in), target :: mesh
     type(dirps_t), intent(in) :: xdirps, ydirps, zdirps
     integer, dimension(3), intent(in) :: n_spec ! Size of the spectral pencil
     integer, dimension(3), intent(in) :: n_sp_st ! Offset of the spectral pencil
+    !> Size and offset of the block the stretching matrices cover
+    integer, dimension(3), optional, intent(in) :: n_blk, blk_st
 
     integer :: dims(3)
     self%mesh => mesh
@@ -206,10 +210,6 @@ contains
     allocate (self%eys(self%ny_glob))
     allocate (self%ezs(self%nz_glob))
 
-    allocate (self%trans_x_re(self%nx_spec), self%trans_x_im(self%nx_spec))
-    allocate (self%trans_y_re(self%ny_spec), self%trans_y_im(self%ny_spec))
-    allocate (self%trans_z_re(self%nz_spec), self%trans_z_im(self%nz_spec))
-
     allocate (self%waves(self%nx_spec, self%ny_spec, self%nz_spec))
 
     ! waves_set requires some of the preprocessed tdsops variables.
@@ -225,7 +225,8 @@ contains
     if (mesh%geo%stretched(2)) then
       if (self%bc_code == '010') then
         self%stretched_y = .true.
-        call self%stretching_matrix(mesh%geo, xdirps, ydirps, zdirps)
+        call self%stretching_matrix(mesh%geo, xdirps, ydirps, zdirps, &
+                                    n_blk, blk_st)
       else
         call abort_run('FFT based Poisson solver supports stretching in &
                        &y-direction only with periodic x and z and &
@@ -278,9 +279,13 @@ contains
     call abort_run('undo_periodicity is not used by this Poisson BC case.')
   end subroutine undo_periodicity
 
-  subroutine stretching_matrix(self, geo, xdirps, ydirps, zdirps)
+  subroutine stretching_matrix(self, geo, xdirps, ydirps, zdirps, n_blk, &
+                               blk_st)
     !! Stretching necessitates a special operation in spectral space.
     !! The coefficients for the operation are stored in matrix form.
+    !! The matrices and trans_* cover the spectral block of size n_blk at
+    !! offset blk_st, the local spectral pencil by default. trans_* hold the
+    !! modes of the block and take the local index.
     !!
     !! Ref. JCP 228 (2009), 5989–6015, Sec 5
     implicit none
@@ -288,12 +293,23 @@ contains
     class(poisson_fft_t) :: self
     type(geo_t), intent(in) :: geo
     type(dirps_t), intent(in) :: xdirps, ydirps, zdirps
+    integer, dimension(3), optional, intent(in) :: n_blk, blk_st
 
     real(dp) :: temp, a0, a1
     integer :: i, j, k, ix, iz
+    integer :: n(3), st(3)
 
-    do i = 1, self%nx_spec
-      temp = real(self%exs(i), kind=dp)*geo%d(1)
+    n = [self%nx_spec, self%ny_spec, self%nz_spec]
+    st = self%sp_st
+    if (present(n_blk)) n = n_blk
+    if (present(blk_st)) st = blk_st
+
+    allocate (self%trans_x_re(n(1)), self%trans_x_im(n(1)))
+    allocate (self%trans_y_re(n(2)), self%trans_y_im(n(2)))
+    allocate (self%trans_z_re(n(3)), self%trans_z_im(n(3)))
+
+    do i = 1, n(1)
+      temp = real(self%exs(i + st(1)), kind=dp)*geo%d(1)
       self%trans_x_re(i) = 2*(xdirps%interpl_v2p%a*cos(temp*0.5_dp) &
                               + xdirps%interpl_v2p%b*cos(temp*1.5_dp) &
                               + xdirps%interpl_v2p%c*cos(temp*2.5_dp) &
@@ -302,8 +318,8 @@ contains
       self%trans_x_im(i) = self%trans_x_re(i)
     end do
 
-    do j = 1, self%ny_spec
-      temp = real(self%eys(j), kind=dp)*geo%d(2)
+    do j = 1, n(2)
+      temp = real(self%eys(j + st(2)), kind=dp)*geo%d(2)
       self%trans_y_re(j) = 2*(ydirps%interpl_v2p%a*cos(temp*0.5_dp) &
                               + ydirps%interpl_v2p%b*cos(temp*1.5_dp) &
                               + ydirps%interpl_v2p%c*cos(temp*2.5_dp) &
@@ -312,8 +328,8 @@ contains
       self%trans_y_im(j) = self%trans_y_re(j)
     end do
 
-    do k = 1, self%nz_spec
-      temp = real(self%ezs(k), kind=dp)*geo%d(3)
+    do k = 1, n(3)
+      temp = real(self%ezs(k + st(3)), kind=dp)*geo%d(3)
       self%trans_z_re(k) = 2*(zdirps%interpl_v2p%a*cos(temp*0.5_dp) &
                               + zdirps%interpl_v2p%b*cos(temp*1.5_dp) &
                               + zdirps%interpl_v2p%c*cos(temp*2.5_dp) &
@@ -324,8 +340,8 @@ contains
 
     if (trim(geo%stretching(2)) == 'bottom') then
       self%stretched_y_sym = .false.
-      allocate (self%a_re(self%nx_spec, self%ny_spec, self%nz_spec, 5))
-      allocate (self%a_im(self%nx_spec, self%ny_spec, self%nz_spec, 5))
+      allocate (self%a_re(n(1), n(2), n(3), 5))
+      allocate (self%a_im(n(1), n(2), n(3), 5))
 
       self%a_re = 0._dp
       self%a_im = 0._dp
@@ -334,7 +350,7 @@ contains
       a1 = -1._dp/(4*pi*geo%beta(2))*geo%L(2)
 
       call fill_stretched_diagonals(self, self%a_re, self%a_im, &
-                                    STRETCH_MAT_BOTTOM, a0, a1)
+                                    STRETCH_MAT_BOTTOM, a0, a1, n, st)
 
       ! tweak the matrix to make it not singular
       self%a_re(1, 1, 1, 3) = 1._dp; self%a_im(1, 1, 1, 3) = 1._dp
@@ -342,10 +358,10 @@ contains
       self%a_re(1, 1, 1, 5) = 0; self%a_im(1, 1, 1, 5) = 0
     else
       self%stretched_y_sym = .true.
-      allocate (self%a_odd_re(self%nx_spec, self%ny_spec/2, self%nz_spec, 5))
-      allocate (self%a_odd_im(self%nx_spec, self%ny_spec/2, self%nz_spec, 5))
-      allocate (self%a_even_re(self%nx_spec, self%ny_spec/2, self%nz_spec, 5))
-      allocate (self%a_even_im(self%nx_spec, self%ny_spec/2, self%nz_spec, 5))
+      allocate (self%a_odd_re(n(1), n(2)/2, n(3), 5))
+      allocate (self%a_odd_im(n(1), n(2)/2, n(3), 5))
+      allocate (self%a_even_re(n(1), n(2)/2, n(3), 5))
+      allocate (self%a_even_im(n(1), n(2)/2, n(3), 5))
 
       self%a_odd_re = 0._dp
       self%a_odd_im = 0._dp
@@ -363,13 +379,13 @@ contains
       end select
 
       call fill_stretched_diagonals(self, self%a_odd_re, self%a_odd_im, &
-                                    STRETCH_MAT_ODD, a0, a1)
+                                    STRETCH_MAT_ODD, a0, a1, n, st)
       call fill_stretched_diagonals(self, self%a_even_re, self%a_even_im, &
-                                    STRETCH_MAT_EVEN, a0, a1)
+                                    STRETCH_MAT_EVEN, a0, a1, n, st)
 
-      do k = 1, self%nz_spec
-        do i = 1, self%nx_spec
-          ix = i + self%sp_st(1); iz = k + self%sp_st(3)
+      do k = 1, n(3)
+        do i = 1, n(1)
+          ix = i + st(1); iz = k + st(3)
           if (get_real(self%k2x(ix)) < 1e-15 &
               .and. get_real(self%k2z(iz)) < 1e-15) then
             self%a_odd_re(i, 1, k, 3) = 1._dp
@@ -385,10 +401,13 @@ contains
 
   end subroutine stretching_matrix
 
-  subroutine fill_stretched_diagonals(self, a_re, a_im, matrix_kind, a0, a1)
-    !! Fill the five diagonals of one stretching matrix. Row j of the matrix
-    !! couples the cosine modes iy_scale*iy + iy_off + (-2:2)*shift, with
-    !! iy = j + sp_st(2). The caller zeroes a_re and a_im beforehand.
+  subroutine fill_stretched_diagonals(self, a_re, a_im, matrix_kind, a0, a1, &
+                                      n, st)
+    !! Fill the five diagonals of one stretching matrix on the spectral block
+    !! of size n at offset st. Row j of the matrix couples the cosine modes
+    !! iy_scale*iy + iy_off + (-2:2)*shift, with iy = j + st(2). trans_*
+    !! take the local index of the block. The caller zeroes a_re and a_im
+    !! beforehand.
     !! The matrix kind sets nrows, iy_scale, iy_off and shift: 'bottom' takes
     !! all the modes, 'odd' and 'even' take every second mode.
     !! The kind also selects the first and last rows: 'bottom' and 'odd' double
@@ -402,6 +421,7 @@ contains
     real(dp), intent(inout) :: a_re(:, :, :, :), a_im(:, :, :, :)
     integer, intent(in) :: matrix_kind
     real(dp), intent(in) :: a0, a1
+    integer, intent(in) :: n(3), st(3)
 
     real(dp) :: c1, c2, c_first
     complex(dp) :: km_a1
@@ -411,11 +431,11 @@ contains
 
     select case (matrix_kind)
     case (STRETCH_MAT_BOTTOM)
-      nrows = self%ny_spec; iy_scale = 1; iy_off = 0; shift = 1
+      nrows = n(2); iy_scale = 1; iy_off = 0; shift = 1
     case (STRETCH_MAT_ODD)
-      nrows = self%ny_spec/2; iy_scale = 2; iy_off = -1; shift = 2
+      nrows = n(2)/2; iy_scale = 2; iy_off = -1; shift = 2
     case (STRETCH_MAT_EVEN)
-      nrows = self%ny_spec/2; iy_scale = 2; iy_off = 0; shift = 2
+      nrows = n(2)/2; iy_scale = 2; iy_off = 0; shift = 2
     case default
       call abort_run('fill_stretched_diagonals: unknown matrix kind')
       nrows = 0; iy_scale = 0; iy_off = 0; shift = 0
@@ -427,10 +447,10 @@ contains
     c_first = a0*a1 - a1*a1
     nup1 = nrows - 1
 
-    do k = 1, self%nz_spec
+    do k = 1, n(3)
       do j = 1, nrows
-        do i = 1, self%nx_spec
-          ix = i + self%sp_st(1); iy = j + self%sp_st(2); iz = k + self%sp_st(3)
+        do i = 1, n(1)
+          ix = i + st(1); iy = j + st(2); iz = k + st(3)
           r = iy_scale*iy + iy_off
 
           ! diagonal
@@ -438,29 +458,29 @@ contains
           c2 = a1*a1
           if (iy == 1) then
             if (is_even) c1 = a0*a0 - a1*a1
-            km_a1 = self%get_km(ix, r + shift, iz)
+            km_a1 = self%get_km(i, r + shift, k)
           else if (iy == nrows) then
             if (is_even) c1 = (a0 + a1)*(a0 + a1)
-            km_a1 = self%get_km(ix, r - shift, iz)
+            km_a1 = self%get_km(i, r - shift, k)
           else
-            km_a1 = self%get_km(ix, r - shift, iz) &
-                    + self%get_km(ix, r + shift, iz)
+            km_a1 = self%get_km(i, r - shift, k) &
+                    + self%get_km(i, r + shift, k)
           end if
           a_re(i, j, k, 3) = &
-            -(get_real(self%kx(ix))*self%trans_y_re(r) &
-              *self%trans_z_re(iz))**2 &
-            - (get_real(self%kz(iz))*self%trans_y_re(r) &
-               *self%trans_x_re(ix))**2 &
-            - c1*self%get_km_re(ix, r, iz)**2 &
-            - c2*self%get_km_re(ix, r, iz) &
+            -(get_real(self%kx(ix))*self%trans_y_re(r - st(2)) &
+              *self%trans_z_re(k))**2 &
+            - (get_real(self%kz(iz))*self%trans_y_re(r - st(2)) &
+               *self%trans_x_re(i))**2 &
+            - c1*self%get_km_re(i, r, k)**2 &
+            - c2*self%get_km_re(i, r, k) &
             *get_real(km_a1)
           a_im(i, j, k, 3) = &
-            -(get_imag(self%kx(ix))*self%trans_y_im(r) &
-              *self%trans_z_im(iz))**2 &
-            - (get_imag(self%kz(iz))*self%trans_y_im(r) &
-               *self%trans_x_im(ix))**2 &
-            - c1*self%get_km_im(ix, r, iz)**2 &
-            - c2*self%get_km_im(ix, r, iz) &
+            -(get_imag(self%kx(ix))*self%trans_y_im(r - st(2)) &
+              *self%trans_z_im(k))**2 &
+            - (get_imag(self%kz(iz))*self%trans_y_im(r - st(2)) &
+               *self%trans_x_im(i))**2 &
+            - c1*self%get_km_im(i, r, k)**2 &
+            - c2*self%get_km_im(i, r, k) &
             *get_imag(km_a1)
 
           ! diagonal + 1
@@ -478,13 +498,13 @@ contains
               c2 = (a0 + a1)*a1
             end if
             a_re(i, j, k, 4) = &
-              c1*(self%get_km_re(ix, r, iz) &
-                  *self%get_km_re(ix, r + shift, iz)) &
-              + c2*self%get_km_re(ix, r + shift, iz)**2
+              c1*(self%get_km_re(i, r, k) &
+                  *self%get_km_re(i, r + shift, k)) &
+              + c2*self%get_km_re(i, r + shift, k)**2
             a_im(i, j, k, 4) = &
-              c1*(self%get_km_im(ix, r, iz) &
-                  *self%get_km_im(ix, r + shift, iz)) &
-              + c2*self%get_km_im(ix, r + shift, iz)**2
+              c1*(self%get_km_im(i, r, k) &
+                  *self%get_km_im(i, r + shift, k)) &
+              + c2*self%get_km_im(i, r + shift, k)**2
           end if
 
           ! diagonal + 2
@@ -492,11 +512,11 @@ contains
             c1 = a1*a1
             if (iy == 1 .and. .not. is_even) c1 = 2*a1*a1
             a_re(i, j, k, 5) = &
-              -(c1*self%get_km_re(ix, r + shift, iz) &
-                *self%get_km_re(ix, r + 2*shift, iz))
+              -(c1*self%get_km_re(i, r + shift, k) &
+                *self%get_km_re(i, r + 2*shift, k))
             a_im(i, j, k, 5) = &
-              -(c1*self%get_km_im(ix, r + shift, iz) &
-                *self%get_km_im(ix, r + 2*shift, iz))
+              -(c1*self%get_km_im(i, r + shift, k) &
+                *self%get_km_im(i, r + 2*shift, k))
           end if
 
           ! diagonal - 1
@@ -509,23 +529,23 @@ contains
               c1 = (a0 + a1)*a1
             end if
             a_re(i, j, k, 2) = &
-              c1*(self%get_km_re(ix, r, iz) &
-                  *self%get_km_re(ix, r - shift, iz)) &
-              + c2*self%get_km_re(ix, r - shift, iz)**2
+              c1*(self%get_km_re(i, r, k) &
+                  *self%get_km_re(i, r - shift, k)) &
+              + c2*self%get_km_re(i, r - shift, k)**2
             a_im(i, j, k, 2) = &
-              c1*(self%get_km_im(ix, r, iz) &
-                  *self%get_km_im(ix, r - shift, iz)) &
-              + c2*self%get_km_im(ix, r - shift, iz)**2
+              c1*(self%get_km_im(i, r, k) &
+                  *self%get_km_im(i, r - shift, k)) &
+              + c2*self%get_km_im(i, r - shift, k)**2
           end if
 
           ! diagonal - 2
           if (j >= 3) then
             a_re(i, j, k, 1) = &
-              -(a1*a1*self%get_km_re(ix, r - shift, iz) &
-                *self%get_km_re(ix, r - 2*shift, iz))
+              -(a1*a1*self%get_km_re(i, r - shift, k) &
+                *self%get_km_re(i, r - 2*shift, k))
             a_im(i, j, k, 1) = &
-              -(a1*a1*self%get_km_im(ix, r - shift, iz) &
-                *self%get_km_im(ix, r - 2*shift, iz))
+              -(a1*a1*self%get_km_im(i, r - shift, k) &
+                *self%get_km_im(i, r - 2*shift, k))
           end if
         end do
       end do
