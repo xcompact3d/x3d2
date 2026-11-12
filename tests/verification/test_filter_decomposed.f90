@@ -13,6 +13,7 @@ program test_filter_decomposed
   !!
   !! Argument 1 selects the boundary conditions of x and z: 'periodic' (the
   !! ABL's spanwise direction) or 'walls' (Dirichlet start, Neumann end).
+  use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
   use m_mpi, only: MPI_COMM_WORLD, MPI_Comm_size, MPI_Init, MPI_Finalize, &
                    MPI_Allreduce, MPI_IN_PLACE, MPI_MAX
 
@@ -164,6 +165,11 @@ contains
     do k = 1, dims(3)
       err = max(err, maxval(abs(d(1:dims(1), 1:dims(2), k) - ref(z_off + k))))
     end do
+    ! max and MPI_MAX can each drop a NaN, so a non-finite result on any
+    ! rank is made the largest difference before the reduction
+    if (.not. (all(ieee_is_finite(ref)) .and. &
+               all(ieee_is_finite(d(1:dims(1), 1:dims(2), 1:dims(3)))))) &
+      err = huge(err)
     call MPI_Allreduce(MPI_IN_PLACE, err, 1, MPI_X3D2_DP, MPI_MAX, &
                        MPI_COMM_WORLD, ierr)
     ! The system is solved exactly either way, so only round-off separates
