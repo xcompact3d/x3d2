@@ -49,6 +49,46 @@ contains
   end function case_channel_init
 
   ! ==========================================================================
+  ! Mean streamwise velocity over the whole domain. Uses the y stretching
+  ! metric on a stretched mesh and the plain volume mean otherwise.
+  ! ==========================================================================
+  function channel_bulk_velocity(backend, mesh, u) result(ub)
+    implicit none
+
+    class(base_backend_t), intent(inout) :: backend
+    type(mesh_t), intent(in) :: mesh
+    class(field_t), intent(in) :: u
+    real(dp) :: ub
+
+    real(dp), allocatable :: sums(:)
+    integer :: j, dims(3), global_dims(3), ierr
+
+    if (mesh%geo%stretched(2)) then
+      ! Bulk velocity as Incompact3d channel_cfr computes it: every y plane
+      ! mean is weighted by its cell width dy/ppy, with ppy = vert_ds. The
+      ! local planes carry their own vert_ds, so only the sum is reduced.
+      dims = mesh%get_dims(VERT)
+      global_dims = mesh%get_global_dims(VERT)
+      allocate (sums(dims(2)))
+      call backend%field_plane_sums(sums, u)
+      ub = 0._dp
+      do j = 1, dims(2)
+        ub = ub + sums(j)/mesh%geo%vert_ds(j, 2)
+      end do
+      ub = ub*mesh%geo%d(2)/mesh%geo%L(2) &
+           /real(global_dims(1)*global_dims(3), dp)
+      call MPI_Allreduce(MPI_IN_PLACE, ub, 1, MPI_X3D2_DP, &
+                         MPI_SUM, MPI_COMM_WORLD, ierr)
+    else
+      ! field_volume_integral is already reduced over all ranks.
+      ub = backend%field_volume_integral(u)
+
+      ub = ub/(product(mesh%get_global_dims(CELL)))
+    end if
+
+  end function channel_bulk_velocity
+
+  ! ==========================================================================
   ! Boundary Conditions hook (called per substep before transeq).
   ! Two responsibilities:
   !   1. Bulk-flow correction: shift u so the mean streamwise velocity stays
@@ -65,31 +105,10 @@ contains
                                               v_end, w_start, w_end
     real(dp) :: can, ub
     real(dp) :: noise(3)
-    real(dp), allocatable :: sums(:)
-    integer :: i, j, k, dims(3), global_dims(3), ierr
+    integer :: i, j, k, dims(3)
 
-    if (self%solver%mesh%geo%stretched(2)) then
-      ! Bulk velocity as Incompact3d channel_cfr computes it: every y plane
-      ! mean is weighted by its cell width dy/ppy, with ppy = vert_ds. The
-      ! local planes carry their own vert_ds, so only the sum is reduced.
-      dims = self%solver%mesh%get_dims(VERT)
-      global_dims = self%solver%mesh%get_global_dims(VERT)
-      allocate (sums(dims(2)))
-      call self%solver%backend%field_plane_sums(sums, self%solver%u)
-      ub = 0._dp
-      do j = 1, dims(2)
-        ub = ub + sums(j)/self%solver%mesh%geo%vert_ds(j, 2)
-      end do
-      ub = ub*self%solver%mesh%geo%d(2)/self%solver%mesh%geo%L(2) &
-           /real(global_dims(1)*global_dims(3), dp)
-      call MPI_Allreduce(MPI_IN_PLACE, ub, 1, MPI_X3D2_DP, &
-                         MPI_SUM, MPI_COMM_WORLD, ierr)
-    else
-      ! field_volume_integral is already reduced over all ranks.
-      ub = self%solver%backend%field_volume_integral(self%solver%u)
-
-      ub = ub/(product(self%solver%mesh%get_global_dims(CELL)))
-    end if
+    ub = channel_bulk_velocity(self%solver%backend, self%solver%mesh, &
+                               self%solver%u)
 
     can = 2._dp/3._dp - ub
 
