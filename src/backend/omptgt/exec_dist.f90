@@ -21,54 +21,19 @@ contains
 
   subroutine exec_dist_tds_compact( &
     du, u, u_recv_s, u_recv_e, du_send_s, du_send_e, du_recv_s, du_recv_e, &
-    tdsops, nproc, pprev, pnext, n_groups &
+    tdsops, par, dir, n_groups &
     )
+    !! Distributed compact solve along dir. The reduced system that couples
+    !! the ranks is solved with the neighbour-only 2x2 approximation, or
+    !! exactly where tdsops%dist_exact asks for it (see m_dist_reduced). The
+    !! exact solve's right-hand sides, two planes per field, go through the
+    !! host.
     implicit none
 
     ! du = d(u)
     real(dp), pointer, contiguous, dimension(:, :, :), intent(in) :: &
       du, u, u_recv_s, u_recv_e
-    ! Scratch for the 2x2 boundary systems
-    real(dp), pointer, contiguous, dimension(:, :, :), intent(in) :: &
-      du_send_s, du_send_e, du_recv_s, du_recv_e
-    type(omptgt_tdsops_t), intent(in) :: tdsops
-    integer, intent(in) :: nproc, pprev, pnext, n_groups
-
-    integer :: n_data
-
-    n_data = SZ*1*n_groups
-
-    call der_univ_dist( &
-      du, du_send_s, du_send_e, u, u_recv_s, u_recv_e, &
-      tdsops%n_tds, tdsops%n_rhs, &
-      tdsops%coeffs_s_dev, tdsops%coeffs_e_dev, tdsops%coeffs_dev, &
-      tdsops%dist_fw_dev, tdsops%dist_bw_dev, tdsops%dist_af_dev, &
-      size(u, 2), n_groups &
-      )
-
-    ! halo exchange for 2x2 systems
-    call sendrecv_fields(du_recv_s, du_recv_e, du_send_s, du_send_e, &
-                         n_data, nproc, pprev, pnext)
-
-    call der_univ_subs( &
-      du, du_recv_s, du_recv_e, tdsops%n_tds, &
-      tdsops%dist_sa_dev, tdsops%dist_sc_dev, tdsops%stretch_dev, &
-      size(u, 2), n_groups &
-      )
-
-  end subroutine exec_dist_tds_compact
-
-  subroutine exec_dist_tds_compact_exact( &
-    du, u, u_recv_s, u_recv_e, du_send_s, du_send_e, du_recv_s, du_recv_e, &
-    tdsops, par, dir, n_groups &
-    )
-    !! As exec_dist_tds_compact, but with the reduced system that couples the
-    !! ranks solved exactly (see m_dist_reduced and tdsops%dist_exact). Its
-    !! right-hand sides, two planes per field, go through the host.
-    implicit none
-
-    real(dp), pointer, contiguous, dimension(:, :, :), intent(in) :: &
-      du, u, u_recv_s, u_recv_e
+    ! Scratch for the boundary systems
     real(dp), pointer, contiguous, dimension(:, :, :), intent(in) :: &
       du_send_s, du_send_e, du_recv_s, du_recv_e
     type(omptgt_tdsops_t), intent(in) :: tdsops
@@ -89,24 +54,37 @@ contains
       size(u, 2), n_groups &
       )
 
-    ! The kernel must be complete before its results are copied back
-    call device_sync()
-    allocate (d_s(n_data), d_e(n_data), x_s(n_data), x_e(n_data))
-    call memcpy_d2h(c_loc(d_s), c_loc(du_send_s), n_data)
-    call memcpy_d2h(c_loc(d_e), c_loc(du_send_e), n_data)
-    call solve_reduced_exact( &
-      x_s, x_e, d_s, d_e, tdsops%dist_sa(1), tdsops%dist_sc(1), &
-      tdsops%dist_sa(n), tdsops%dist_sc(n), par, dir)
-    call memcpy_h2d(c_loc(du_recv_s), c_loc(x_s), n_data)
-    call memcpy_h2d(c_loc(du_recv_e), c_loc(x_e), n_data)
+    if (tdsops%dist_exact .and. par%nproc_dir(dir) > 1) then
+      ! The kernel must be complete before its results are copied back
+      call device_sync()
+      allocate (d_s(n_data), d_e(n_data), x_s(n_data), x_e(n_data))
+      call memcpy_d2h(c_loc(d_s), c_loc(du_send_s), n_data)
+      call memcpy_d2h(c_loc(d_e), c_loc(du_send_e), n_data)
+      call solve_reduced_exact( &
+        x_s, x_e, d_s, d_e, tdsops%dist_sa(1), tdsops%dist_sc(1), &
+        tdsops%dist_sa(n), tdsops%dist_sc(n), par, dir)
+      call memcpy_h2d(c_loc(du_recv_s), c_loc(x_s), n_data)
+      call memcpy_h2d(c_loc(du_recv_e), c_loc(x_e), n_data)
 
-    call der_univ_subs_exact( &
-      du, du_recv_s, du_recv_e, tdsops%n_tds, &
-      tdsops%dist_sa_dev, tdsops%dist_sc_dev, tdsops%stretch_dev, &
-      size(u, 2), n_groups &
-      )
+      call der_univ_subs_exact( &
+        du, du_recv_s, du_recv_e, tdsops%n_tds, &
+        tdsops%dist_sa_dev, tdsops%dist_sc_dev, tdsops%stretch_dev, &
+        size(u, 2), n_groups &
+        )
+    else
+      ! halo exchange for 2x2 systems
+      call sendrecv_fields(du_recv_s, du_recv_e, du_send_s, du_send_e, &
+                           n_data, par%nproc_dir(dir), par%pprev(dir), &
+                           par%pnext(dir))
 
-  end subroutine exec_dist_tds_compact_exact
+      call der_univ_subs( &
+        du, du_recv_s, du_recv_e, tdsops%n_tds, &
+        tdsops%dist_sa_dev, tdsops%dist_sc_dev, tdsops%stretch_dev, &
+        size(u, 2), n_groups &
+        )
+    end if
+
+  end subroutine exec_dist_tds_compact
 
   subroutine exec_dist_transeq_3fused( &
     r_du, u, u_recv_s, u_recv_e, v, v_recv_s, v_recv_e, &

@@ -20,9 +20,7 @@ module m_cuda_backend
 
   use m_cuda_allocator, only: cuda_allocator_t, cuda_field_t
   use m_cuda_common, only: SZ
-  use m_cuda_exec_dist, only: exec_dist_transeq_3fused, &
-                              exec_dist_tds_compact, &
-                              exec_dist_tds_compact_exact
+  use m_cuda_exec_dist, only: exec_dist_transeq_3fused, exec_dist_tds_compact
   use m_cuda_exec_thom, only: exec_thom_tds_compact
   use m_cuda_poisson_fft, only: create_cuda_poisson_fft
   use m_cuda_sendrecv, only: sendrecv_fields, sendrecv_3fields
@@ -715,25 +713,13 @@ contains
                          self%mesh%par%pprev(dir), &
                          self%mesh%par%pnext(dir))
 
-    if (tdsops%dist_exact .and. self%mesh%par%nproc_dir(dir) > 1) then
-      call exec_dist_tds_compact_exact( &
-        du_dev, u_dev, &
-        self%u_recv_s_dev, self%u_recv_e_dev, &
-        self%du_send_s_dev, self%du_send_e_dev, &
-        self%du_recv_s_dev, self%du_recv_e_dev, &
-        tdsops_dev, self%mesh%par, dir, blocks, threads &
-        )
-    else
-      call exec_dist_tds_compact( &
-        du_dev, u_dev, &
-        self%u_recv_s_dev, self%u_recv_e_dev, &
-        self%du_send_s_dev, self%du_send_e_dev, &
-        self%du_recv_s_dev, self%du_recv_e_dev, &
-        tdsops_dev, self%mesh%par%nproc_dir(dir), &
-        self%mesh%par%pprev(dir), self%mesh%par%pnext(dir), &
-        blocks, threads &
-        )
-    end if
+    call exec_dist_tds_compact( &
+      du_dev, u_dev, &
+      self%u_recv_s_dev, self%u_recv_e_dev, &
+      self%du_send_s_dev, self%du_send_e_dev, &
+      self%du_recv_s_dev, self%du_recv_e_dev, &
+      tdsops_dev, self%mesh%par, dir, blocks, threads &
+      )
 
   end subroutine tds_solve_dist
 

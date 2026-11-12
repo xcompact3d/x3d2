@@ -15,9 +15,7 @@ module m_omp_backend
   use m_tdsops, only: dirps_t, tdsops_t
 
   use m_omp_common, only: SZ
-  use m_omp_exec_dist, only: exec_dist_tds_compact, &
-                             exec_dist_tds_compact_exact, &
-                             exec_dist_transeq_compact
+  use m_omp_exec_dist, only: exec_dist_tds_compact, exec_dist_transeq_compact
   use m_exec_thom, only: exec_thom_tds_compact
   use m_omp_sendrecv, only: sendrecv_fields
   use m_logger, only: abort_run
@@ -456,19 +454,10 @@ contains
                          self%mesh%par%pprev(dir), &
                          self%mesh%par%pnext(dir))
 
-    if (tdsops%dist_exact .and. self%mesh%par%nproc_dir(dir) > 1) then
-      call exec_dist_tds_compact_exact( &
-        du%data, u%data, self%u_recv_s, self%u_recv_e, &
-        self%du_send_s, self%du_send_e, self%du_recv_s, self%du_recv_e, &
-        tdsops, self%mesh%par, dir, n_groups)
-    else
-      call exec_dist_tds_compact( &
-        du%data, u%data, self%u_recv_s, self%u_recv_e, &
-        self%du_send_s, self%du_send_e, self%du_recv_s, self%du_recv_e, &
-        tdsops, self%mesh%par%nproc_dir(dir), &
-        self%mesh%par%pprev(dir), self%mesh%par%pnext(dir), &
-        n_groups)
-    end if
+    call exec_dist_tds_compact( &
+      du%data, u%data, self%u_recv_s, self%u_recv_e, &
+      self%du_send_s, self%du_send_e, self%du_recv_s, self%du_recv_e, &
+      tdsops, self%mesh%par, dir, n_groups)
 
   end subroutine tds_solve_dist
 
