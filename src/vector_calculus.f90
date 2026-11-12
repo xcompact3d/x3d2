@@ -376,7 +376,8 @@ contains
 
   end subroutine interpl_c2v
 
-  subroutine laplacian(self, lapl_u, u, x_der2nd, y_der2nd, z_der2nd)
+  subroutine laplacian(self, lapl_u, u, x_der1st, y_der1st, z_der1st, &
+                       x_der2nd, y_der2nd, z_der2nd)
     !! Laplacian of a scalar field 'u'.
     !!
     !! Evaluated at the data_loc defined by the input u field
@@ -388,6 +389,7 @@ contains
     class(field_t), intent(inout) :: lapl_u
     class(field_t), intent(in) :: u
 
+    class(tdsops_t), intent(in) :: x_der1st, y_der1st, z_der1st
     class(tdsops_t), intent(in) :: x_der2nd, y_der2nd, z_der2nd
 
     class(field_t), pointer :: u_y, d2u_y, u_z, d2u_z
@@ -398,7 +400,7 @@ contains
     end if
 
     ! d2u/dx2
-    call self%backend%tds_solve(lapl_u, u, x_der2nd)
+    call self%backend%tds_solve_der2nd(lapl_u, u, x_der2nd, x_der1st)
 
     ! y directional temporary fields
     u_y => self%backend%allocator%get_block(DIR_Y)
@@ -407,7 +409,7 @@ contains
     call self%backend%reorder(u_y, u, RDR_X2Y)
 
     ! d2u/dy2
-    call self%backend%tds_solve(d2u_y, u_y, y_der2nd)
+    call self%backend%tds_solve_der2nd(d2u_y, u_y, y_der2nd, y_der1st)
 
     ! add the y derivative component into the result field
     call self%backend%sum_yintox(lapl_u, d2u_y)
@@ -423,7 +425,7 @@ contains
     call self%backend%reorder(u_z, u, RDR_X2Z)
 
     ! d2u/dz2
-    call self%backend%tds_solve(d2u_z, u_z, z_der2nd)
+    call self%backend%tds_solve_der2nd(d2u_z, u_z, z_der2nd, z_der1st)
 
     ! add the z derivative component into the result field
     call self%backend%sum_zintox(lapl_u, d2u_z)

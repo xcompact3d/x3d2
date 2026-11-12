@@ -41,6 +41,7 @@ module m_omp_backend
     procedure :: transeq_species => transeq_species_omp
     procedure :: tds_solve => tds_solve_omp
     procedure :: thom_solve => thom_solve_omp
+    procedure :: stretch_correct_add => stretch_correct_add_omp
     procedure :: reorder => reorder_omp
     procedure :: sum_yintox => sum_yintox_omp
     procedure :: sum_zintox => sum_zintox_omp
@@ -409,6 +410,30 @@ contains
     call tds_solve_dist(self, du, u, tdsops)
 
   end subroutine tds_solve_omp
+
+  subroutine stretch_correct_add_omp(self, d2u, du, tdsops)
+    !! [[m_base_backend(module):stretch_correct_add(subroutine)]]
+    implicit none
+
+    class(omp_backend_t) :: self
+    class(field_t), intent(inout) :: d2u
+    class(field_t), intent(in) :: du
+    class(tdsops_t), intent(in) :: tdsops
+
+    integer :: i, j, k
+
+    !$omp parallel do private(i, j)
+    do k = 1, size(d2u%data, dim=3)
+      do j = 1, tdsops%n_tds
+        do i = 1, size(d2u%data, dim=1)
+          d2u%data(i, j, k) = d2u%data(i, j, k) &
+                              + tdsops%stretch_correct(j)*du%data(i, j, k)
+        end do
+      end do
+    end do
+    !$omp end parallel do
+
+  end subroutine stretch_correct_add_omp
 
   subroutine thom_solve_omp(self, du, u, tdsops)
     implicit none
