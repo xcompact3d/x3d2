@@ -446,6 +446,15 @@ function(define_backend_tests backend)
   unset(X3D2_TEST_NAME_SUFFIX)
   define_verification_test(verification/test_penta.f90 ${np} ${backend})
   define_verification_test(verification/test_transeq.f90 ${np} ${backend})
+  # The Laplacian on a stretched mesh decomposed in x: one rank, and several
+  # ranks to exercise the distributed solve. The CUDA runs share the GPUs of
+  # the node, so they use two ranks.
+  define_verification_test(verification/test_laplacian_stretched.f90 ${serial} ${backend})
+  if(is_omp AND NOT np EQUAL serial)
+    define_verification_test(verification/test_laplacian_stretched.f90 ${np} ${backend})
+  elseif(${backend} STREQUAL cuda)
+    define_verification_test(verification/test_laplacian_stretched.f90 2 ${backend})
+  endif()
   define_verification_test(verification/test_les_field.f90 ${serial} ${backend})
   define_verification_test(verification/test_thom.f90 ${serial} ${backend})
   define_verification_test(verification/test_filter.f90 ${serial} ${backend})
