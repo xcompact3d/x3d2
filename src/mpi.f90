@@ -39,7 +39,8 @@ module m_mpi
                  MPI_IN_PLACE, &
                  MPI_Init, MPI_Finalize, MPI_Initialized, MPI_Finalized, &
                  MPI_Abort, MPI_MAX_ERROR_STRING, MPI_Error_string, &
-                 MPI_Comm_rank, MPI_Comm_size, MPI_Barrier, MPI_Wtime
+                 MPI_Comm_rank, MPI_Comm_size, MPI_Comm_free, MPI_Barrier, &
+                 MPI_Wtime
 
   implicit none
 
@@ -65,8 +66,8 @@ module m_mpi
   public :: mpi_in_place_t, MPI_IN_PLACE
   public :: MPI_Init, MPI_Finalize, MPI_Initialized, MPI_Finalized, MPI_Abort
   public :: MPI_MAX_ERROR_STRING, MPI_Error_string
-  public :: MPI_Comm_rank, MPI_Comm_size, MPI_Comm_split, MPI_Barrier, &
-            MPI_Wtime
+  public :: MPI_Comm_rank, MPI_Comm_size, MPI_Comm_split, MPI_Comm_free, &
+            MPI_Barrier, MPI_Wtime
   public :: MPI_Bcast, MPI_Allreduce, MPI_Allgather, MPI_Reduce
   public :: MPI_Isend, MPI_Irecv, MPI_Waitall, MPI_Sendrecv, MPI_Alltoall
 
@@ -110,6 +111,11 @@ module m_mpi
     module procedure allreduce_r64
     module procedure allreduce_r64_1d
   end interface MPI_Allreduce
+
+  interface MPI_Allgather
+    module procedure allgather_r32
+    module procedure allgather_r64
+  end interface MPI_Allgather
 
   interface MPI_Reduce
     module procedure reduce_r32
@@ -197,7 +203,27 @@ contains
     ierror = MPI_SUCCESS
   end subroutine MPI_Comm_split
 
-  subroutine MPI_Allgather(sendbuf, sendcount, sendtype, recvbuf, &
+  subroutine MPI_Comm_free(comm, ierror)
+    integer, intent(inout) :: comm
+    integer, intent(out) :: ierror
+
+    comm = MPI_COMM_NULL
+    ierror = MPI_SUCCESS
+  end subroutine MPI_Comm_free
+
+  subroutine allgather_r32(sendbuf, sendcount, sendtype, recvbuf, &
+                           recvcount, recvtype, comm, ierror)
+    !! Gathering from the one rank is a copy.
+    real(real32), intent(in) :: sendbuf(*)
+    real(real32), intent(inout) :: recvbuf(*)
+    integer, intent(in) :: sendcount, sendtype, recvcount, recvtype, comm
+    integer, intent(out) :: ierror
+
+    recvbuf(1:sendcount) = sendbuf(1:sendcount)
+    ierror = MPI_SUCCESS
+  end subroutine allgather_r32
+
+  subroutine allgather_r64(sendbuf, sendcount, sendtype, recvbuf, &
                            recvcount, recvtype, comm, ierror)
     !! Gathering from the one rank is a copy.
     real(real64), intent(in) :: sendbuf(*)
@@ -207,7 +233,7 @@ contains
 
     recvbuf(1:sendcount) = sendbuf(1:sendcount)
     ierror = MPI_SUCCESS
-  end subroutine MPI_Allgather
+  end subroutine allgather_r64
 
   subroutine MPI_Barrier(comm, ierror)
     integer, intent(in) :: comm

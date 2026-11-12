@@ -31,7 +31,7 @@ module m_dist_reduced
   use m_logger, only: abort_run
   use m_mesh_content, only: par_t
   use m_mpi, only: MPI_COMM_WORLD, MPI_COMM_NULL, MPI_Allgather, &
-                   MPI_Comm_split
+                   MPI_Comm_free, MPI_Comm_split
 
   implicit none
 
@@ -161,8 +161,10 @@ contains
       d1 = modulo(dir, 3) + 1
       d2 = modulo(dir + 1, 3) + 1
       color = par%nrank_dir(d1) + par%nproc_dir(d1)*par%nrank_dir(d2)
-      ! A communicator made for an earlier layout is left as it is: freeing
-      ! it is not worth a collective here.
+      ! Every rank reaches here together, as the split is collective, so the
+      ! communicator made for an earlier layout can be freed first.
+      if (dir_comm(dir) /= MPI_COMM_NULL) &
+        call MPI_Comm_free(dir_comm(dir), ierr)
       call MPI_Comm_split(MPI_COMM_WORLD, color, par%nrank_dir(dir), &
                           dir_comm(dir), ierr)
       comm_layout(:, dir) = layout
