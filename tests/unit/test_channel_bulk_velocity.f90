@@ -10,7 +10,7 @@ program test_channel_bulk_velocity
   !! own MPI_Allreduce and does not use the backend. Check 2 compares it with
   !! the exact value, within the quadrature error of the trapezoid rule.
 
-  use iso_fortran_env, only: int64
+  use, intrinsic :: ieee_arithmetic, only: ieee_is_finite, ieee_is_nan
   use m_mpi, only: MPI_COMM_WORLD, MPI_IN_PLACE, MPI_INTEGER, MPI_LAND, &
                    MPI_LOGICAL, MPI_SUM, MPI_Allreduce, MPI_Comm_rank, &
                    MPI_Comm_size, MPI_Finalize, MPI_Init
@@ -36,8 +36,9 @@ program test_channel_bulk_velocity
   ! beta of the channel smoke case
   real(dp), parameter :: beta = 0.259065151_dp
   real(dp), parameter :: ub_exact = 2._dp/3._dp
-  ! Check 1: the two sums differ only in the order of the additions.
-  real(dp), parameter :: tol_ref = 1.e-13_dp
+  ! Check 1: the two sums differ only in the order of the additions. The
+  ! round-off of a sum of n terms is at most n*epsilon, here n = 4*ny.
+  real(dp), parameter :: tol_ref = 4._dp*real(ny, dp)*epsilon(1._dp)
   ! Check 2: trapezoid error of a profile that vanishes at the walls is
   ! (h**2/12)*|u'(L)|*y'(L)**2/L, with h = 1/(ny - 1), u'(L) = -4 and
   ! y'(L) at most L = 2. This is 8*h**2/12, and 2*h**2 bounds it.
@@ -95,8 +96,8 @@ program test_channel_bulk_velocity
 
   err_ref = abs(ub - ub_ref)
   err_quad = abs(ub - ub_exact)
-  test_pass = test_pass .and. .not. is_not_finite(ub) &
-              .and. .not. is_not_finite(ub_ref)
+  test_pass = test_pass .and. ieee_is_finite(ub) .and. .not. ieee_is_nan(ub) &
+              .and. ieee_is_finite(ub_ref) .and. .not. ieee_is_nan(ub_ref)
   test_pass = test_pass .and. err_ref <= tol_ref
   test_pass = test_pass .and. err_quad < tol_quad
   call MPI_Allreduce(MPI_IN_PLACE, test_pass, 1, MPI_LOGICAL, MPI_LAND, &
@@ -121,16 +122,5 @@ program test_channel_bulk_velocity
   call MPI_Finalize(ierr)
 
   if (.not. test_pass) error stop 'Channel bulk velocity test failed.'
-
-contains
-
-  logical function is_not_finite(x)
-    !! True for NaN and Infinity. Reads the exponent bits, because a
-    !! comparison is not reliable when the compiler assumes finite maths.
-    real(dp), intent(in) :: x
-
-    is_not_finite = ibits(transfer(x, 0_int64), 52, 11) == 2047_int64
-
-  end function is_not_finite
 
 end program test_channel_bulk_velocity
