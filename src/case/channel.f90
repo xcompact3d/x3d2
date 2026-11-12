@@ -64,9 +64,10 @@ contains
     integer :: j, dims(3), global_dims(3), ierr
 
     if (mesh%geo%stretched(2)) then
-      ! Bulk velocity as Incompact3d channel_cfr computes it: every y plane
-      ! mean is weighted by its cell width dy/ppy, with ppy = vert_ds. The
-      ! local planes carry their own vert_ds, so only the sum is reduced.
+      ! Each y plane mean has the weight dy/(ppy*L(2)), with dy = d(2). The
+      ! weight is not a cell width. ppy = vert_ds is the analytic derivative
+      ! of the y stretching function, as in Incompact3d. The local planes
+      ! carry their own vert_ds, so the code reduces only the sum.
       dims = mesh%get_dims(VERT)
       global_dims = mesh%get_global_dims(VERT)
       allocate (sums(dims(2)))
