@@ -359,6 +359,12 @@ contains
 
     class(field_t), pointer :: du
 
+    ! A uniform direction has no correction, so skip the first derivative.
+    if (all(tdsops_d2%stretch_correct == 0._dp)) then
+      call self%tds_solve(d2u, u, tdsops_d2)
+      return
+    end if
+
     du => self%allocator%get_block(u%dir)
 
     call self%tds_solve(du, u, tdsops_d1)
