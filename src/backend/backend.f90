@@ -327,6 +327,11 @@ contains
     !! Applies a tridiagonal operator to u, the exact algorithm used
     !! being decided at runtime. Backend implementations are responsible
     !! from directing calls to tds_solve to the correct algorithm.
+    !!
+    !! With a second derivative operator on a stretched grid, this applies
+    !! only the `stretch` factor (vert_ds2) and omits the `stretch_correct`
+    !! term (vert_d2s times the first derivative). Use `tds_solve_der2nd`
+    !! for the physical second derivative on a stretched grid.
     implicit none
 
     class(base_backend_t) :: self
