@@ -102,11 +102,15 @@ contains
     allocate (cp(m), den(m), z(m), y(m))
     den(1) = 1._dp - gamma
     cp(1) = up(1)/den(1)
+    ! The corner correction of the last entry stays out of the loop: with it
+    ! inside, nvfortran 25.3 at -O2 breaks the recurrence through cp(i - 1),
+    ! and double precision builds solved a different system.
     do i = 2, m
       den(i) = 1._dp - lo(i)*cp(i - 1)
-      if (i == m) den(i) = den(i) - corner_bl*corner_tr/gamma
       cp(i) = up(i)/den(i)
     end do
+    den(m) = den(m) - corner_bl*corner_tr/gamma
+    cp(m) = up(m)/den(m)
     z = 0._dp
     z(1) = gamma
     z(m) = corner_bl
