@@ -106,7 +106,7 @@ contains
                                               v_end, w_start, w_end
     real(dp) :: can, ub
     real(dp) :: noise(3)
-    integer :: i, j, k, dims(3)
+    integer :: i, k, dims(3)
 
     ub = channel_bulk_velocity(self%solver%backend, self%solver%mesh, &
                                self%solver%u)
