@@ -879,11 +879,16 @@ endif()
 if(WITH_2DECOMPFFT AND _cpu_omp_backend)
   define_regression_case_test(tgv_smoke tgv_smoke.x3d tgv_smoke_golden_omp.csv 2 omp
     ${_smoke_cmp_args})
+  # The OpenMP backend runs only top-bottom y stretching in the FFT solver, so
+  # only the top-bottom channel case is registered for it. Its golden is blessed
+  # from a double precision gfortran build.
+  define_regression_case_test(channel_smoke channel_smoke.x3d
+    channel_smoke_golden_omp.csv 1 omp ${_channel_cmp_args})
 endif()
 
 # CUDA regression cases. The channel cases run the 010 FFT Poisson solver with
-# a stretched y grid, one case per stretching operator. Only the CUDA backend
-# supports y stretching in the FFT solver, and on more than one rank only
+# a stretched y grid, one case per stretching operator. The CUDA backend
+# supports every y stretching in the FFT solver, and on more than one rank only
 # top-bottom stretching. The channel cases run on one rank. Their goldens
 # are blessed from a double precision NVHPC build, and a single precision
 # build checks against them too.
