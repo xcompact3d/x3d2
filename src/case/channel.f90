@@ -1,5 +1,6 @@
 module m_case_channel
 
+  use iso_fortran_env, only: int64
   use m_allocator, only: allocator_t
   use m_base_backend, only: base_backend_t
   use m_base_case, only: base_case_t
@@ -135,16 +136,36 @@ contains
     integer :: i, j, k, dims(3)
     real(dp) :: xloc(3), y, noise(3), um
 
+    integer, parameter :: base_seed = 20240517
+    integer, allocatable :: seed(:)
+    integer :: seed_size
+    integer(int64) :: state
+
     dims = self%solver%mesh%get_dims(VERT)
     u_init => self%solver%host_allocator%get_block(DIR_C)
     v_init => self%solver%host_allocator%get_block(DIR_C)
     w_init => self%solver%host_allocator%get_block(DIR_C)
 
+    ! Seed the noise per rank, otherwise every rank draws the same numbers and
+    ! a z decomposed IC is periodic over the rank length. A MINSTD generator
+    ! spreads the base seed and rank over the processor's seed, as in the ABL.
+    call log_info('Channel noise seed: '//str(base_seed))
+    call random_seed(size=seed_size)
+    allocate (seed(seed_size))
+    state = 1 + modulo(int(base_seed, int64) &
+                       + 63946_int64*(self%solver%mesh%par%nrank + 1), &
+                       2147483646_int64)
+    do i = 1, seed_size
+      state = modulo(48271_int64*state, 2147483647_int64)
+      seed(i) = int(state)
+    end do
+    call random_seed(put=seed)
+
     call random_number(u_init%data(1:dims(1), 1:dims(2), 1:dims(3)))
     call random_number(v_init%data(1:dims(1), 1:dims(2), 1:dims(3)))
     call random_number(w_init%data(1:dims(1), 1:dims(2), 1:dims(3)))
 
-    noise = self%channel_cfg%inlet_noise(3)
+    noise = self%channel_cfg%init_noise
     do k = 1, dims(3)
       do j = 1, dims(2)
         do i = 1, dims(1)
