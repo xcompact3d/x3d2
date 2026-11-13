@@ -19,7 +19,7 @@ program test_channel_bulk_velocity
   use m_backend_runtime, only: backend_runtime_t
   use m_base_backend, only: base_backend_t
   use m_case_channel, only: channel_bulk_velocity
-  use m_common, only: dp, MPI_X3D2_DP, DIR_X, VERT
+  use m_common, only: dp, MPI_X3D2_DP, DIR_C, DIR_X, VERT
   use m_field, only: field_t
   use m_mesh, only: mesh_t
 
@@ -49,7 +49,7 @@ program test_channel_bulk_velocity
 
   real(dp), allocatable :: host_u(:, :, :)
   real(dp) :: ub, ub_ref, y, err_ref, err_quad
-  integer :: dims(3), nproc_dir(3)
+  integer :: dims(3), dims_padded(3), nproc_dir(3)
   integer :: nvert, j, ierr, nrank, nproc
   logical :: test_pass
 
@@ -68,15 +68,19 @@ program test_channel_bulk_velocity
 
   ! Exactly one rank must own each vertex plane.
   dims = mesh%get_dims(VERT)
+  dims_padded = allocator%get_padded_dims(DIR_C)
   nvert = dims(2)
   call MPI_Allreduce(MPI_IN_PLACE, nvert, 1, MPI_INTEGER, MPI_SUM, &
                      MPI_COMM_WORLD, ierr)
   test_pass = nvert == ny
 
-  allocate (host_u(dims(1), dims(2), dims(3)))
+  ! The field block is padded, so the host array is padded too. The padding
+  ! stays zero and the sums only read the unpadded range.
+  allocate (host_u(dims_padded(1), dims_padded(2), dims_padded(3)))
+  host_u = 0._dp
   do j = 1, dims(2)
     y = mesh%geo%vert_coords(j, 2)
-    host_u(:, j, :) = y**2*(2._dp - y)
+    host_u(1:dims(1), j, 1:dims(3)) = y**2*(2._dp - y)
   end do
 
   u => allocator%get_block(DIR_X, VERT)
