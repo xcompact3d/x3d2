@@ -74,12 +74,12 @@ program test_poisson
   !!                                each stretched case to x3d2_<stretch>.dump
   !!                                (the format of the Incompact3d dumps)
   !! The stretched cases need the CUDA backend for BC code pdp, except
-  !! top-bottom stretching, which also runs on one rank with the OpenMP
-  !! backend. Top-bottom stretching runs on 1 or 2 ranks on CUDA, centred and
-  !! bottom need 1 rank. The other BC codes with stretching in y, and the
-  !! centred and bottom cases on the OpenMP backend, end in the abort of the
-  !! solver. On a stretched case Check 1 is printed and not judged, because
-  !! cos(n*pi*y) is not an eigenfunction of the stretched discrete operator.
+  !! top-bottom stretching, which also runs with the OpenMP backend. Top-bottom
+  !! stretching runs on 1 or 2 ranks, centred and bottom need 1 rank on CUDA.
+  !! The other BC codes with stretching in y, and the centred and bottom cases
+  !! on the OpenMP backend, end in the abort of the solver. On a stretched case
+  !! Check 1 is printed and not judged, because cos(n*pi*y) is not an
+  !! eigenfunction of the stretched discrete operator.
   !! A run with one case per process is what a multi rank ctest entry needs,
   !! because with the OpenMP backend 2decomp can be initialised only once per
   !! process and some cases still stop on more than one rank. What the solver

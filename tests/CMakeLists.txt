@@ -465,9 +465,9 @@ function(define_backend_tests backend)
       define_verification_test(verification/test_poisson_bc.f90 1 ${backend} --bc ${bc})
     endforeach()
     # Stretching in y is specific to the pdp (010) solver. The CUDA backend
-    # registers every stretching, the OpenMP backend only top-bottom on one
-    # rank. On 2 ranks only top-bottom is supported on CUDA, the other
-    # stretchings stop at the abort of the solver.
+    # registers every stretching, the OpenMP backend only top-bottom. On 2
+    # ranks only top-bottom is supported, the other stretchings stop at the
+    # abort of the solver.
     if(${backend} STREQUAL cuda)
       foreach(stretch bottom centred top-bottom)
         set(X3D2_TEST_NAME_SUFFIX _pdp_${stretch})
@@ -499,6 +499,8 @@ function(define_backend_tests backend)
     elseif(is_omp)
       set(X3D2_TEST_NAME_SUFFIX _pdp_top-bottom)
       define_verification_test(verification/test_poisson_bc.f90 1 ${backend} --bc pdp --stretch top-bottom)
+      set(X3D2_TEST_NAME_SUFFIX _pdp_top-bottom)
+      define_verification_test(verification/test_poisson_bc.f90 2 ${backend} --bc pdp --stretch top-bottom)
     endif()
     # Validated 2 rank runs of the same test: the suffix keeps their names apart
     set(X3D2_TEST_NAME_SUFFIX _dpp)
