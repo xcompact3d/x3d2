@@ -3,7 +3,10 @@ module m_cuda_exec_dist
 
   use m_common, only: dp
   use m_cuda_common, only: SZ
+  use m_dist_reduced, only: solve_reduced_exact
+  use m_mesh_content, only: par_t
   use m_cuda_kernels_dist, only: der_univ_dist, der_univ_subs, &
+                                 der_univ_subs_exact, &
                                  der_penta_full, der_penta_periodic, &
                                  transeq_3fused_dist, transeq_3fused_subs
   use m_cuda_sendrecv, only: sendrecv_fields, sendrecv_3fields
@@ -15,8 +18,13 @@ contains
 
   subroutine exec_dist_tds_compact( &
     du, u, u_recv_s, u_recv_e, du_send_s, du_send_e, du_recv_s, du_recv_e, &
-    tdsops, nproc, pprev, pnext, blocks, threads &
+    tdsops, par, dir, blocks, threads &
     )
+    !! Distributed compact solve along dir. The reduced system that couples
+    !! the ranks is solved with the neighbour-only 2x2 approximation, or
+    !! exactly where tdsops%dist_exact asks for it (see m_dist_reduced). The
+    !! exact solve's right-hand sides, two planes per field, go through the
+    !! host.
     implicit none
 
     ! du = d(u)
@@ -30,12 +38,16 @@ contains
       du_send_s, du_send_e, du_recv_s, du_recv_e
 
     type(cuda_tdsops_t), intent(in) :: tdsops
-    integer, intent(in) :: nproc, pprev, pnext
+    type(par_t), intent(in) :: par
+    integer, intent(in) :: dir
     type(dim3), intent(in) :: blocks, threads
 
-    integer :: n_data
+    real(dp), allocatable :: d_s(:, :, :), d_e(:, :, :), x_s(:), x_e(:)
+    integer :: n, n_groups, n_data
 
-    n_data = SZ*1*blocks%x
+    n = tdsops%n_tds
+    n_groups = blocks%x
+    n_data = SZ*n_groups
 
     call der_univ_dist<<<blocks, threads>>>( & !&
       du, du_send_s, du_send_e, u, u_recv_s, u_recv_e, &
@@ -44,14 +56,36 @@ contains
       tdsops%dist_fw_dev, tdsops%dist_bw_dev, tdsops%dist_af_dev &
       )
 
-    ! halo exchange for 2x2 systems
-    call sendrecv_fields(du_recv_s, du_recv_e, du_send_s, du_send_e, &
-                         n_data, nproc, pprev, pnext)
+    if (tdsops%dist_exact .and. par%nproc_dir(dir) > 1) then
+      ! Device to host copies on the default stream wait for the kernel
+      allocate (d_s(SZ, 1, n_groups), d_e(SZ, 1, n_groups))
+      d_s = du_send_s(:, :, 1:n_groups)
+      d_e = du_send_e(:, :, 1:n_groups)
+      allocate (x_s(n_data), x_e(n_data))
+      call solve_reduced_exact( &
+        x_s, x_e, reshape(d_s, [n_data]), reshape(d_e, [n_data]), &
+        tdsops%dist_sa(1), tdsops%dist_sc(1), tdsops%dist_sa(n), &
+        tdsops%dist_sc(n), par, dir)
+      d_s = reshape(x_s, [SZ, 1, n_groups])
+      d_e = reshape(x_e, [SZ, 1, n_groups])
+      du_recv_s(:, :, 1:n_groups) = d_s
+      du_recv_e(:, :, 1:n_groups) = d_e
 
-    call der_univ_subs<<<blocks, threads>>>( & !&
-      du, du_recv_s, du_recv_e, tdsops%n_tds, &
-      tdsops%dist_sa_dev, tdsops%dist_sc_dev, tdsops%stretch_dev &
-      )
+      call der_univ_subs_exact<<<blocks, threads>>>( & !&
+        du, du_recv_s, du_recv_e, tdsops%n_tds, &
+        tdsops%dist_sa_dev, tdsops%dist_sc_dev, tdsops%stretch_dev &
+        )
+    else
+      ! halo exchange for 2x2 systems
+      call sendrecv_fields(du_recv_s, du_recv_e, du_send_s, du_send_e, &
+                           n_data, par%nproc_dir(dir), par%pprev(dir), &
+                           par%pnext(dir))
+
+      call der_univ_subs<<<blocks, threads>>>( & !&
+        du, du_recv_s, du_recv_e, tdsops%n_tds, &
+        tdsops%dist_sa_dev, tdsops%dist_sc_dev, tdsops%stretch_dev &
+        )
+    end if
 
   end subroutine exec_dist_tds_compact
 

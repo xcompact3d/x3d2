@@ -228,6 +228,36 @@ contains
 
   end subroutine der_univ_subs
 
+  subroutine der_univ_subs_exact(du, x_s, x_e, n, dist_sa, dist_sc, strch)
+    !! Second phase of the distributed solve with the block's first and last
+    !! unknowns already known exactly (m_dist_reduced), in place of the 2x2
+    !! approximation of der_univ_subs.
+    implicit none
+
+    real(dp), intent(inout), dimension(:, :) :: du
+    real(dp), intent(in), dimension(:, :) :: x_s, x_e
+    real(dp), intent(in), dimension(:) :: dist_sa, dist_sc, strch
+    integer, intent(in) :: n
+
+    integer :: i, j
+
+    do j = 2, n - 1
+      !$omp simd
+      do i = 1, SZ
+        du(i, j) = (du(i, j) - dist_sa(j)*x_s(i, 1) - dist_sc(j)*x_e(i, 1)) &
+                   *strch(j)
+      end do
+      !$omp end simd
+    end do
+    !$omp simd
+    do i = 1, SZ
+      du(i, 1) = x_s(i, 1)*strch(1)
+      du(i, n) = x_e(i, 1)*strch(n)
+    end do
+    !$omp end simd
+
+  end subroutine der_univ_subs_exact
+
   subroutine der_univ_fused_subs( &
     rhs_du, dud, d2u, v, &
     du_recv_s, du_recv_e, dud_recv_s, dud_recv_e, d2u_recv_s, d2u_recv_e, &

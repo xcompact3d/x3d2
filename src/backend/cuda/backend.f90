@@ -713,15 +713,12 @@ contains
                          self%mesh%par%pprev(dir), &
                          self%mesh%par%pnext(dir))
 
-    ! call exec_dist
     call exec_dist_tds_compact( &
       du_dev, u_dev, &
       self%u_recv_s_dev, self%u_recv_e_dev, &
       self%du_send_s_dev, self%du_send_e_dev, &
       self%du_recv_s_dev, self%du_recv_e_dev, &
-      tdsops_dev, self%mesh%par%nproc_dir(dir), &
-      self%mesh%par%pprev(dir), self%mesh%par%pnext(dir), &
-      blocks, threads &
+      tdsops_dev, self%mesh%par, dir, blocks, threads &
       )
 
   end subroutine tds_solve_dist

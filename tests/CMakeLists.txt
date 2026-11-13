@@ -452,6 +452,13 @@ function(define_backend_tests backend)
   define_verification_test(verification/test_les_field.f90 ${serial} ${backend})
   define_verification_test(verification/test_thom.f90 ${serial} ${backend})
   define_verification_test(verification/test_filter.f90 ${serial} ${backend})
+  # The filter along a decomposed direction must match the undecomposed one.
+  foreach(mode periodic walls)
+    set(X3D2_TEST_NAME_SUFFIX _${mode})
+    define_verification_test(verification/test_filter_decomposed.f90 ${np}
+                             ${backend} ${mode})
+  endforeach()
+  unset(X3D2_TEST_NAME_SUFFIX)
 
   # The FFT Poisson solvers (2DECOMP&FFT on CPU, cuFFTMp on CUDA) are not at
   # feature parity, so the CUDA FFT test and the Poisson BC tests keep the rank

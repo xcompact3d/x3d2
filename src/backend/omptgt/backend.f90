@@ -571,8 +571,7 @@ contains
         self%u_recv_s_dev, self%u_recv_e_dev, &
         self%du_send_s_dev, self%du_send_e_dev, &
         self%du_recv_s_dev, self%du_recv_e_dev, &
-        tdsops, self%mesh%par%nproc_dir(dir), &
-        self%mesh%par%pprev(dir), self%mesh%par%pnext(dir), n_groups &
+        tdsops, self%mesh%par, dir, n_groups &
         )
     class default
       call abort_run('Expected omptgt_tdsops_t in tds_solve_dist.')

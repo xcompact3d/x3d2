@@ -193,6 +193,35 @@ contains
 
   end subroutine der_univ_subs
 
+  attributes(global) subroutine der_univ_subs_exact(du, x_s, x_e, n, &
+                                                    dist_sa, dist_sc, strch)
+    !! Second phase of the distributed solve with the block's first and last
+    !! unknowns already known exactly (m_dist_reduced), in place of the 2x2
+    !! approximation of der_univ_subs.
+    implicit none
+
+    real(dp), device, intent(inout), dimension(:, :, :) :: du
+    real(dp), device, intent(in), dimension(:, :, :) :: x_s, x_e
+    real(dp), device, intent(in), dimension(:) :: dist_sa, dist_sc, strch
+    integer, value, intent(in) :: n
+
+    integer :: i, j, b
+    real(dp) :: du_s, du_e
+
+    i = threadIdx%x
+    b = blockIdx%x
+
+    du_s = x_s(i, 1, b)
+    du_e = x_e(i, 1, b)
+
+    du(i, 1, b) = du_s*strch(1)
+    do j = 2, n - 1
+      du(i, j, b) = (du(i, j, b) - dist_sa(j)*du_s - dist_sc(j)*du_e)*strch(j)
+    end do
+    du(i, n, b) = du_e*strch(n)
+
+  end subroutine der_univ_subs_exact
+
   attributes(global) subroutine transeq_3fused_dist( &
     du, dud, d2u, &
     send_du_s, send_du_e, send_dud_s, send_dud_e, send_d2u_s, send_d2u_e, &
