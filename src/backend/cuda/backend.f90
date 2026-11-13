@@ -28,6 +28,7 @@ module m_cuda_backend
   use m_cuda_kernels_dist, only: transeq_3fused_dist, transeq_3fused_subs
   use m_cuda_kernels_fieldops, only: axpby, buffer_copy, field_scale, &
                                      field_shift, scalar_product, &
+                                     stretch_correct_add, &
                                      vector_norm_squared, labelled_sums, &
                                      labelled_axpy, sample_points, &
                                      add_gaussian_sources, &
@@ -80,6 +81,7 @@ module m_cuda_backend
     procedure :: transeq_species => transeq_species_cuda
     procedure :: tds_solve => tds_solve_cuda
     procedure :: thom_solve => thom_solve_cuda
+    procedure :: stretch_correct_add => stretch_correct_add_cuda
     procedure :: reorder => reorder_cuda
     procedure :: sum_yintox => sum_yintox_cuda
     procedure :: sum_zintox => sum_zintox_cuda
@@ -640,6 +642,34 @@ contains
     call tds_solve_dist(self, du, u, tdsops, blocks, threads)
 
   end subroutine tds_solve_cuda
+
+  subroutine stretch_correct_add_cuda(self, d2u, du, tdsops)
+    !! [[m_base_backend(module):stretch_correct_add(subroutine)]]
+    implicit none
+
+    class(cuda_backend_t) :: self
+    class(field_t), intent(inout) :: d2u
+    class(field_t), intent(in) :: du
+    class(tdsops_t), intent(in) :: tdsops
+
+    real(dp), device, pointer, dimension(:, :, :) :: d2u_d, du_d
+    type(dim3) :: blocks, threads
+
+    call resolve_field_t(d2u_d, d2u)
+    call resolve_field_t(du_d, du)
+
+    blocks = dim3(self%allocator%get_n_groups(d2u%dir), 1, 1)
+    threads = dim3(SZ, 1, 1)
+
+    select type (tdsops)
+    type is (cuda_tdsops_t)
+      call stretch_correct_add<<<blocks, threads>>>( &
+        d2u_d, du_d, tdsops%stretch_correct_dev, tdsops%n_tds) !&
+    class default
+      call abort_run('Expected cuda_tdsops_t in stretch_correct_add_cuda.')
+    end select
+
+  end subroutine stretch_correct_add_cuda
 
   subroutine thom_solve_cuda(self, du, u, tdsops)
     implicit none

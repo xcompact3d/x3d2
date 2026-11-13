@@ -51,6 +51,8 @@ module m_base_backend
     procedure :: transeq_z => transeq_z_base
     procedure :: transeq_species => transeq_species_base
     procedure :: tds_solve => tds_solve_base
+    procedure :: tds_solve_der2nd
+    procedure :: stretch_correct_add => stretch_correct_add_base
     procedure :: thom_solve => thom_solve_base
     procedure :: reorder => reorder_base
     procedure :: sum_yintox => sum_yintox_base
@@ -325,6 +327,11 @@ contains
     !! Applies a tridiagonal operator to u, the exact algorithm used
     !! being decided at runtime. Backend implementations are responsible
     !! from directing calls to tds_solve to the correct algorithm.
+    !!
+    !! With a second derivative operator on a stretched grid, this applies
+    !! only the `stretch` factor (vert_ds2) and omits the `stretch_correct`
+    !! term (vert_d2s times the first derivative). Use `tds_solve_der2nd`
+    !! for the physical second derivative on a stretched grid.
     implicit none
 
     class(base_backend_t) :: self
@@ -335,6 +342,53 @@ contains
     call not_implemented('tds_solve')
 
   end subroutine tds_solve_base
+
+  subroutine tds_solve_der2nd(self, d2u, u, tdsops_d2, tdsops_d1)
+    !! Second derivative of u on a possibly stretched grid. On a stretched
+    !! grid d2u/dy2 = vert_ds2*d2u/dxi2 + vert_d2s*(vert_ds*du/dxi), but
+    !! `tds_solve` with a second derivative operator applies only the
+    !! vert_ds2 factor. This solves the first derivative with `tdsops_d1`,
+    !! the second derivative with `tdsops_d2`, and adds the
+    !! `stretch_correct` term of `tdsops_d2` times the first derivative.
+    implicit none
+
+    class(base_backend_t) :: self
+    class(field_t), intent(inout) :: d2u
+    class(field_t), intent(in) :: u
+    class(tdsops_t), intent(in) :: tdsops_d2, tdsops_d1
+
+    class(field_t), pointer :: du
+
+    ! A uniform direction has no correction, so skip the first derivative.
+    if (all(tdsops_d2%stretch_correct == 0._dp)) then
+      call self%tds_solve(d2u, u, tdsops_d2)
+      return
+    end if
+
+    du => self%allocator%get_block(u%dir)
+
+    call self%tds_solve(du, u, tdsops_d1)
+    call self%tds_solve(d2u, u, tdsops_d2)
+    call self%stretch_correct_add(d2u, du, tdsops_d2)
+
+    call self%allocator%release_block(du)
+
+  end subroutine tds_solve_der2nd
+
+  subroutine stretch_correct_add_base(self, d2u, du, tdsops)
+    !! Adds the stretched grid correction of a second derivative:
+    !! d2u(i, j, k) = d2u(i, j, k) + stretch_correct(j)*du(i, j, k),
+    !! where j runs along the direction of the tridiagonal system.
+    implicit none
+
+    class(base_backend_t) :: self
+    class(field_t), intent(inout) :: d2u
+    class(field_t), intent(in) :: du
+    class(tdsops_t), intent(in) :: tdsops
+
+    call not_implemented('stretch_correct_add')
+
+  end subroutine stretch_correct_add_base
 
   subroutine thom_solve_base(self, du, u, tdsops)
     !! As tds_solve, solving the tridiagonal system with the Thomas

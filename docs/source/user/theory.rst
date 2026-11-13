@@ -293,6 +293,8 @@ and the second derivative is given by:
 
     \frac{\partial^2{f}}{\partial{y}^2} = \frac{\partial^2{f}}{\partial{s^2}}\left(\frac{\partial{s}}{\partial{y}}\right)^2 + \frac{\partial{f}}{\partial{s}}\frac{\partial^2{s}}{\partial{y^2}} = \frac{1}{h'(s)^2}\frac{\partial^2{f}}{\partial{s}^2} - \frac{h''(s)}{h'(s)^3}\frac{\partial{f}}{\partial{s}}
 
+In the code, a tridiagonal solve with a second derivative operator applies only the :math:`1/h'(s)^2` factor of :eq:`second-derivative-mapping`. The backend procedure ``tds_solve_der2nd`` adds the first derivative term, so it takes both the second and the first derivative operators. Use it for the physical second derivative on a stretched mesh, as the ``laplacian`` of the vector calculus module does.
+
 Expressed in physical space, these rules can be used to implement schemes like :eq:`first-derivative` and :eq:`staggered-first-derivative` where the finite differences are performed on the regular coordinate :math:`s` (instead of :math:`x`). 
 
 The main difficulty is in the treatment of the Poisson equation that requires similar operations in the spectral space. Here the metric :math:`1/h'` is expressed with only three Fourier modes in spectral space:

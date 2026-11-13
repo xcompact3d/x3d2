@@ -116,6 +116,25 @@ contains
 
   end subroutine field_shift
 
+  attributes(global) subroutine stretch_correct_add(d2u, du, correct, n)
+    implicit none
+
+    real(dp), device, intent(inout), dimension(:, :, :) :: d2u
+    real(dp), device, intent(in), dimension(:, :, :) :: du
+    real(dp), device, intent(in), dimension(:) :: correct
+    integer, value, intent(in) :: n
+
+    integer :: i, j, b
+
+    i = threadIdx%x
+    b = blockIdx%x
+
+    do j = 1, n
+      d2u(i, j, b) = d2u(i, j, b) + correct(j)*du(i, j, b)
+    end do
+
+  end subroutine stretch_correct_add
+
   attributes(global) subroutine vorticity_from_gradients( &
     vort, dudy, dudz, dvdx, dvdz, dwdx, dwdy, n)
     implicit none
