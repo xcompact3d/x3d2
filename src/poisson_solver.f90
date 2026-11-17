@@ -58,6 +58,7 @@ program x3d2_poisson_solver
   integer :: dims_global(3), nproc_dir(3), dims(3)
   integer :: nproc, ierr
   real(dp) :: L_global(3)
+  ! real(dp) :: l2_err = 0.0_dp
   character(len=9) :: bc_x_name, bc_y_name, bc_z_name
   character(len=9) :: BC_x(2), BC_y(2), BC_z(2)
   character(len=8) :: deriv1_scheme, deriv2_scheme, interpl_scheme, stagder_scheme
@@ -170,6 +171,8 @@ program x3d2_poisson_solver
                 //' z='//trim(bc_z_name))
   call log_info('Ranks: '//str(nproc))
   call log_info('Backend: '//trim(backend_name))
+  call log_info('Scheme: '//str(scheme))
+  ! call log_info("L2 error relative to analytical solution (test cases only): "//str(l2_err))
   call log_info('Solve time (min):  '//str(min_time, '(ES12.4)')//' s')
   call log_info('Solve time (mean): ' &
                 //str(sum_time/real(repeat_count, dp), '(ES12.4)')//' s')
@@ -180,7 +183,7 @@ contains
 
   subroutine parse_arguments()
     !! Read `nx ny nz`, then the optional `bc_x bc_y bc_z`, then the optional
-    !! `--repeat N`.
+    !! `--repeat N`, then the optional `--scheme ORDER`.
     !! The `bc` values are `periodic` or `dirichlet`.
     !! The default is `periodic`.
     !! The default for `--repeat` is 1.
@@ -207,12 +210,6 @@ contains
       call get_command_argument(iarg, arg)
       if (trim(arg) /= '--repeat') then
         if (nargs < iarg + 2) call usage_error()
-        if (trim(arg) /= '--scheme') then
-          if (nargs < iarg + 4) call usage_error()
-          call get_command_argument(iarg + 1, scheme_char)
-          read (scheme_char, *) scheme
-          iarg = iarg + 2
-        end if
         call get_command_argument(iarg, bc_x_name)
         call get_command_argument(iarg + 1, bc_y_name)
         call get_command_argument(iarg + 2, bc_z_name)
@@ -233,6 +230,16 @@ contains
       call get_command_argument(iarg + 1, arg)
       read (arg, *, iostat=ios) repeat_count
       if (ios /= 0 .or. repeat_count < 1) call usage_error()
+      iarg = iarg + 2
+    end if
+
+    if (nargs >= iarg) then
+      call get_command_argument(iarg, arg)
+      if (trim(arg) /= '--scheme') call usage_error()
+      if (nargs < iarg + 1) call usage_error()
+      call get_command_argument(iarg + 1, scheme_char)
+      read (scheme_char, *) scheme
+      if (ios /= 0 .or. (scheme /= 2 .and. scheme /= 6)) call usage_error()
       iarg = iarg + 2
     end if
 
@@ -283,6 +290,9 @@ contains
       end do
     end do
   end subroutine fill_rhs
+
+  ! subroutine generate_analytical_solution(host_field)
+  !   !! The default case has the function cos(2 pi x). Taking the derivative 
 
   subroutine warn_if_rhs_mean_nonzero(host_field)
     !! Warn on rank 0 if the right-hand side does not have zero mean.
