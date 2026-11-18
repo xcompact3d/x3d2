@@ -102,6 +102,89 @@ program test_boundary_planes
   call check_planes('field_set_face_from_field', data, expected, dims, &
                     tolerance, all_pass)
 
+  ! --- field_set_face_from_field X_FACE: inflow plane + convective outflow --
+  ! The inlet plane is copied from f_start; the outlet gets
+  ! f - c_end*(f(nx) - f(nx-1)) + flow_rate_diff; interior planes are kept.
+  ! f varies along x so the outflow update is not a no-op.
+  block
+    real(dp), parameter :: c_end = 0.3_dp, flow_rate_diff = 0.05_dp
+    real(dp), allocatable :: start(:, :, :)
+
+    call backend%get_field_data(data, f_start)
+    start = data
+    do k = 1, dims(3)
+      do j = 1, dims(2)
+        do i = 1, dims(1)
+          data(i, j, k) = 3._dp*real(i, dp) - 0.25_dp*real(j, dp) &
+                          + 0.1_dp*real(k, dp)
+        end do
+      end do
+    end do
+    call backend%set_field_data(f, data)
+
+    expected = data
+    expected(1, :, :) = start(1, :, :)
+    expected(dims(1), :, :) = data(dims(1), :, :) &
+                              - c_end*(data(dims(1), :, :) &
+                                       - data(dims(1) - 1, :, :)) &
+                              + flow_rate_diff
+
+    call backend%field_set_face_from_field(f, f_start, c_end, X_FACE, &
+                                           flow_rate_diff=flow_rate_diff)
+    call backend%get_field_data(data, f)
+    call check_planes('field_set_face_from_field X_FACE', data, expected, &
+                      dims, tolerance, all_pass)
+  end block
+
+  ! --- field_set_x_inlet_plane: host (ny, nz) plane onto the x = 1 plane ----
+  ! Only the inlet plane changes; the plane varies in y and z so a wrong
+  ! group ordering cannot match.
+  block
+    real(dp), allocatable :: plane(:, :)
+
+    allocate (plane(dims(2), dims(3)))
+    do k = 1, dims(3)
+      do j = 1, dims(2)
+        plane(j, k) = 10._dp*real(k, dp) + 0.5_dp*real(j, dp)
+      end do
+    end do
+
+    expected = sentinel
+    expected(1, 1:dims(2), 1:dims(3)) = plane
+
+    call f%fill(sentinel)
+    call backend%field_set_x_inlet_plane(f, plane)
+    call backend%get_field_data(data, f)
+    call check_planes('field_set_x_inlet_plane', data, expected, dims, &
+                      tolerance, all_pass)
+  end block
+
+  ! --- field_add_const_x_face: a constant added to one x plane only ---------
+  ! The outlet mass correction of the wind turbine case shifts x = nx;
+  ! at_end = .false. selects x = 1.
+  block
+    real(dp), parameter :: shift = 0.75_dp
+    logical :: at_end
+    integer :: i_plane
+
+    do i_plane = 1, 2
+      at_end = i_plane == 2
+      expected = sentinel
+      if (at_end) then
+        expected(dims(1), :, :) = sentinel + shift
+      else
+        expected(1, :, :) = sentinel + shift
+      end if
+
+      call f%fill(sentinel)
+      call backend%field_add_const_x_face(f, shift, at_end)
+      call backend%get_field_data(data, f)
+      write (label, '(a,l1)') 'field_add_const_x_face at_end=', at_end
+      call check_planes(trim(label), data, expected, dims, tolerance, &
+                        all_pass)
+    end do
+  end block
+
   ! --- field_add_face_from_field: plane values added on Dirichlet faces -----
   ! The wall pre-correction adds onto the value the case has already set,
   ! and must leave a non-Dirichlet face (the ABL's free-slip lid) alone.
@@ -157,6 +240,49 @@ program test_boundary_planes
       all_pass = .false.
     else
       print *, 'PASS: field_plane_sums'
+    end if
+  end block
+
+  ! --- x_slice_weighted_sum: one x slice, weighted per y-plane --------------
+  ! The weights differ on every y-plane and the data on every x slice, so a
+  ! weight applied to the wrong plane, or a sum taken over the wrong slice,
+  ! cannot match. The face slices and an interior one are checked.
+  block
+    real(dp), allocatable :: weights(:)
+    real(dp) :: got, want, worst
+    integer :: slices(3), s
+
+    do k = 1, dims(3)
+      do j = 1, dims(2)
+        do i = 1, dims(1)
+          data(i, j, k) = 100._dp*real(i, dp) + real(k, dp) &
+                          + 0.5_dp*real(j, dp)
+        end do
+      end do
+    end do
+    call backend%set_field_data(f, data)
+    allocate (weights(dims(2)))
+    do j = 1, dims(2)
+      weights(j) = 1._dp + 0.01_dp*real(j*j, dp)
+    end do
+    weights(1) = 0._dp
+    weights(dims(2)) = 0.5_dp
+
+    slices = [1, dims(1)/2, dims(1)]
+    worst = 0._dp
+    do s = 1, size(slices)
+      call backend%x_slice_weighted_sum(got, f, slices(s), weights)
+      want = 0._dp
+      do j = 1, dims(2)
+        want = want + weights(j)*sum(data(slices(s), j, 1:dims(3)))
+      end do
+      worst = max(worst, abs(got - want)/abs(want))
+    end do
+    if (worst > tolerance) then
+      print *, 'FAIL: x_slice_weighted_sum relative error=', worst
+      all_pass = .false.
+    else
+      print *, 'PASS: x_slice_weighted_sum'
     end if
   end block
 

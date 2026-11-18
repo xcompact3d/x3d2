@@ -16,11 +16,15 @@
 
 module m_omptgt_backend
 
+  use iso_c_binding, only: c_loc, c_f_pointer
   use m_mpi, only: MPI_COMM_WORLD, MPI_IN_PLACE, MPI_MAX, MPI_SUM, &
-                   MPI_Allreduce
+                   MPI_STATUSES_IGNORE, MPI_Allreduce, MPI_Irecv, MPI_Isend, &
+                   MPI_Waitall
 
   use m_allocator, only: allocator_t
-  use m_base_backend, only: base_backend_t
+  use m_base_backend, only: base_backend_t, source_index_boxes, &
+                            check_point_fields, check_labelled_fields, &
+                            abl_wall_upper_plane, shifted_z_source
   use m_common, only: dp, MPI_X3D2_DP, move_data_loc, get_dirs_from_rdr, &
                       DIR_X, DIR_Y, DIR_Z, DIR_C, VERT, NULL_LOC, &
                       X_FACE, Y_FACE, Z_FACE, BC_DIRICHLET
@@ -33,7 +37,7 @@ module m_omptgt_backend
 
   use m_omptgt_device_info, only: query_device_memory
   use m_omptgt_common, only: SZ, dev_alloc, dev_free, dev_upload, &
-                             dev_download, device_sync
+                             dev_clone, dev_download, device_sync, memcpy_d2d
   use m_omptgt_exec_dist, only: exec_dist_transeq_3fused, &
                                 exec_dist_tds_compact
   use m_omptgt_exec_thom, only: exec_thom_tds_compact
@@ -48,16 +52,23 @@ module m_omptgt_backend
                                        scalar_product, scalar_product_cart, &
                                        vector_norm_squared, field_max_sum, &
                                        volume_integral, slice_max_sum, &
+                                       x_slice_weighted_sum, &
                                        field_set_x_face, field_set_y_face, &
                                        field_set_y_plane, &
                                        field_set_abl_wall_stress, &
+                                       field_get_x_band, &
+                                       field_blend_x_band, &
                                        field_set_x_face_from_field, &
                                        field_set_y_face_from_field, &
+                                       field_add_const_x_face, &
                                        field_add_x_face_from_field, &
                                        field_add_y_face_from_field, &
+                                       field_set_x_face_from_plane, &
+                                       field_set_y_face_from_plane, &
                                        field_plane_partial_sums, &
                                        field_plane_sums_reduce, &
                                        labelled_sums, labelled_axpy, &
+                                       sample_points, add_gaussian_sources, &
                                        reorder, sum_intox
 
   implicit none
@@ -95,15 +106,22 @@ module m_omptgt_backend
     procedure :: vector_norm_squared => vector_norm_squared_omptgt
     procedure :: field_labelled_sums => field_labelled_sums_omptgt
     procedure :: field_labelled_axpy => field_labelled_axpy_omptgt
+    procedure :: field_sample_points => field_sample_points_omptgt
+    procedure :: field_add_gaussian_sources => &
+      field_add_gaussian_sources_omptgt
     procedure :: field_max_mean => field_max_mean_omptgt
     procedure :: slice_max_sum => slice_max_sum_omptgt
+    procedure :: x_slice_weighted_sum => x_slice_weighted_sum_omptgt
     procedure :: field_scale => field_scale_omptgt
     procedure :: field_shift => field_shift_omptgt
     procedure :: field_set_face => field_set_face_omptgt
     procedure :: field_set_y_plane => field_set_y_plane_omptgt
     procedure :: field_plane_sums => field_plane_sums_omptgt
     procedure :: field_set_abl_wall_stress => field_set_abl_wall_stress_omptgt
+    procedure :: field_shift_blend_x_band => field_shift_blend_x_band_omptgt
     procedure :: field_set_face_from_field => field_set_face_from_field_omptgt
+    procedure :: field_add_const_x_face => field_add_const_x_face_omptgt
+    procedure :: set_field_face_data => set_field_face_data_omptgt
     procedure :: field_add_face_from_field => field_add_face_from_field_omptgt
     procedure :: compute_vorticity => compute_vorticity_omptgt
     procedure :: compute_qcriterion => compute_qcriterion_omptgt
@@ -553,8 +571,7 @@ contains
         self%u_recv_s_dev, self%u_recv_e_dev, &
         self%du_send_s_dev, self%du_send_e_dev, &
         self%du_recv_s_dev, self%du_recv_e_dev, &
-        tdsops, self%mesh%par%nproc_dir(dir), &
-        self%mesh%par%pprev(dir), self%mesh%par%pnext(dir), n_groups &
+        tdsops, self%mesh%par, dir, n_groups &
         )
     class default
       call abort_run('Expected omptgt_tdsops_t in tds_solve_dist.')
@@ -1010,27 +1027,78 @@ contains
 
   end subroutine field_labelled_axpy_omptgt
 
-  subroutine check_labelled_fields(g, label, a, b, c)
-    !! Checks the fields passed to the labelled field operations share a
-    !! valid data location and the DIR_X layout.
+  subroutine field_sample_points_omptgt(self, vals, points, a, b, c)
+    !! [[m_base_backend(module):field_sample_points_base(subroutine)]]
     implicit none
 
-    class(field_t), intent(in) :: g, label, a, b, c
+    class(omptgt_backend_t) :: self
+    real(dp), intent(out) :: vals(:, :)
+    real(dp), intent(in) :: points(:, :)
+    class(field_t), intent(in) :: a, b, c
 
-    if (g%data_loc == NULL_LOC .or. label%data_loc == NULL_LOC .or. &
-        a%data_loc == NULL_LOC .or. b%data_loc == NULL_LOC .or. &
-        c%data_loc == NULL_LOC) then
-      call abort_run('You must set data_loc before labelled field operations.')
-    end if
-    if (label%data_loc /= g%data_loc .or. a%data_loc /= g%data_loc .or. &
-        b%data_loc /= g%data_loc .or. c%data_loc /= g%data_loc) then
-      call abort_run('Labelled field operations need one data location.')
-    end if
-    if (g%dir /= DIR_X .or. label%dir /= DIR_X .or. a%dir /= DIR_X .or. &
-        b%dir /= DIR_X .or. c%dir /= DIR_X) then
-      call abort_run('Labelled field operations need DIR_X layout.')
-    end if
-  end subroutine check_labelled_fields
+    real(dp), pointer, contiguous, dimension(:, :, :) :: a_d, b_d, c_d
+    real(dp) :: d(3)
+    integer :: grid(13), dims_padded(3), n
+
+    call check_point_fields(a, b, c)
+
+    vals = 0._dp
+    n = size(points, 2)
+    if (n == 0) return
+
+    call resolve_field_t(a_d, a)
+    call resolve_field_t(b_d, b)
+    call resolve_field_t(c_d, c)
+
+    d = self%mesh%geo%d
+    dims_padded = self%allocator%get_padded_dims(DIR_C)
+    grid = [self%mesh%get_dims(VERT), self%mesh%get_global_dims(VERT), &
+            self%mesh%par%n_offset, &
+            merge(1, 0, self%mesh%grid%periodic_BC), dims_padded(2)/SZ]
+    call sample_points(vals, points, a_d, b_d, c_d, n, size(a_d, 2), &
+                       size(a_d, 3), d, grid)
+
+  end subroutine field_sample_points_omptgt
+
+  subroutine field_add_gaussian_sources_omptgt(self, a, b, c, points, &
+                                               coeffs, eps, r_cut)
+    !! [[m_base_backend(module):field_add_gaussian_sources_base(subroutine)]]
+    implicit none
+
+    class(omptgt_backend_t) :: self
+    class(field_t), intent(inout) :: a, b, c
+    real(dp), intent(in) :: points(:, :), coeffs(:, :)
+    real(dp), intent(in) :: eps, r_cut
+
+    real(dp), pointer, contiguous, dimension(:, :, :) :: a_d, b_d, c_d
+    real(dp) :: src(6, size(points, 2)), d(3)
+    integer :: box(6, size(points, 2)), grid(13), dims_padded(3), n
+
+    call check_point_fields(a, b, c)
+
+    n = size(points, 2)
+    if (n == 0) return
+    call source_index_boxes(self%mesh, points, r_cut, box(1:3, :), &
+                            box(4:6, :))
+
+    call resolve_field_t(a_d, a)
+    call resolve_field_t(b_d, b)
+    call resolve_field_t(c_d, c)
+
+    src(1:3, :) = points
+    src(4:6, :) = coeffs
+    d = self%mesh%geo%d
+    dims_padded = self%allocator%get_padded_dims(DIR_C)
+    grid = [self%mesh%get_dims(VERT), self%mesh%get_global_dims(VERT), &
+            self%mesh%par%n_offset, &
+            merge(1, 0, self%mesh%grid%periodic_BC), dims_padded(2)/SZ]
+    call add_gaussian_sources(a_d, b_d, c_d, src, box, n, &
+                              maxval(box(5, :) - box(2, :) + 1), &
+                              maxval(box(6, :) - box(3, :) + 1), &
+                              1._dp/eps**2, r_cut, size(a_d, 2), &
+                              size(a_d, 3), d, grid)
+
+  end subroutine field_add_gaussian_sources_omptgt
 
   subroutine field_max_mean_omptgt(self, max_val, mean_val, f, &
                                    enforced_data_loc)
@@ -1117,6 +1185,38 @@ contains
                        n_groups_pad, n_j)
 
   end subroutine slice_max_sum_omptgt
+
+  subroutine x_slice_weighted_sum_omptgt(self, sum_val, f, i_slice, &
+                                         y_weights)
+    !! [[m_base_backend(module):x_slice_weighted_sum_base(subroutine)]]
+    implicit none
+
+    class(omptgt_backend_t) :: self
+    real(dp), intent(out) :: sum_val
+    class(field_t), intent(in) :: f
+    integer, intent(in) :: i_slice
+    real(dp), intent(in) :: y_weights(:)
+
+    real(dp), pointer, contiguous, dimension(:, :, :) :: f_d
+    integer :: n, n_i, n_groups_pad, n_j
+
+    if (f%dir /= DIR_X) &
+      call abort_run('x_slice_weighted_sum: only supported for DIR_X fields.')
+    if (f%data_loc == NULL_LOC) &
+      call abort_run('x_slice_weighted_sum: requires a valid data_loc.')
+    call pencil_extents(self, f%dir, f%data_loc, n, n_i, n_groups_pad, n_j)
+
+    if (i_slice < 1 .or. i_slice > n) &
+      call abort_run('x_slice_weighted_sum: i_slice out of range')
+    if (size(y_weights) /= n_j) &
+      call abort_run('x_slice_weighted_sum: one weight per y point needed')
+
+    ! Rank-local value; caller is responsible for MPI_Allreduce.
+    call resolve_field_t(f_d, f)
+    call x_slice_weighted_sum(sum_val, f_d, y_weights, size(f_d, 2), &
+                              i_slice, n_i, n_groups_pad, n_j)
+
+  end subroutine x_slice_weighted_sum_omptgt
 
   real(dp) function field_volume_integral_omptgt(self, f) result(s)
     !! volume integral of a field
@@ -1268,7 +1368,8 @@ contains
   end subroutine field_set_y_plane_omptgt
 
   subroutine field_set_abl_wall_stress_omptgt( &
-    self, stress, u, w, sample_plane, stress_plane, drag_coeff, component)
+    self, stress, u, w, sample_plane, sample_weight, stress_plane, &
+    drag_coeff, component)
     !! [[m_base_backend(module):field_set_abl_wall_stress(subroutine)]]
     implicit none
 
@@ -1276,10 +1377,10 @@ contains
     class(field_t), intent(inout) :: stress
     class(field_t), intent(in) :: u, w
     integer, intent(in) :: sample_plane, stress_plane, component
-    real(dp), intent(in) :: drag_coeff
+    real(dp), intent(in) :: sample_weight, drag_coeff
 
     real(dp), pointer, contiguous, dimension(:, :, :) :: stress_d, u_d, w_d
-    integer :: dims(3)
+    integer :: dims(3), upper_plane
 
     if (stress%dir /= DIR_X .or. u%dir /= DIR_X .or. w%dir /= DIR_X) &
       call abort_run('ABL wall stress requires DIR_X fields.')
@@ -1292,17 +1393,111 @@ contains
       call abort_run('ABL wall stress plane is outside the domain.')
     if (component /= 1 .and. component /= 3) &
       call abort_run('Invalid ABL wall stress component.')
+    upper_plane = abl_wall_upper_plane(sample_plane, sample_weight, dims(2))
 
     call resolve_field_t(stress_d, stress)
     call resolve_field_t(u_d, u)
     call resolve_field_t(w_d, w)
 
     call field_set_abl_wall_stress(stress_d, u_d, w_d, drag_coeff, &
-                                   sample_plane, stress_plane, &
+                                   sample_weight, sample_plane, &
+                                   upper_plane, stress_plane, &
                                    size(stress_d, 2), dims(1), dims(3), &
                                    n_yb_pad(self), component)
 
   end subroutine field_set_abl_wall_stress_omptgt
+
+  subroutine field_shift_blend_x_band_omptgt(self, f, lambda, i_start, &
+                                             i_offset, nshift, z_plane_rank)
+    !! [[m_base_backend(module):field_shift_blend_x_band(subroutine)]]
+    !!
+    !! The band stays on the device: it is gathered into a buffer, shifted
+    !! in z with device copies and GPU-aware MPI for the planes held by
+    !! other ranks (see m_omptgt_sendrecv), and blended back.
+    implicit none
+
+    class(omptgt_backend_t) :: self
+    class(field_t), intent(inout) :: f
+    real(dp), intent(in) :: lambda(:)
+    integer, intent(in) :: i_start, i_offset, nshift
+    integer, intent(in) :: z_plane_rank(:)
+
+    real(dp), pointer, contiguous, dimension(:, :, :) :: f_d, band_d, &
+                                                         shifted_d
+    real(dp), pointer, contiguous, dimension(:) :: lambda_d, plane
+    integer, allocatable :: requests(:)
+    integer :: dims(3), nband, nz, z_offset, rank, k, kg, k_src, k_dst
+    integer :: n_plane, n_req, ierr
+
+    if (f%dir /= DIR_X .or. f%data_loc /= VERT) &
+      call abort_run('Shifted x band blend requires a DIR_X vertex field.')
+    dims = self%mesh%get_dims(VERT)
+    nband = size(lambda)
+    nz = size(z_plane_rank)
+    z_offset = self%mesh%par%n_offset(3)
+    rank = self%mesh%par%nrank
+    n_plane = nband*dims(2)
+
+    call resolve_field_t(f_d, f)
+    call dev_alloc(band_d, nband, dims(2), dims(3))
+    call dev_alloc(shifted_d, nband, dims(2), dims(3))
+    call dev_alloc(lambda_d, nband)
+    call dev_upload(lambda_d, lambda)
+
+    call field_get_x_band(band_d, f_d, i_start, nband, dims(2), dims(3), &
+                          size(f_d, 2), n_yb_pad(self))
+
+    do k = 1, dims(3)
+      k_src = shifted_z_source(z_offset + k, nshift, nz)
+      if (z_plane_rank(k_src) == rank) &
+        call memcpy_d2d(c_loc(shifted_d(1, 1, k)), &
+                        c_loc(band_d(1, 1, k_src - z_offset)), n_plane)
+    end do
+
+    allocate (requests(2*dims(3)))
+    n_req = 0
+#ifdef MPI
+    ! The band must be complete before MPI reads device memory
+    call device_sync()
+    do k = 1, dims(3)
+      kg = z_offset + k
+      k_src = shifted_z_source(kg, nshift, nz)
+      if (z_plane_rank(k_src) /= rank) then
+        n_req = n_req + 1
+        ! Plane k as a contiguous 1D pointer, so MPI gets its device
+        ! address with no copy-in temporary
+        call c_f_pointer(c_loc(shifted_d(1, 1, k)), plane, [n_plane])
+        call MPI_Irecv(plane, n_plane, MPI_X3D2_DP, &
+                       z_plane_rank(k_src), kg, MPI_COMM_WORLD, &
+                       requests(n_req), ierr)
+      end if
+      k_dst = shifted_z_source(kg, -nshift, nz)
+      if (z_plane_rank(k_dst) /= rank) then
+        n_req = n_req + 1
+        call c_f_pointer(c_loc(band_d(1, 1, k)), plane, [n_plane])
+        call MPI_Isend(plane, n_plane, MPI_X3D2_DP, &
+                       z_plane_rank(k_dst), k_dst, MPI_COMM_WORLD, &
+                       requests(n_req), ierr)
+      end if
+    end do
+    if (n_req > 0) &
+      call MPI_Waitall(n_req, requests, MPI_STATUSES_IGNORE, ierr)
+#else
+    if (any(z_plane_rank /= rank)) &
+      call abort_run('Shifted x band blend needs MPI for a decomposed z.')
+#endif
+
+    call field_blend_x_band(f_d, shifted_d, lambda_d, i_start + i_offset, &
+                            nband, dims(2), dims(3), size(f_d, 2), &
+                            n_yb_pad(self))
+
+    ! Keep the buffers alive until the blend has read them
+    call device_sync()
+    call dev_free(band_d)
+    call dev_free(shifted_d)
+    call dev_free(lambda_d)
+
+  end subroutine field_shift_blend_x_band_omptgt
 
   subroutine field_set_face_from_field_omptgt(self, f, f_start, c_end, face, &
                                               bc_start, bc_end, &
@@ -1367,6 +1562,110 @@ contains
     end select
 
   end subroutine field_set_face_from_field_omptgt
+
+  subroutine field_add_const_x_face_omptgt(self, f, c, at_end)
+    !! [[m_base_backend(module):field_add_const_x_face_base(subroutine)]]
+    implicit none
+
+    class(omptgt_backend_t) :: self
+    class(field_t), intent(inout) :: f
+    real(dp), intent(in) :: c
+    logical, intent(in) :: at_end
+
+    real(dp), pointer, contiguous, dimension(:, :, :) :: f_d
+    integer :: dims(3), i_plane
+
+    if (f%dir /= DIR_X) &
+      call abort_run('field_add_const_x_face: only supported for DIR_X &
+                     &fields.')
+    if (f%data_loc == NULL_LOC) &
+      call abort_run('field_add_const_x_face: requires a valid data_loc.')
+
+    dims = self%mesh%get_dims(f%data_loc)
+    if (at_end) then
+      i_plane = dims(1)   ! global x = nx (outlet)
+    else
+      i_plane = 1         ! global x = 1  (inlet)
+    end if
+
+    call resolve_field_t(f_d, f)
+    call field_add_const_x_face(f_d, c, i_plane, size(f_d, 2), dims(2), &
+                                dims(3), n_yb_pad(self))
+
+  end subroutine field_add_const_x_face_omptgt
+
+  subroutine set_field_face_data_omptgt(self, f, data_start, data_end, face)
+    !! [[m_base_backend(module):set_field_face_data(subroutine)]]
+    !! The host planes are copied to small device arrays and one kernel
+    !! scatters them into the face planes of the device-resident field.
+    implicit none
+
+    class(omptgt_backend_t) :: self
+    class(field_t), intent(inout) :: f
+    real(dp), dimension(:, :), intent(in) :: data_start
+    real(dp), dimension(:, :), optional, intent(in) :: data_end
+    integer, intent(in) :: face
+
+    real(dp), pointer, contiguous, dimension(:, :, :) :: f_d
+    real(dp), pointer, contiguous, dimension(:, :) :: p_start_d, p_end_d
+    integer :: dims(3)
+    logical :: apply_end
+
+    if (f%dir /= DIR_X) &
+      call abort_run('set_field_face_data: only supported for DIR_X fields.')
+    if (f%data_loc == NULL_LOC) &
+      call abort_run('set_field_face_data: requires a valid data_loc.')
+
+    call resolve_field_t(f_d, f)
+    dims = self%mesh%get_dims(f%data_loc)
+    apply_end = present(data_end)
+
+    select case (face)
+    case (X_FACE)
+      if (size(data_start, 1) /= dims(2) .or. size(data_start, 2) /= dims(3)) &
+        call abort_run('set_field_face_data: X_FACE planes must be (ny, nz).')
+      if (present(data_end)) then
+        if (size(data_end, 1) /= dims(2) .or. size(data_end, 2) /= dims(3)) &
+          call abort_run('set_field_face_data: X_FACE planes must be &
+                         &(ny, nz).')
+      end if
+    case (Y_FACE)
+      if (size(data_start, 1) /= dims(1) .or. size(data_start, 2) /= dims(3)) &
+        call abort_run('set_field_face_data: Y_FACE planes must be (nx, nz).')
+      if (present(data_end)) then
+        if (size(data_end, 1) /= dims(1) .or. size(data_end, 2) /= dims(3)) &
+          call abort_run('set_field_face_data: Y_FACE planes must be &
+                         &(nx, nz).')
+      end if
+    case default
+      call abort_run('set_field_face_data: only X_FACE and Y_FACE supported.')
+    end select
+
+    call dev_clone(p_start_d, data_start)
+    ! When data_end is absent p_end_d only aliases p_start_d as a placeholder
+    ! argument, the kernel never reads it.
+    if (present(data_end)) then
+      call dev_clone(p_end_d, data_end)
+    else
+      p_end_d => p_start_d
+    end if
+
+    if (face == X_FACE) then
+      call field_set_x_face_from_plane(f_d, p_start_d, p_end_d, apply_end, &
+                                       size(f_d, 2), dims(1), dims(2), &
+                                       dims(3), n_yb_pad(self))
+    else
+      call field_set_y_face_from_plane(f_d, p_start_d, p_end_d, apply_end, &
+                                       size(f_d, 2), dims(1), dims(2), &
+                                       dims(3), n_yb_pad(self))
+    end if
+
+    ! The kernel may still be reading the plane arrays (see device_sync)
+    call device_sync()
+    call dev_free(p_start_d)
+    if (present(data_end)) call dev_free(p_end_d)
+
+  end subroutine set_field_face_data_omptgt
 
   subroutine field_add_face_from_field_omptgt(self, f, g, face, bc_start, &
                                               bc_end)

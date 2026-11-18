@@ -6,8 +6,8 @@ module m_turbine_model
   !! at actuator points and accumulates a momentum source back onto the RHS
   !! fields (du, dv, dw). It is owned and driven entirely by the flow case
   !! (see m_case_wind_turbine) and therefore knows nothing about the solver,
-  !! the case, or the `iturbine` switch - the case decides which concrete model
-  !! to allocate and when to call it.
+  !! the case, or the `iturbine` switch - m_turbine_setup decides which
+  !! concrete model to allocate and the case decides when to call it.
   !!
   !! Concrete implementations:
   !!   - turbine_dummy_t (m_turbine_dummy): no-op / iturbine=0, the fallback

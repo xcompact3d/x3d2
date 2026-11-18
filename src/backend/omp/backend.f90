@@ -3,7 +3,9 @@ module m_omp_backend
                    MPI_Allreduce
 
   use m_allocator, only: allocator_t
-  use m_base_backend, only: base_backend_t
+  use m_base_backend, only: base_backend_t, source_index_boxes, &
+                            check_point_fields, check_labelled_fields, &
+                            abl_wall_upper_plane
   use m_common, only: dp, MPI_X3D2_DP, get_dirs_from_rdr, move_data_loc, &
                       DIR_X, DIR_Y, DIR_Z, DIR_C, NULL_LOC, &
                       X_FACE, Y_FACE, Z_FACE, VERT, BC_DIRICHLET
@@ -49,8 +51,11 @@ module m_omp_backend
     procedure :: vector_norm_squared => vector_norm_squared_omp
     procedure :: field_labelled_sums => field_labelled_sums_omp
     procedure :: field_labelled_axpy => field_labelled_axpy_omp
+    procedure :: field_sample_points => field_sample_points_omp
+    procedure :: field_add_gaussian_sources => field_add_gaussian_sources_omp
     procedure :: field_max_mean => field_max_mean_omp
     procedure :: slice_max_sum => slice_max_sum_omp
+    procedure :: x_slice_weighted_sum => x_slice_weighted_sum_omp
     procedure :: field_scale => field_scale_omp
     procedure :: field_shift => field_shift_omp
     procedure :: field_set_face => field_set_face_omp
@@ -58,8 +63,8 @@ module m_omp_backend
     procedure :: field_plane_sums => field_plane_sums_omp
     procedure :: field_set_abl_wall_stress => field_set_abl_wall_stress_omp
     procedure :: field_set_face_from_field => field_set_face_from_field_omp
+    procedure :: set_field_face_data => set_field_face_data_omp
     procedure :: field_add_const_x_face => field_add_const_x_face_omp
-    procedure :: field_set_x_inlet_plane => field_set_x_inlet_plane_omp
     procedure :: field_add_face_from_field => field_add_face_from_field_omp
     procedure :: compute_vorticity => compute_vorticity_omp
     procedure :: compute_qcriterion => compute_qcriterion_omp
@@ -452,9 +457,7 @@ contains
     call exec_dist_tds_compact( &
       du%data, u%data, self%u_recv_s, self%u_recv_e, &
       self%du_send_s, self%du_send_e, self%du_recv_s, self%du_recv_e, &
-      tdsops, self%mesh%par%nproc_dir(dir), &
-      self%mesh%par%pprev(dir), self%mesh%par%pnext(dir), &
-      n_groups)
+      tdsops, self%mesh%par, dir, n_groups)
 
   end subroutine tds_solve_dist
 
@@ -994,27 +997,164 @@ contains
     !$omp end parallel do
   end subroutine field_labelled_axpy_omp
 
-  subroutine check_labelled_fields(g, label, a, b, c)
-    !! Checks the fields passed to the labelled field operations share a
-    !! valid data location and the DIR_X layout.
+  subroutine field_sample_points_omp(self, vals, points, a, b, c)
+    !! [[m_base_backend(module):field_sample_points_base(subroutine)]]
     implicit none
 
-    class(field_t), intent(in) :: g, label, a, b, c
+    class(omp_backend_t) :: self
+    real(dp), intent(out) :: vals(:, :)
+    real(dp), intent(in) :: points(:, :)
+    class(field_t), intent(in) :: a, b, c
 
-    if (g%data_loc == NULL_LOC .or. label%data_loc == NULL_LOC .or. &
-        a%data_loc == NULL_LOC .or. b%data_loc == NULL_LOC .or. &
-        c%data_loc == NULL_LOC) then
-      call abort_run('You must set data_loc before labelled field operations.')
-    end if
-    if (label%data_loc /= g%data_loc .or. a%data_loc /= g%data_loc .or. &
-        b%data_loc /= g%data_loc .or. c%data_loc /= g%data_loc) then
-      call abort_run('Labelled field operations need one data location.')
-    end if
-    if (g%dir /= DIR_X .or. label%dir /= DIR_X .or. a%dir /= DIR_X .or. &
-        b%dir /= DIR_X .or. c%dir /= DIR_X) then
-      call abort_run('Labelled field operations need DIR_X layout.')
-    end if
-  end subroutine check_labelled_fields
+    integer :: dims(3), gdims(3), n_offset(3), y_stride
+    integer :: p, o1, o2, o3, dir, g0(3), loc(3), i, k
+    real(dp) :: frac(3), wgt(0:1, 3), w
+    logical :: periodic(3), owned
+
+    call check_point_fields(a, b, c)
+
+    dims = self%mesh%get_dims(VERT)
+    gdims = self%mesh%get_global_dims(VERT)
+    n_offset = self%mesh%par%n_offset
+    periodic = self%mesh%grid%periodic_BC
+    y_stride = y_group_stride(self)
+
+    vals = 0._dp
+    do p = 1, size(points, 2)
+      ! Zero-based global index of the lower corner and the weights
+      do dir = 1, 3
+        frac(dir) = points(dir, p)/self%mesh%geo%d(dir)
+        g0(dir) = floor(frac(dir))
+        frac(dir) = frac(dir) - g0(dir)
+        wgt(0, dir) = 1._dp - frac(dir)
+        wgt(1, dir) = frac(dir)
+      end do
+      do o3 = 0, 1
+        do o2 = 0, 1
+          do o1 = 0, 1
+            w = wgt(o1, 1)*wgt(o2, 2)*wgt(o3, 3)
+            if (w == 0._dp) cycle
+            call local_corner(g0 + [o1, o2, o3], gdims, n_offset, dims, &
+                              periodic, loc, owned)
+            if (.not. owned) cycle
+            ! DIR_X storage: x along j, y split into SZ-blocks
+            i = mod(loc(2) - 1, SZ) + 1
+            k = (loc(2) - 1)/SZ + 1 + (loc(3) - 1)*y_stride
+            vals(1, p) = vals(1, p) + w*a%data(i, loc(1), k)
+            vals(2, p) = vals(2, p) + w*b%data(i, loc(1), k)
+            vals(3, p) = vals(3, p) + w*c%data(i, loc(1), k)
+          end do
+        end do
+      end do
+    end do
+  end subroutine field_sample_points_omp
+
+  subroutine field_add_gaussian_sources_omp(self, a, b, c, points, coeffs, &
+                                            eps, r_cut)
+    !! [[m_base_backend(module):field_add_gaussian_sources_base(subroutine)]]
+    implicit none
+
+    class(omp_backend_t) :: self
+    class(field_t), intent(inout) :: a, b, c
+    real(dp), intent(in) :: points(:, :), coeffs(:, :)
+    real(dp), intent(in) :: eps, r_cut
+
+    integer :: lo(3, size(points, 2)), hi(3, size(points, 2))
+    integer :: dims(3), gdims(3), n_offset(3), y_stride
+    integer :: s, gx, gy, gz, x, y, z, i, k
+    real(dp) :: d(3), inv_eps2, r_cut2, dz2, dyz2, dist2, kern
+    logical :: periodic(3)
+
+    call check_point_fields(a, b, c)
+
+    d = self%mesh%geo%d
+    dims = self%mesh%get_dims(VERT)
+    gdims = self%mesh%get_global_dims(VERT)
+    n_offset = self%mesh%par%n_offset
+    periodic = self%mesh%grid%periodic_BC
+    y_stride = y_group_stride(self)
+    inv_eps2 = 1._dp/eps**2
+    r_cut2 = r_cut**2
+
+    call source_index_boxes(self%mesh, points, r_cut, lo, hi)
+
+    ! Sources in order, so every point accumulates them in the same order
+    ! whatever the thread count. Distances use the unwrapped global index g;
+    ! the point it lands on is found by wrapping g.
+    do s = 1, size(points, 2)
+      !$omp parallel do private(dz2, dyz2, dist2, kern, i, k, gx, gy, x, y, z)
+      do gz = lo(3, s), hi(3, s)
+        z = wrapped_local(gz, gdims(3), n_offset(3), dims(3), periodic(3))
+        if (z == 0) cycle
+        dz2 = (points(3, s) - gz*d(3))**2
+        if (dz2 > r_cut2) cycle
+        do gy = lo(2, s), hi(2, s)
+          y = wrapped_local(gy, gdims(2), n_offset(2), dims(2), periodic(2))
+          if (y == 0) cycle
+          dyz2 = dz2 + (points(2, s) - gy*d(2))**2
+          if (dyz2 > r_cut2) cycle
+          i = mod(y - 1, SZ) + 1
+          k = (y - 1)/SZ + 1 + (z - 1)*y_stride
+          do gx = lo(1, s), hi(1, s)
+            x = wrapped_local(gx, gdims(1), n_offset(1), dims(1), &
+                              periodic(1))
+            if (x == 0) cycle
+            dist2 = dyz2 + (points(1, s) - gx*d(1))**2
+            if (dist2 > r_cut2) cycle
+            kern = exp(-dist2*inv_eps2)
+            a%data(i, x, k) = a%data(i, x, k) + coeffs(1, s)*kern
+            b%data(i, x, k) = b%data(i, x, k) + coeffs(2, s)*kern
+            c%data(i, x, k) = c%data(i, x, k) + coeffs(3, s)*kern
+          end do
+        end do
+      end do
+      !$omp end parallel do
+    end do
+  end subroutine field_add_gaussian_sources_omp
+
+  pure integer function wrapped_local(g, n_glob, offset, n_loc, periodic)
+    !! Local one-based index of the zero-based global VERT index g, wrapped
+    !! when periodic; 0 when it is off this rank or outside the domain.
+    implicit none
+
+    integer, intent(in) :: g, n_glob, offset, n_loc
+    logical, intent(in) :: periodic
+
+    integer :: gw
+
+    gw = g
+    if (periodic) gw = modulo(g, n_glob)
+    wrapped_local = gw - offset + 1
+    if (gw < 0 .or. gw >= n_glob .or. wrapped_local < 1 &
+        .or. wrapped_local > n_loc) wrapped_local = 0
+  end function wrapped_local
+
+  pure subroutine local_corner(g, gdims, n_offset, dims, periodic, loc, &
+                               owned)
+    !! Local one-based index of the zero-based global VERT index g, wrapped
+    !! across periodic boundaries; owned is false off this rank or outside
+    !! a non-periodic boundary.
+    implicit none
+
+    integer, intent(in) :: g(3), gdims(3), n_offset(3), dims(3)
+    logical, intent(in) :: periodic(3)
+    integer, intent(out) :: loc(3)
+    logical, intent(out) :: owned
+
+    integer :: dir, gw
+
+    owned = .true.
+    do dir = 1, 3
+      gw = g(dir)
+      if (periodic(dir)) then
+        gw = modulo(gw, gdims(dir))
+      else if (gw < 0 .or. gw >= gdims(dir)) then
+        owned = .false.
+      end if
+      loc(dir) = gw - n_offset(dir) + 1
+      if (loc(dir) < 1 .or. loc(dir) > dims(dir)) owned = .false.
+    end do
+  end subroutine local_corner
 
   subroutine copy_into_buffers(u_send_s, u_send_e, u, n, n_groups)
     implicit none
@@ -1201,6 +1341,49 @@ contains
 
   end subroutine slice_max_sum_omp
 
+  subroutine x_slice_weighted_sum_omp(self, sum_val, f, i_slice, y_weights)
+    !! [[m_base_backend(module):x_slice_weighted_sum_base(subroutine)]]
+    implicit none
+    class(omp_backend_t) :: self
+    real(dp), intent(out) :: sum_val
+    class(field_t), intent(in) :: f
+    integer, intent(in) :: i_slice
+    real(dp), intent(in) :: y_weights(:)
+
+    real(dp) :: sum_p
+    integer :: dims(3), y_stride, i, k, y_block, z
+
+    if (f%dir /= DIR_X) &
+      call abort_run('x_slice_weighted_sum: only supported for DIR_X fields.')
+    if (f%data_loc == NULL_LOC) &
+      call abort_run('x_slice_weighted_sum: requires a valid data_loc.')
+
+    dims = self%mesh%get_dims(f%data_loc)
+    y_stride = y_group_stride(self)
+
+    if (i_slice < 1 .or. i_slice > dims(1)) &
+      call abort_run('x_slice_weighted_sum: i_slice out of range')
+    if (size(y_weights) /= dims(2)) &
+      call abort_run('x_slice_weighted_sum: one weight per y point needed')
+
+    sum_p = 0._dp
+    ! y-block is the fast-varying component of the group index
+    !$omp parallel do collapse(2) reduction(+:sum_p) private(k)
+    do z = 1, dims(3)
+      do y_block = 1, (dims(2) - 1)/SZ + 1
+        k = y_stride*(z - 1) + y_block
+        do i = 1, min(SZ, dims(2) - (y_block - 1)*SZ)
+          sum_p = sum_p + y_weights(i + (y_block - 1)*SZ)*f%data(i, i_slice, k)
+        end do
+      end do
+    end do
+    !$omp end parallel do
+
+    ! Rank-local value; caller is responsible for MPI_Allreduce.
+    sum_val = sum_p
+
+  end subroutine x_slice_weighted_sum_omp
+
   subroutine field_scale_omp(self, f, a)
     implicit none
 
@@ -1383,16 +1566,19 @@ contains
   end subroutine field_set_y_plane_omp
 
   subroutine field_set_abl_wall_stress_omp( &
-    self, stress, u, w, sample_plane, stress_plane, drag_coeff, component)
+    self, stress, u, w, sample_plane, sample_weight, stress_plane, &
+    drag_coeff, component)
     !! [[m_base_backend(module):field_set_abl_wall_stress(subroutine)]]
     implicit none
     class(omp_backend_t) :: self
     class(field_t), intent(inout) :: stress
     class(field_t), intent(in) :: u, w
     integer, intent(in) :: sample_plane, stress_plane, component
-    real(dp), intent(in) :: drag_coeff
-    integer :: dims(3), y_stride, sample_block, stress_block
-    integer :: sample_i, stress_i, k, i, sample_group, stress_group
+    real(dp), intent(in) :: sample_weight, drag_coeff
+    integer :: dims(3), y_stride, upper_plane
+    integer :: sample_block, upper_block, stress_block
+    integer :: sample_i, upper_i, stress_i, k, i
+    integer :: sample_group, upper_group, stress_group
     real(dp) :: us, ws, speed
 
     if (stress%dir /= DIR_X .or. u%dir /= DIR_X .or. w%dir /= DIR_X) &
@@ -1406,20 +1592,27 @@ contains
       call abort_run('ABL wall stress plane is outside the domain.')
     if (component /= 1 .and. component /= 3) &
       call abort_run('Invalid ABL wall stress component.')
+    upper_plane = abl_wall_upper_plane(sample_plane, sample_weight, dims(2))
 
     y_stride = y_group_stride(self)
     sample_block = (sample_plane - 1)/SZ + 1
+    upper_block = (upper_plane - 1)/SZ + 1
     stress_block = (stress_plane - 1)/SZ + 1
     sample_i = mod(sample_plane - 1, SZ) + 1
+    upper_i = mod(upper_plane - 1, SZ) + 1
     stress_i = mod(stress_plane - 1, SZ) + 1
 
-    !$omp parallel do private(sample_group, stress_group, i, us, ws, speed)
+    !$omp parallel do private(sample_group, upper_group, stress_group, i, &
+    !$omp us, ws, speed)
     do k = 1, dims(3)
       sample_group = y_stride*(k - 1) + sample_block
+      upper_group = y_stride*(k - 1) + upper_block
       stress_group = y_stride*(k - 1) + stress_block
       do i = 1, dims(1)
-        us = u%data(sample_i, i, sample_group)
-        ws = w%data(sample_i, i, sample_group)
+        us = (1._dp - sample_weight)*u%data(sample_i, i, sample_group) &
+             + sample_weight*u%data(upper_i, i, upper_group)
+        ws = (1._dp - sample_weight)*w%data(sample_i, i, sample_group) &
+             + sample_weight*w%data(upper_i, i, upper_group)
         speed = sqrt(us**2 + ws**2)
         if (component == 1) then
           stress%data(stress_i, i, stress_group) = drag_coeff*us*speed
@@ -1502,6 +1695,77 @@ contains
 
   end subroutine field_set_face_from_field_omp
 
+  subroutine set_field_face_data_omp(self, f, data_start, data_end, face)
+    !! [[m_base_backend(module):set_field_face_data(subroutine)]]
+    implicit none
+    class(omp_backend_t) :: self
+    class(field_t), intent(inout) :: f
+    real(dp), dimension(:, :), intent(in) :: data_start
+    real(dp), dimension(:, :), optional, intent(in) :: data_end
+    integer, intent(in) :: face
+    integer :: dims(3), z, j, i, y_block, i_max, k, k_start, k_end, &
+               n_mod, n_y_blocks, y_stride
+
+    if (f%dir /= DIR_X) &
+      call abort_run('set_field_face_data: only supported for DIR_X fields.')
+    if (f%data_loc == NULL_LOC) &
+      call abort_run('set_field_face_data: requires a valid data_loc.')
+
+    dims = self%mesh%get_dims(f%data_loc)
+    n_mod = mod(dims(2) - 1, SZ) + 1
+    n_y_blocks = (dims(2) - 1)/SZ + 1
+    y_stride = y_group_stride(self)
+
+    select case (face)
+    case (X_FACE)
+      if (size(data_start, 1) /= dims(2) .or. size(data_start, 2) /= dims(3)) &
+        call abort_run('set_field_face_data: X_FACE planes must be (ny, nz).')
+      if (present(data_end)) then
+        if (size(data_end, 1) /= dims(2) .or. size(data_end, 2) /= dims(3)) &
+          call abort_run('set_field_face_data: X_FACE planes must be &
+                         &(ny, nz).')
+      end if
+      !$omp parallel do collapse(2) private(k, i, i_max)
+      do z = 1, dims(3)
+        do y_block = 1, n_y_blocks
+          ! OMP DIR_X ordering: k = y_stride*(z - 1) + y_block
+          k = y_stride*(z - 1) + y_block
+          i_max = SZ
+          if (y_block == n_y_blocks) i_max = n_mod
+          do i = 1, i_max
+            f%data(i, 1, k) = data_start((y_block - 1)*SZ + i, z)
+            if (present(data_end)) &
+              f%data(i, dims(1), k) = data_end((y_block - 1)*SZ + i, z)
+          end do
+        end do
+      end do
+      !$omp end parallel do
+
+    case (Y_FACE)
+      if (size(data_start, 1) /= dims(1) .or. size(data_start, 2) /= dims(3)) &
+        call abort_run('set_field_face_data: Y_FACE planes must be (nx, nz).')
+      if (present(data_end)) then
+        if (size(data_end, 1) /= dims(1) .or. size(data_end, 2) /= dims(3)) &
+          call abort_run('set_field_face_data: Y_FACE planes must be &
+                         &(nx, nz).')
+      end if
+      !$omp parallel do collapse(2) private(k_start, k_end)
+      do z = 1, dims(3)
+        do j = 1, dims(1)
+          k_start = 1 + (z - 1)*y_stride
+          k_end = (z - 1)*y_stride + n_y_blocks
+          f%data(1, j, k_start) = data_start(j, z)
+          if (present(data_end)) f%data(n_mod, j, k_end) = data_end(j, z)
+        end do
+      end do
+      !$omp end parallel do
+
+    case default
+      call abort_run('set_field_face_data: only X_FACE and Y_FACE supported.')
+    end select
+
+  end subroutine set_field_face_data_omp
+
   subroutine field_add_const_x_face_omp(self, f, c, at_end)
     !! [[m_base_backend(module):field_add_const_x_face_base(subroutine)]]
     implicit none
@@ -1547,46 +1811,6 @@ contains
     !$omp end parallel do
 
   end subroutine field_add_const_x_face_omp
-
-  subroutine field_set_x_inlet_plane_omp(self, f, plane)
-    !! [[m_base_backend(module):field_set_x_inlet_plane_base(subroutine)]]
-    implicit none
-    class(omp_backend_t) :: self
-    class(field_t), intent(inout) :: f
-    real(dp), dimension(:, :), intent(in) :: plane
-    integer :: dims(3), k, i, z, i_max, n_mod, n_y_blocks, y_block, y_stride
-
-    if (f%dir /= DIR_X) &
-      call abort_run('field_set_x_inlet_plane: only supported for DIR_X &
-                     &fields.')
-    if (f%data_loc == NULL_LOC) &
-      call abort_run('field_set_x_inlet_plane: requires a valid data_loc.')
-
-    dims = self%mesh%get_dims(f%data_loc)
-    if (size(plane, 1) /= dims(2) .or. size(plane, 2) /= dims(3)) &
-      call abort_run('field_set_x_inlet_plane: plane must be (ny, nz).')
-    n_mod = mod(dims(2) - 1, SZ) + 1
-    n_y_blocks = (dims(2) - 1)/SZ + 1
-    y_stride = y_group_stride(self)
-
-    !$omp parallel do collapse(2) private(k, i, i_max)
-    do z = 1, dims(3)
-      do y_block = 1, n_y_blocks
-        ! y-block is the fast-varying component of the group index
-        k = y_stride*(z - 1) + y_block
-        if (y_block == n_y_blocks) then
-          i_max = n_mod
-        else
-          i_max = SZ
-        end if
-        do i = 1, i_max
-          f%data(i, 1, k) = plane((y_block - 1)*SZ + i, z)
-        end do
-      end do
-    end do
-    !$omp end parallel do
-
-  end subroutine field_set_x_inlet_plane_omp
 
   subroutine field_add_face_from_field_omp(self, f, g, face, bc_start, bc_end)
     !! [[m_base_backend(module):field_add_face_from_field(subroutine)]]
@@ -1718,7 +1942,7 @@ contains
 
   subroutine init_omp_poisson_fft(self, mesh, xdirps, ydirps, zdirps, lowmem)
 #ifdef WITH_2DECOMPFFT
-    use m_omp_poisson_fft, only: omp_poisson_fft_t
+    use m_omp_poisson_fft, only: create_omp_poisson_fft
 #endif
 
     implicit none
@@ -1729,12 +1953,8 @@ contains
     logical, optional, intent(in) :: lowmem
 
 #ifdef WITH_2DECOMPFFT
-    allocate (omp_poisson_fft_t :: self%poisson_fft)
-
-    select type (poisson_fft => self%poisson_fft)
-    type is (omp_poisson_fft_t)
-      poisson_fft = omp_poisson_fft_t(mesh, xdirps, ydirps, zdirps, lowmem)
-    end select
+    call create_omp_poisson_fft(self%poisson_fft, mesh, xdirps, ydirps, &
+                                zdirps, lowmem)
 #else
     call abort_run('This build does not support FFT based Poisson solver on &
                    &the OpenMP backend!')

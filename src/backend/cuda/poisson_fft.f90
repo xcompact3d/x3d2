@@ -11,7 +11,7 @@ module m_cuda_poisson_fft
   use m_common, only: dp, CELL, is_sp, MPI_X3D2_DP
   use m_field, only: field_t
   use m_mesh
-  use m_poisson_fft, only: poisson_fft_t
+  use m_poisson_fft, only: poisson_fft_t, poisson_bc_code, fft_bc_class
   use m_tdsops, only: dirps_t
 
   use m_cuda_allocator, only: cuda_field_t
@@ -35,19 +35,22 @@ module m_cuda_poisson_fft
                              process_spectral_010_fw, &
                              process_spectral_010_poisson, &
                              process_spectral_010_bw, &
-                             process_spectral_100_fw, &
-                             process_spectral_100_pair_fw, &
-                             process_spectral_100_pair_bw, &
+                             process_spectral_fw, &
+                             process_spectral_pair_fw, &
+                             process_spectral_pair_bw, &
                              pack_spectral_plane, &
-                             pack_110_xyz_to_yslab, unpack_110_yslab, &
-                             pack_110_yslab, unpack_110_yslab_to_xyz
+                             pack_zslab_to_alltoall, unpack_110_yslab, &
+                             pack_110_yslab, unpack_alltoall_to_zslab, &
+                             pack_010_yslab, unpack_010_yslab
   use m_logger, only: log_info, log_warn, abort_run, check_mpi, str
   use m_cuda_errors, only: check_cuda, check_cufft
 
   implicit none
 
-  type, extends(poisson_fft_t) :: cuda_poisson_fft_t
-    !! FFT based Poisson solver
+  type, abstract, extends(poisson_fft_t) :: cuda_poisson_fft_t
+    !! FFT based Poisson solver, the state and the plain transform that
+    !! every boundary condition case shares. Each case extends this type
+    !! with its own buffers, see cuda_poisson_000_t to cuda_poisson_110_t.
 
     !> Local domain sized array storing the spectral equivalence constants
     complex(dp), device, allocatable, dimension(:, :, :) :: waves_dev
@@ -55,26 +58,11 @@ module m_cuda_poisson_fft
     real(dp), device, allocatable, dimension(:) :: ax_dev, bx_dev, &
                                                    ay_dev, by_dev, &
                                                    az_dev, bz_dev
-    !> Stretching operator matrices stores
-    real(dp), device, allocatable, dimension(:, :, :, :) :: &
-      store_a_odd_re_dev, store_a_odd_im_dev, &
-      store_a_even_re_dev, store_a_even_im_dev, &
-      store_a_re_dev, store_a_im_dev
-    !> Stretching operator matrices
-    real(dp), device, allocatable, dimension(:, :, :, :) :: &
-      a_odd_re_dev, a_odd_im_dev, a_even_re_dev, a_even_im_dev, &
-      a_re_dev, a_im_dev
     !> Forward and backward FFT transform plans
     integer :: plan3D_fw, plan3D_bw
 
     !> Flag to indicate whether cuFFTMp is used
     logical :: use_cufftmp = .true.
-
-    !> Flag for cases
-    logical :: is_000_case = .false.
-    logical :: is_010_case = .false.
-    logical :: is_100_case = .false.
-    logical :: is_110_case = .false.
 
     !> cuFFTMp object manages decomposition and data storage
     type(cudaLibXtDesc), pointer :: xtdesc
@@ -83,10 +71,11 @@ module m_cuda_poisson_fft
     complex(dp), device, allocatable, dimension(:, :, :) :: c_dev
     !> cuFFT real workspace (input/output of R2C/C2R)
     real(dp), device, allocatable, dimension(:, :, :) :: r_dev
-    !> Transposed real workspace for 110 case (nz, nx, ny)
-    real(dp), device, allocatable, dimension(:, :, :) :: r_dev_110
-    !> dim2 mirror of the local spectral slab, used by the 100 and 110 cases
-    !> to reach the paired split partner that lives on another rank
+    !> dim2 mirror of the local spectral slab, used by the 010, 100 and 110
+    !> cases to reach the paired split partner that lives on another rank.
+    !> Only init_dim2_mirror allocates it. The stretched 010 case on multiple
+    !> ranks does not allocate it. init_cuda decides the cuFFTMp requirement
+    !> from the case and the rank count, not from the allocation status.
     complex(dp), device, allocatable, dimension(:, :, :) :: c_mirror_dev
     !> Staging copy of the local slab, sent in place of c_dev itself.
     !> In the cuFFTMp path c_dev is a c_f_pointer onto descriptor%data(1),
@@ -102,35 +91,83 @@ module m_cuda_poisson_fft
                                                          c_plane_recv_dev
     !> Ranks holding the mirror slab and the extra mirror plane
     integer :: mirror_slab_rank = 0, mirror_plane_rank = 0
-    !> All-to-all buffers redistributing the 110 field between the physical
-    !> Z-slab (nx, ny, nz_l) and the cuFFTMp Y-slab (2*(nz/2+1), nx, ny_l),
-    !> sized (nz_l, nx, ny_l, nproc). Ordinary device memory, for the same
-    !> reason as c_slab_send_dev.
+    !> All-to-all buffers of the slab redistribution, sized
+    !> (nz_l, nx, ny_l, nproc). The 110 case moves the field between the
+    !> physical Z-slab (nx, ny, nz_l) and the cuFFTMp Y-slab
+    !> (2*(nz/2+1), nx, ny_l). The stretched 010 case moves the spectral
+    !> field between the cuFFTMp Y-slab and a Z-slab, with nx = 2*nx_spec
+    !> on the real view. Ordinary device memory, for the same reason as
+    !> c_slab_send_dev.
     real(dp), device, allocatable, dimension(:, :, :, :) :: r_a2a_send_dev, &
                                                             r_a2a_recv_dev
   contains
+    procedure :: init => init_cuda
+    procedure :: init_case
+    procedure :: create_plans
+    procedure :: init_dim2_mirror
     procedure :: fft_forward => fft_forward_cuda
-    procedure :: fft_forward_010 => fft_forward_cuda
-    procedure :: fft_forward_100 => fft_forward_100_cuda
-    procedure :: fft_forward_110 => fft_forward_110_cuda
     procedure :: fft_backward => fft_backward_cuda
-    procedure :: fft_backward_010 => fft_backward_cuda
-    procedure :: fft_backward_100 => fft_backward_100_cuda
-    procedure :: fft_backward_110 => fft_backward_110_cuda
-    procedure :: fft_postprocess_000 => fft_postprocess_000_cuda
-    procedure :: fft_postprocess_010 => fft_postprocess_010_cuda
-    procedure :: fft_postprocess_100 => fft_postprocess_100_cuda
-    procedure :: fft_postprocess_110 => fft_postprocess_110_cuda
-    procedure :: enforce_periodicity_x => enforce_periodicity_x_cuda
-    procedure :: undo_periodicity_x => undo_periodicity_x_cuda
-    procedure :: enforce_periodicity_y => enforce_periodicity_y_cuda
-    procedure :: undo_periodicity_y => undo_periodicity_y_cuda
-    procedure :: enforce_periodicity_xy => enforce_periodicity_xy_cuda
-    procedure :: undo_periodicity_xy => undo_periodicity_xy_cuda
     procedure :: exchange_dim2_mirror
+  end type cuda_poisson_fft_t
+
+  type, extends(cuda_poisson_fft_t) :: cuda_poisson_000_t
+    !! Periodic in x, y and z
+  contains
+    procedure :: solve_poisson => solve_poisson_000_cuda
+    procedure :: fft_postprocess => fft_postprocess_000_cuda
+  end type cuda_poisson_000_t
+
+  type, extends(cuda_poisson_fft_t) :: cuda_poisson_010_t
+    !! Periodic in x and z, non-periodic in y, the only case that supports
+    !! stretching in y
+    !> Stretching operator matrices stores
+    real(dp), device, allocatable, dimension(:, :, :, :) :: &
+      store_a_odd_re_dev, store_a_odd_im_dev, &
+      store_a_even_re_dev, store_a_even_im_dev, &
+      store_a_re_dev, store_a_im_dev
+    !> Stretching operator matrices
+    real(dp), device, allocatable, dimension(:, :, :, :) :: &
+      a_odd_re_dev, a_odd_im_dev, a_even_re_dev, a_even_im_dev, &
+      a_re_dev, a_im_dev
+    !> On multiple ranks the stretched y solve runs on the Z-slab
+    !> (nx/2+1, ny, nz/nproc) of the spectral field, which holds whole y
+    !> lines. The slab redistribution fills it from the cuFFTMp Y-slab.
+    complex(dp), device, allocatable, dimension(:, :, :) :: c_zslab_dev
+  contains
+    procedure :: init_case => init_case_010
+    procedure :: fft_postprocess => fft_postprocess_010_cuda
+    procedure :: enforce_periodicity => enforce_periodicity_y_cuda
+    procedure :: undo_periodicity => undo_periodicity_y_cuda
+    procedure :: redistribute_010_to_zslab
+    procedure :: redistribute_010_to_yslab
+  end type cuda_poisson_010_t
+
+  type, extends(cuda_poisson_fft_t) :: cuda_poisson_100_t
+    !! Non-periodic in x, periodic in y and z
+  contains
+    procedure :: init_case => init_case_100
+    procedure :: fft_forward => fft_forward_100_cuda
+    procedure :: fft_backward => fft_backward_100_cuda
+    procedure :: fft_postprocess => fft_postprocess_100_cuda
+    procedure :: enforce_periodicity => enforce_periodicity_x_cuda
+    procedure :: undo_periodicity => undo_periodicity_x_cuda
+  end type cuda_poisson_100_t
+
+  type, extends(cuda_poisson_fft_t) :: cuda_poisson_110_t
+    !! Non-periodic in x and y, periodic in z
+    !> Transposed real workspace (nz, nx, ny), single rank only
+    real(dp), device, allocatable, dimension(:, :, :) :: r_dev_110
+  contains
+    procedure :: init_case => init_case_110
+    procedure :: create_plans => create_plans_110
+    procedure :: fft_forward => fft_forward_110_cuda
+    procedure :: fft_backward => fft_backward_110_cuda
+    procedure :: fft_postprocess => fft_postprocess_110_cuda
+    procedure :: enforce_periodicity => enforce_periodicity_xy_cuda
+    procedure :: undo_periodicity => undo_periodicity_xy_cuda
     procedure :: redistribute_110_to_yslab
     procedure :: redistribute_110_to_zslab
-  end type cuda_poisson_fft_t
+  end type cuda_poisson_110_t
 
   ! Explicit C interfaces for cuFFT functions that nvfortran has trouble with
   interface
@@ -151,8 +188,16 @@ module m_cuda_poisson_fft
     end function cufftExecC2R_C
   end interface
 
-  private :: create_fft_plan, sync_or_abort, yslab_view_110, &
-             redistribution_launch_config, redistribution_alltoall
+  private :: sync_or_abort, yslab_view_110, &
+             redistribution_launch_config, redistribution_alltoall, &
+             redistribute_010_to_zslab, redistribute_010_to_yslab, &
+             init_cuda, postprocess_dim2_mirror
+
+  !> create_fft_plan is deliberately public: the static memory estimator
+  !> (m_cuda_memcheck_device, src/backend/cuda/memcheck_device.f90)
+  !> calls it standalone (plan only, no mesh/case/fields) to capture the
+  !> real cuFFT/cuFFTMp workspace size via its worksize out-argument,
+  !> instead of duplicating cufftMakePlan3D's call sequence a second time.
 
 contains
 
@@ -171,7 +216,8 @@ contains
   end subroutine sync_or_abort
 
   subroutine create_fft_plan(plan, use_cufftmp, nx, ny, nz, &
-                             plan_type, plan_name)
+                             plan_type, plan_name, worksize_out, &
+                             stat, auto_alloc_off)
     !! Helper subroutine to create FFT plan with automatic cuFFTMp fallback
     implicit none
 
@@ -179,12 +225,26 @@ contains
     logical, intent(inout) :: use_cufftmp
     integer, intent(in) :: nx, ny, nz, plan_type
     character(*), intent(in) :: plan_name
+    !> Set to cufftMakePlan3D's reported workspace size (bytes) when
+    !> present. Optional and unused by every real solver call site (init,
+    !> below); added only so the static memory estimator can read the exact
+    !> FFT workspace size without a second, duplicate cufftMakePlan3D call.
+    integer(int_ptr_kind()), optional, intent(out) :: worksize_out
+    !> When present, a failed plain cuFFT plan creation returns its cuFFT
+    !> error code here instead of stopping. Used only by the static memory
+    !> estimator; the solver call sites leave it out and keep the stop.
+    integer, optional, intent(out) :: stat
+    !> When present and true, a cuFFTMp plan is made with auto-allocation off.
+    !> The plan then reports its workspace size in worksize_out and does not
+    !> allocate the workspace. Used only by the static memory estimator.
+    logical, optional, intent(in) :: auto_alloc_off
 
     integer :: ierr
     integer(int_ptr_kind()) :: worksize
     logical :: cufftmp_failed
 
     cufftmp_failed = .false.
+    if (present(stat)) stat = 0
     ierr = cufftCreate(plan)
 
 #ifndef MPI
@@ -203,8 +263,12 @@ contains
         call log_warn('cuFFTMp: MPI attach failed (error '//str(ierr)//')')
         cufftmp_failed = .true.
       else
+        if (present(auto_alloc_off)) then
+          if (auto_alloc_off) ierr = cufftSetAutoAllocation(plan, 0)
+        end if
         ! MPI attach succeeded, create the plan
-        ierr = cufftMakePlan3D(plan, nz, ny, nx, plan_type, worksize)
+        if (ierr == 0) &
+          ierr = cufftMakePlan3D(plan, nz, ny, nx, plan_type, worksize)
         if (ierr /= 0) then
           call log_warn('cuFFTMp: Plan creation failed (error ' &
                         //str(ierr)//')')
@@ -225,93 +289,152 @@ contains
     ! create plan with cuFFT
     if (.not. use_cufftmp) then
       ierr = cufftMakePlan3D(plan, nz, ny, nx, plan_type, worksize)
+      if (present(stat) .and. ierr /= 0) then
+        stat = ierr
+        ierr = cufftDestroy(plan)
+        return
+      end if
       call check_cufft(ierr, trim(plan_name)//' 3D FFT plan generation')
     end if
 
+    if (present(worksize_out)) worksize_out = worksize
+
   end subroutine create_fft_plan
 
-  subroutine init_cuda_poisson_fft_t(poisson_fft, mesh, xdirps, ydirps, &
-                                     zdirps, lowmem)
+  subroutine create_fft_plan_pair(plan_fw, plan_bw, use_cufftmp, fft_n, &
+                                  fw_type, bw_type, label, worksize_fw, &
+                                  worksize_bw, stat, no_auto_alloc)
+    !! Creates the forward and the backward FFT plan the way the solver does.
+    !! A backward plan that forces the fallback to plain cuFFT makes the
+    !! forward plan, built on cuFFTMp, get rebuilt on plain cuFFT, so both
+    !! plans end on the same library. Shared by the solver init and the
+    !! x3d2-memcheck probe. The optional arguments are the ones of
+    !! create_fft_plan. label is appended to the plan names in the messages.
+    !! When stat is present and not zero, the plans made so far are destroyed
+    !! and the other plan is left undefined.
     implicit none
 
-    type(cuda_poisson_fft_t), intent(out) :: poisson_fft
-    type(mesh_t), target, intent(in) :: mesh
-    type(dirps_t), intent(in) :: xdirps, ydirps, zdirps
-    logical, optional, intent(in) :: lowmem
-
-    integer :: nx, ny, nz
+    integer, intent(inout) :: plan_fw, plan_bw
+    logical, intent(inout) :: use_cufftmp
+    integer, intent(in) :: fft_n(3), fw_type, bw_type
+    character(*), intent(in) :: label
+    integer(int_ptr_kind()), optional, intent(out) :: worksize_fw, worksize_bw
+    integer, optional, intent(out) :: stat
+    logical, optional, intent(in) :: no_auto_alloc
 
     integer :: ierr
-
-    integer :: dims_glob(3), dims_loc(3), n_spec(3), n_sp_st(3)
-    logical :: periodic_x, periodic_y, periodic_z
     logical :: fw_was_cufftmp
 
-    integer :: fft_n1, fft_n2, fft_n3, fft_n1_loc, fft_n2_loc
-    integer :: fw_plan_type, bw_plan_type
+    call create_fft_plan(plan_fw, use_cufftmp, fft_n(1), fft_n(2), fft_n(3), &
+                         fw_type, 'Forward'//label, worksize_fw, stat, &
+                         no_auto_alloc)
+    if (present(stat)) then
+      if (stat /= 0) return
+    end if
+    fw_was_cufftmp = use_cufftmp
 
-    periodic_x = mesh%grid%periodic_BC(1)
-    periodic_y = mesh%grid%periodic_BC(2)
-    periodic_z = mesh%grid%periodic_BC(3)
-
-    ! Detect cases
-    poisson_fft%is_000_case = periodic_x .and. periodic_y &
-                              .and. periodic_z
-    poisson_fft%is_010_case = periodic_x .and. (.not. periodic_y) &
-                              .and. periodic_z
-    poisson_fft%is_100_case = (.not. periodic_x) .and. periodic_y &
-                              .and. periodic_z
-    poisson_fft%is_110_case = (.not. periodic_x) .and. (.not. periodic_y) &
-                              .and. periodic_z
-
-    ! 1D decomposition along Z in real domain, and along Y in spectral space
-    if (mesh%par%nproc_dir(2) /= 1) &
-      call log_warn('nproc_dir in y-dir must be 1')
-    if ((poisson_fft%is_100_case .or. poisson_fft%is_110_case) &
-        .and. mesh%par%nproc > 1) then
-      if (mesh%par%nproc_dir(1) /= 1 .or. mesh%par%nproc_dir(2) /= 1) then
-        call abort_run('The 100 and 110 cases on multiple ranks need a 1D z &
-                       &decomposition, nproc_dir must be [1, 1, nproc].')
+    ! Create the backward plan with automatic cuFFTMp detection/fallback
+    call create_fft_plan(plan_bw, use_cufftmp, fft_n(1), fft_n(2), fft_n(3), &
+                         bw_type, 'Backward'//label, worksize_bw, stat, &
+                         no_auto_alloc)
+    if (present(stat)) then
+      if (stat /= 0) then
+        ierr = cufftDestroy(plan_fw)
+        return
       end if
     end if
-    if (poisson_fft%is_010_case .and. mesh%par%nproc > 1) then
-      call abort_run('Multiple ranks are not yet supported for the 010 case &
-                     &in the CUDA backend!')
+
+    ! If the backward plan forced the fallback, rebuild the forward plan too
+    if (fw_was_cufftmp .and. (.not. use_cufftmp)) then
+      ierr = cufftDestroy(plan_fw)
+      call check_cufft(ierr, 'cufftDestroy (fwd, cuFFTMp fallback rebuild)')
+      call create_fft_plan(plan_fw, use_cufftmp, fft_n(1), fft_n(2), &
+                           fft_n(3), fw_type, 'Forward'//label, worksize_fw, &
+                           stat)
+      if (present(stat)) then
+        if (stat /= 0) then
+          ierr = cufftDestroy(plan_bw)
+          return
+        end if
+      end if
     end if
 
-    ! Work out the spectral dimensions in the permuted state
-    dims_glob = mesh%get_global_dims(CELL)
-    dims_loc = mesh%get_dims(CELL)
-    if (poisson_fft%is_100_case .and. mesh%par%nproc > 1) then
-      if (mod(dims_loc(1), mesh%par%nproc_dir(3)) /= 0) then
-        call abort_run('The 100 case on multiple ranks needs the number of x &
-                       &cells to divide by the number of ranks.')
-      end if
+  end subroutine create_fft_plan_pair
+
+  pure function cuda_fft_decomp_reason(bc_code, cdims, nproc_dir) &
+    result(reason)
+    !! The reason the solver cannot run the BC class bc_code on the cell
+    !! dimensions cdims and the decomposition nproc_dir, blank when it can.
+    !! The text is the message the solver init aborts with. Shared by the
+    !! solver init and x3d2-memcheck.
+    implicit none
+
+    integer, intent(in) :: bc_code
+    integer, intent(in) :: cdims(3), nproc_dir(3)
+    character(len=110) :: reason
+
+    integer :: nproc
+
+    reason = ''
+    nproc = product(nproc_dir)
+    if ((bc_code == FFT_BC_010 .or. bc_code == FFT_BC_100 &
+         .or. bc_code == FFT_BC_110) &
+        .and. nproc > 1 .and. (nproc_dir(1) /= 1 .or. nproc_dir(2) /= 1)) then
+      reason = 'The 010, 100 and 110 cases on multiple ranks need a 1D z &
+               &decomposition, nproc_dir must be [1, 1, nproc].'
+    else if (bc_code == FFT_BC_010 .and. nproc > 1 &
+             .and. mod(cdims(2), nproc_dir(3)) /= 0) then
+      reason = 'The 010 case on multiple ranks needs the number of y &
+               &cells to divide by the number of ranks.'
+    else if (bc_code == FFT_BC_100 .and. nproc > 1 &
+             .and. mod(cdims(1), nproc_dir(3)) /= 0) then
+      reason = 'The 100 case on multiple ranks needs the number of x &
+               &cells to divide by the number of ranks.'
+    else if (bc_code == FFT_BC_110 .and. nproc > 1 &
+             .and. (mod(cdims(1), nproc_dir(3)) /= 0 &
+                    .or. mod(cdims(2), nproc_dir(3)) /= 0)) then
+      reason = 'The 110 case on multiple ranks needs the number of x &
+               &and y cells to divide by the number of ranks.'
     end if
-    if (poisson_fft%is_110_case .and. mesh%par%nproc > 1) then
-      if (mod(dims_loc(1), mesh%par%nproc_dir(3)) /= 0 .or. &
-          mod(dims_loc(2), mesh%par%nproc_dir(3)) /= 0) then
-        call abort_run('The 110 case on multiple ranks needs the number of x &
-                       &and y cells to divide by the number of ranks.')
-      end if
-    end if
-    if (poisson_fft%is_100_case) then
+
+  end function cuda_fft_decomp_reason
+
+  pure subroutine cuda_fft_spectral_dims(bc_code, dims_glob, dims_loc, &
+                                         nproc_dir, nrank_dir, n_spec, n_sp_st)
+    !! The size n_spec and the offset n_sp_st of the local spectral pencil in
+    !! the permuted state, for the BC class bc_code on the cell dimensions
+    !! dims_glob and dims_loc, the decomposition nproc_dir and the rank
+    !! position nrank_dir. A BC class the solver does not support gives
+    !! zeros. Shared by the solver init and the x3d2-memcheck estimate.
+    implicit none
+
+    integer, intent(in) :: bc_code
+    integer, intent(in) :: dims_glob(3), dims_loc(3)
+    integer, intent(in) :: nproc_dir(3), nrank_dir(3)
+    integer, intent(out) :: n_spec(3), n_sp_st(3)
+
+    n_spec = 0
+    n_sp_st = 0
+
+    if (bc_code == FFT_BC_100) then
       n_spec(1) = dims_loc(2)/2 + 1
-      n_spec(2) = dims_loc(1)/mesh%par%nproc_dir(3)
+      n_spec(2) = dims_loc(1)/nproc_dir(3)
+      n_spec(3) = dims_glob(3)
 
       n_sp_st(1) = 0
-      n_sp_st(2) = dims_loc(1)/mesh%par%nproc_dir(3)*mesh%par%nrank_dir(3)
+      n_sp_st(2) = dims_loc(1)/nproc_dir(3)*nrank_dir(3)
+      n_sp_st(3) = 0
 
-    else if (poisson_fft%is_110_case) then
+    else if (bc_code == FFT_BC_110) then
       ! R2C Z-transpose: spectral array is (nz/2+1, nx, ny) on 1 rank.
       ! dim1 = Z R2C modes, dim2 = X spectrum, dim3 = Y full spectrum.
       ! On P ranks the cuFFTMp Y-slab transform shuffles the spectral
       ! output to split dim2 (X) instead of leaving it whole, same as the
       ! 100 case's dim2 split.
       n_spec(1) = dims_glob(3)/2 + 1
-      if (mesh%par%nproc > 1) then
-        n_spec(2) = dims_loc(1)/mesh%par%nproc_dir(3)
-        n_sp_st(2) = dims_loc(1)/mesh%par%nproc_dir(3)*mesh%par%nrank_dir(3)
+      if (product(nproc_dir) > 1) then
+        n_spec(2) = dims_loc(1)/nproc_dir(3)
+        n_sp_st(2) = dims_loc(1)/nproc_dir(3)*nrank_dir(3)
       else
         n_spec(2) = dims_loc(1)
         n_sp_st(2) = 0
@@ -321,213 +444,418 @@ contains
       n_sp_st(1) = 0
       n_sp_st(3) = 0
 
-    else if (poisson_fft%is_010_case .or. poisson_fft%is_000_case) then
+    else if (bc_code == FFT_BC_010 .or. bc_code == FFT_BC_000) then
       n_spec(1) = dims_loc(1)/2 + 1
-      n_spec(2) = dims_loc(2)/mesh%par%nproc_dir(3)
+      n_spec(2) = dims_loc(2)/nproc_dir(3)
+      n_spec(3) = dims_glob(3)
 
       n_sp_st(1) = 0
-      n_sp_st(2) = dims_loc(2)/mesh%par%nproc_dir(3)*mesh%par%nrank_dir(3)
-
-    else
-      call abort_run("Unsupported periodicity combination!!")
-    end if
-
-    if (.not. poisson_fft%is_110_case) then
-      n_spec(3) = dims_glob(3)
+      n_sp_st(2) = dims_loc(2)/nproc_dir(3)*nrank_dir(3)
       n_sp_st(3) = 0
     end if
 
-    call poisson_fft%base_init(mesh, xdirps, ydirps, zdirps, n_spec, n_sp_st)
+  end subroutine cuda_fft_spectral_dims
 
-    nx = poisson_fft%nx_glob
-    ny = poisson_fft%ny_glob
-    nz = poisson_fft%nz_glob
+  pure subroutine cuda_fft_plan_setup(bc_code, dims_glob, dims_loc, fft_n, &
+                                      fft_n_loc, fw_type, bw_type)
+    !! The cuFFT plan dimensions and types of a BC class. The 100 case
+    !! transposes X<->Y and runs the FFT on (ny, nx, nz), the 110 case
+    !! transposes to (nz, nx, ny) with R2C along Z, and the 000 and 010 cases
+    !! run it on (nx, ny, nz). fft_n holds the global plan dimensions and
+    !! fft_n_loc the local extents of the first two. Shared by the solver
+    !! init and the x3d2-memcheck probe.
+    implicit none
 
-    ! Determine FFT plan dimensions
-    if (poisson_fft%is_100_case) then
+    integer, intent(in) :: bc_code
+    integer, intent(in) :: dims_glob(3), dims_loc(3)
+    integer, intent(out) :: fft_n(3), fft_n_loc(2)
+    integer, intent(out) :: fw_type, bw_type
+
+    if (bc_code == FFT_BC_100) then
       ! 100: transpose X<->Y, FFT on (ny, nx, nz)
-      fft_n1 = ny; fft_n2 = nx; fft_n3 = nz
-      fft_n1_loc = dims_loc(2); fft_n2_loc = dims_loc(1)
-    else if (poisson_fft%is_110_case) then
+      fft_n = [dims_glob(2), dims_glob(1), dims_glob(3)]
+      fft_n_loc = [dims_loc(2), dims_loc(1)]
+    else if (bc_code == FFT_BC_110) then
       ! 110: transpose to (nz, nx, ny), R2C along Z
-      fft_n1 = nz; fft_n2 = nx; fft_n3 = ny
-      fft_n1_loc = dims_glob(3); fft_n2_loc = dims_loc(1)
+      fft_n = [dims_glob(3), dims_glob(1), dims_glob(2)]
+      fft_n_loc = [dims_glob(3), dims_loc(1)]
     else
       ! 000, 010: FFT on (nx, ny, nz)
-      fft_n1 = nx; fft_n2 = ny; fft_n3 = nz
-      fft_n1_loc = dims_loc(1); fft_n2_loc = dims_loc(2)
+      fft_n = dims_glob
+      fft_n_loc = [dims_loc(1), dims_loc(2)]
     end if
 
     if (is_sp) then
-      fw_plan_type = CUFFT_R2C
-      bw_plan_type = CUFFT_C2R
+      fw_type = CUFFT_R2C
+      bw_type = CUFFT_C2R
     else
-      fw_plan_type = CUFFT_D2Z
-      bw_plan_type = CUFFT_Z2D
+      fw_type = CUFFT_D2Z
+      bw_type = CUFFT_Z2D
     end if
 
-    allocate (poisson_fft%waves_dev(poisson_fft%nx_spec, &
-                                    poisson_fft%ny_spec, &
-                                    poisson_fft%nz_spec))
-    poisson_fft%waves_dev = poisson_fft%waves
+  end subroutine cuda_fft_plan_setup
 
-    ! The 100 and 110 cases pair each dim2 spectral mode with its mirror,
-    ! which cuFFTMp may place on another rank. Slab index r of P owns global
-    ! dim2 modes [r*m + 1, (r + 1)*m] with m = ny_spec, and the mirror of
-    ! that range is slab P - 1 - r shifted up by one plane, so the extra
-    ! plane comes from slab P - r. Both partners are symmetric.
-    if ((poisson_fft%is_100_case .or. poisson_fft%is_110_case) &
-        .and. mesh%par%nproc > 1) then
-      poisson_fft%mirror_slab_rank = mesh%par%nproc_dir(3) - 1 &
-                                     - mesh%par%nrank_dir(3)
-      poisson_fft%mirror_plane_rank = mod(mesh%par%nproc_dir(3) &
-                                          - mesh%par%nrank_dir(3), &
-                                          mesh%par%nproc_dir(3))
+  subroutine create_cuda_poisson_fft(poisson_fft, mesh, xdirps, ydirps, &
+                                     zdirps, lowmem)
+    !! Allocates the solver type of the mesh's boundary condition case and
+    !! initialises it.
+    implicit none
 
-      allocate (poisson_fft%c_mirror_dev(poisson_fft%nx_spec, &
-                                         poisson_fft%ny_spec, &
-                                         poisson_fft%nz_spec))
-      allocate (poisson_fft%c_slab_send_dev(poisson_fft%nx_spec, &
-                                            poisson_fft%ny_spec, &
-                                            poisson_fft%nz_spec))
-      allocate (poisson_fft%c_plane_send_dev(poisson_fft%nx_spec, &
-                                             poisson_fft%nz_spec))
-      allocate (poisson_fft%c_plane_recv_dev(poisson_fft%nx_spec, &
-                                             poisson_fft%nz_spec))
+    class(poisson_fft_t), pointer, intent(out) :: poisson_fft
+    type(mesh_t), target, intent(in) :: mesh
+    type(dirps_t), intent(in) :: xdirps, ydirps, zdirps
+    logical, optional, intent(in) :: lowmem
+
+    select case (poisson_bc_code(mesh%grid%periodic_BC))
+    case ('000')
+      allocate (cuda_poisson_000_t :: poisson_fft)
+    case ('010')
+      allocate (cuda_poisson_010_t :: poisson_fft)
+    case ('100')
+      allocate (cuda_poisson_100_t :: poisson_fft)
+    case ('110')
+      allocate (cuda_poisson_110_t :: poisson_fft)
+    case default
+      call abort_run('Requested BCs are not supported in FFT-based Poisson &
+                     &solver!')
+    end select
+
+    select type (poisson_fft)
+    class is (cuda_poisson_fft_t)
+      call poisson_fft%init(mesh, xdirps, ydirps, zdirps, lowmem)
+    end select
+
+  end subroutine create_cuda_poisson_fft
+
+  subroutine init_cuda(self, mesh, xdirps, ydirps, zdirps, lowmem)
+    implicit none
+
+    class(cuda_poisson_fft_t) :: self
+    type(mesh_t), target, intent(in) :: mesh
+    type(dirps_t), intent(in) :: xdirps, ydirps, zdirps
+    logical, optional, intent(in) :: lowmem
+
+    integer :: nx, ny, nz
+
+    character(len=110) :: reason
+
+    integer :: dims_glob(3), dims_loc(3), n_spec(3), n_sp_st(3)
+    integer :: n_blk(3), blk_st(3)
+    integer :: fft_n(3), fft_n_loc(2)
+    integer :: fw_plan_type, bw_plan_type
+    integer :: fft_bc
+
+    ! Set ahead of everything else, base_init reads it
+    self%bc_code = poisson_bc_code(mesh%grid%periodic_BC)
+
+    ! The decomposition checks, the spectral extents and the plan setup are
+    ! the helpers x3d2-memcheck shares, so the estimate follows the solver.
+    ! They take the case from self%bc_code, not from mesh%grid%bc_code, so
+    ! the solver classifies the BCs in one place.
+    fft_bc = fft_bc_class(self%bc_code)
+
+    ! 1D decomposition along Z in real domain, and along Y in spectral space
+    if (mesh%par%nproc_dir(2) /= 1) &
+      call log_warn('nproc_dir in y-dir must be 1')
+    dims_glob = mesh%get_global_dims(CELL)
+    dims_loc = mesh%get_dims(CELL)
+    reason = cuda_fft_decomp_reason(fft_bc, dims_loc, &
+                                    mesh%par%nproc_dir)
+    if (len_trim(reason) > 0) call abort_run(trim(reason))
+
+    ! Work out the spectral dimensions in the permuted state
+    call cuda_fft_spectral_dims(fft_bc, dims_glob, dims_loc, &
+                                mesh%par%nproc_dir, mesh%par%nrank_dir, &
+                                n_spec, n_sp_st)
+
+    ! On multiple ranks the 010 case moves the spectral field to z-slabs to
+    ! solve the stretched y system, and the tests check only top-bottom
+    ! stretching there. Stop ahead of base_init, which builds the stretching
+    ! matrices.
+    if (self%bc_code == '010' .and. mesh%geo%stretched(2) &
+        .and. mesh%par%nproc > 1 &
+        .and. trim(mesh%geo%stretching(2)) /= 'top-bottom') then
+      call abort_run('The 010 case on multiple ranks supports only &
+                     &top-bottom y stretching.')
     end if
 
-    allocate (poisson_fft%ax_dev(nx), poisson_fft%bx_dev(nx))
-    allocate (poisson_fft%ay_dev(ny), poisson_fft%by_dev(ny))
-    allocate (poisson_fft%az_dev(nz), poisson_fft%bz_dev(nz))
-    poisson_fft%ax_dev = poisson_fft%ax; poisson_fft%bx_dev = poisson_fft%bx
-    poisson_fft%ay_dev = poisson_fft%ay; poisson_fft%by_dev = poisson_fft%by
-    poisson_fft%az_dev = poisson_fft%az; poisson_fft%bz_dev = poisson_fft%bz
+    ! The z-slabs of the stretched y solve split z evenly over the ranks
+    if (self%bc_code == '010' .and. mesh%geo%stretched(2) &
+        .and. mesh%par%nproc > 1 &
+        .and. mod(dims_glob(3), mesh%par%nproc) /= 0) then
+      call abort_run('The 010 case with y stretching on multiple ranks &
+                     &needs the number of z cells to divide by the number &
+                     &of ranks.')
+    end if
+
+    ! The stretching matrices cover the local spectral pencil. On multiple
+    ! ranks they cover the z-slab (nx/2+1, ny, nz/nproc) of this rank, where
+    ! the stretched y solve runs.
+    n_blk = n_spec
+    blk_st = n_sp_st
+    if (mesh%par%nproc > 1) then
+      n_blk = [n_spec(1), dims_glob(2), dims_glob(3)/mesh%par%nproc]
+      blk_st = [0, 0, n_blk(3)*mesh%par%nrank]
+    end if
+
+    call self%base_init(mesh, xdirps, ydirps, zdirps, n_spec, n_sp_st, &
+                        n_blk, blk_st)
+
+    nx = self%nx_glob
+    ny = self%ny_glob
+    nz = self%nz_glob
+
+    ! Determine FFT plan dimensions and types
+    call cuda_fft_plan_setup(fft_bc, dims_glob, dims_loc, fft_n, &
+                             fft_n_loc, fw_plan_type, bw_plan_type)
+
+    allocate (self%waves_dev(self%nx_spec, self%ny_spec, self%nz_spec))
+    self%waves_dev = self%waves
+
+    allocate (self%ax_dev(nx), self%bx_dev(nx))
+    allocate (self%ay_dev(ny), self%by_dev(ny))
+    allocate (self%az_dev(nz), self%bz_dev(nz))
+    self%ax_dev = self%ax; self%bx_dev = self%bx
+    self%ay_dev = self%ay; self%by_dev = self%by
+    self%az_dev = self%az; self%bz_dev = self%bz
 
     ! will store the a matrix coefficients in GPU memory if (.not. lowmem)
     ! and do a device-to-device copy at each iter. Otherwise copy from host.
     ! lowmem is .false. by default
-    if (present(lowmem)) poisson_fft%lowmem = lowmem
+    if (present(lowmem)) self%lowmem = lowmem
 
     ! Try cuFFTMp first, with automatic fallback to cuFFT if not supported
-    poisson_fft%use_cufftmp = .true.
+    self%use_cufftmp = .true.
 
-    ! if stretching in y is 'centred' or 'top-bottom'
-    if (poisson_fft%stretched_y .and. poisson_fft%stretched_y_sym) then
-      poisson_fft%a_odd_re_dev = poisson_fft%a_odd_re
-      poisson_fft%a_odd_im_dev = poisson_fft%a_odd_im
-      poisson_fft%a_even_re_dev = poisson_fft%a_even_re
-      poisson_fft%a_even_im_dev = poisson_fft%a_even_im
-      if (.not. poisson_fft%lowmem) then
-        poisson_fft%store_a_odd_re_dev = poisson_fft%a_odd_re
-        poisson_fft%store_a_odd_im_dev = poisson_fft%a_odd_im
-        poisson_fft%store_a_even_re_dev = poisson_fft%a_even_re
-        poisson_fft%store_a_even_im_dev = poisson_fft%a_even_im
-      end if
-    !! if stretching in y is 'bottom'
-    else if (poisson_fft%stretched_y .and. &
-             (.not. poisson_fft%stretched_y_sym)) then
-      poisson_fft%a_re_dev = poisson_fft%a_re
-      poisson_fft%a_im_dev = poisson_fft%a_im
-      if (.not. poisson_fft%lowmem) then
-        poisson_fft%store_a_re_dev = poisson_fft%a_re
-        poisson_fft%store_a_im_dev = poisson_fft%a_im
-      end if
-    end if
+    ! init_case must run before create_plans: the 010, 100 and 110 cases set up
+    ! their device state there.
+    call self%init_case(mesh)
 
-    if (poisson_fft%is_110_case) then
-      ! 110: R2C with Z-transpose. A single rank keeps the plain cuFFT path
-      ! below unchanged; on multiple ranks cuFFTMp distributes the (nz, nx,
-      ! ny) transform, and the physical Z-slab is redistributed into its
-      ! Y-slab input through an MPI_Alltoall (see redistribute_110_to_yslab).
-      poisson_fft%use_cufftmp = mesh%par%nproc > 1
-
-      call create_fft_plan(poisson_fft%plan3D_fw, poisson_fft%use_cufftmp, &
-                           fft_n1, fft_n2, fft_n3, fw_plan_type, 'Forward 110')
-      call create_fft_plan(poisson_fft%plan3D_bw, poisson_fft%use_cufftmp, &
-                           fft_n1, fft_n2, fft_n3, bw_plan_type, &
-                           'Backward 110')
-
-      if (poisson_fft%use_cufftmp) then
-        ierr = cufftXtMalloc(poisson_fft%plan3D_fw, poisson_fft%xtdesc, &
-                             CUFFT_XT_FORMAT_INPLACE)
-        call check_cufft(ierr, 'cufftXtMalloc')
-
-        ! All-to-all buffers between the physical Z-slab (nx, ny, nz_l) and
-        ! the cuFFTMp Y-slab (nz, nx, ny_l), sized (nz_l, nx, ny_l, nproc).
-        allocate (poisson_fft%r_a2a_send_dev( &
-                  poisson_fft%nz_loc, nx, ny/mesh%par%nproc_dir(3), &
-                  mesh%par%nproc_dir(3)))
-        allocate (poisson_fft%r_a2a_recv_dev( &
-                  poisson_fft%nz_loc, nx, ny/mesh%par%nproc_dir(3), &
-                  mesh%par%nproc_dir(3)))
-
-        call log_info('Using cuFFTMp R2C (Z-transpose) for FFT (110 case)')
-      else
-        ! Transposed real workspace (nz, nx, ny)
-        allocate (poisson_fft%r_dev_110(nz, nx, ny))
-        ! Spectral complex workspace (nz/2+1, nx, ny)
-        allocate (poisson_fft%c_dev(poisson_fft%nx_spec, &
-                                    poisson_fft%ny_spec, &
-                                    poisson_fft%nz_spec))
-
-        call log_info('Using cuFFT R2C (Z-transpose) for FFT (110 case)')
-      end if
-
-    else
-      ! All other cases: standard R2C/C2R with cuFFTMp fallback
-      call create_fft_plan(poisson_fft%plan3D_fw, poisson_fft%use_cufftmp, &
-                           fft_n1, fft_n2, fft_n3, fw_plan_type, 'Forward')
-      fw_was_cufftmp = poisson_fft%use_cufftmp
-
-      ! Create backward FFT plan with automatic cuFFTMp detection/fallback
-      call create_fft_plan(poisson_fft%plan3D_bw, poisson_fft%use_cufftmp, &
-                           fft_n1, fft_n2, fft_n3, bw_plan_type, 'Backward')
-
-      ! If backward plan forced fallback, rebuild forward plan too
-      if (fw_was_cufftmp .and. (.not. poisson_fft%use_cufftmp)) then
-        ierr = cufftDestroy(poisson_fft%plan3D_fw)
-        call create_fft_plan(poisson_fft%plan3D_fw, poisson_fft%use_cufftmp, &
-                             fft_n1, fft_n2, fft_n3, fw_plan_type, 'Forward')
-      end if
-
-      ! Allocate storage - cuFFTMp uses xtdesc, cuFFT uses c_dev
-      if (poisson_fft%use_cufftmp) then
-        ierr = cufftXtMalloc(poisson_fft%plan3D_fw, poisson_fft%xtdesc, &
-                             CUFFT_XT_FORMAT_INPLACE)
-        call check_cufft(ierr, 'cufftXtMalloc')
-      else
-        ! For R2C: nx_spec is nx/2+1 (or ny/2+1 for 100 case)
-        allocate (poisson_fft%c_dev(poisson_fft%nx_spec, &
-                                    poisson_fft%ny_spec, &
-                                    poisson_fft%nz_spec))
-        allocate (poisson_fft%r_dev(fft_n1_loc, fft_n2_loc, &
-                                    poisson_fft%nz_loc))
-      end if
-
-      if (poisson_fft%use_cufftmp) then
-        call log_info('Using cuFFTMp for FFT')
-      else
-        call log_info('Using cuFFT for FFT')
-      end if
-    end if
+    call self%create_plans(mesh, fft_n, fft_n_loc, fw_plan_type, &
+                           bw_plan_type)
 
     ! use_cufftmp is only settled once create_fft_plan has run, because plain
     ! cuFFT is a fallback taken inside it, so unlike the decomposition checks
-    ! above this one cannot move ahead of the plans.
-    if ((poisson_fft%is_100_case .or. poisson_fft%is_110_case) &
-        .and. mesh%par%nproc > 1 .and. (.not. poisson_fft%use_cufftmp)) then
-      call abort_run('The 100 and 110 cases on multiple ranks need cuFFTMp, &
-                     &plain cuFFT cannot decompose the transform.')
+    ! above this one cannot move ahead of the plans. The 010, 100 and 110
+    ! cases need cuFFTMp on more than one rank.
+    if ((self%bc_code == '010' .or. self%bc_code == '100' &
+         .or. self%bc_code == '110') &
+        .and. mesh%par%nproc > 1 .and. (.not. self%use_cufftmp)) then
+      call abort_run('The 010, 100 and 110 cases on multiple ranks need &
+                     &cuFFTMp, plain cuFFT cannot decompose the transform.')
     end if
 
-  end subroutine init_cuda_poisson_fft_t
+  end subroutine init_cuda
+
+  subroutine init_case(self, mesh)
+    !! Sets up the device state of the case ahead of the FFT plans. The 000
+    !! case needs nothing beyond the shared state.
+    implicit none
+
+    class(cuda_poisson_fft_t) :: self
+    type(mesh_t), intent(in) :: mesh
+  end subroutine init_case
+
+  subroutine init_case_010(self, mesh)
+    implicit none
+
+    class(cuda_poisson_010_t) :: self
+    type(mesh_t), intent(in) :: mesh
+
+    integer :: nz_l
+
+    ! The stretched solve on multiple ranks uses the z-slabs and the all to
+    ! all buffers below, never the dim2 mirror.
+    if (.not. (self%stretched_y .and. mesh%par%nproc > 1)) then
+      call self%init_dim2_mirror(mesh)
+    end if
+
+    if (self%stretched_y .and. mesh%par%nproc > 1) then
+      nz_l = self%nz_glob/mesh%par%nproc
+      allocate (self%c_zslab_dev(self%nx_spec, self%ny_glob, nz_l))
+      allocate (self%r_a2a_send_dev(nz_l, 2*self%nx_spec, self%ny_spec, &
+                                    mesh%par%nproc))
+      allocate (self%r_a2a_recv_dev(nz_l, 2*self%nx_spec, self%ny_spec, &
+                                    mesh%par%nproc))
+    end if
+
+    ! if stretching in y is 'centred' or 'top-bottom'
+    if (self%stretched_y .and. self%stretched_y_sym) then
+      self%a_odd_re_dev = self%a_odd_re
+      self%a_odd_im_dev = self%a_odd_im
+      self%a_even_re_dev = self%a_even_re
+      self%a_even_im_dev = self%a_even_im
+      if (.not. self%lowmem) then
+        self%store_a_odd_re_dev = self%a_odd_re
+        self%store_a_odd_im_dev = self%a_odd_im
+        self%store_a_even_re_dev = self%a_even_re
+        self%store_a_even_im_dev = self%a_even_im
+      end if
+    !! if stretching in y is 'bottom'
+    else if (self%stretched_y .and. (.not. self%stretched_y_sym)) then
+      self%a_re_dev = self%a_re
+      self%a_im_dev = self%a_im
+      if (.not. self%lowmem) then
+        self%store_a_re_dev = self%a_re
+        self%store_a_im_dev = self%a_im
+      end if
+    end if
+
+  end subroutine init_case_010
+
+  subroutine init_case_100(self, mesh)
+    implicit none
+
+    class(cuda_poisson_100_t) :: self
+    type(mesh_t), intent(in) :: mesh
+
+    call self%init_dim2_mirror(mesh)
+
+  end subroutine init_case_100
+
+  subroutine init_case_110(self, mesh)
+    implicit none
+
+    class(cuda_poisson_110_t) :: self
+    type(mesh_t), intent(in) :: mesh
+
+    call self%init_dim2_mirror(mesh)
+
+  end subroutine init_case_110
+
+  subroutine init_dim2_mirror(self, mesh)
+    !! The 010, 100 and 110 cases pair each dim2 spectral mode with its mirror,
+    !! which cuFFTMp may place on another rank. Slab index r of P owns global
+    !! dim2 modes [r*m + 1, (r + 1)*m] with m = ny_spec, and the mirror of
+    !! that range is slab P - 1 - r shifted up by one plane, so the extra
+    !! plane comes from slab P - r. Both partners are symmetric. A single
+    !! rank holds every partner itself and allocates nothing.
+    implicit none
+
+    class(cuda_poisson_fft_t) :: self
+    type(mesh_t), intent(in) :: mesh
+
+    if (mesh%par%nproc == 1) return
+
+    self%mirror_slab_rank = mesh%par%nproc_dir(3) - 1 - mesh%par%nrank_dir(3)
+    self%mirror_plane_rank = mod(mesh%par%nproc_dir(3) &
+                                 - mesh%par%nrank_dir(3), &
+                                 mesh%par%nproc_dir(3))
+
+    allocate (self%c_mirror_dev(self%nx_spec, self%ny_spec, self%nz_spec))
+    allocate (self%c_slab_send_dev(self%nx_spec, self%ny_spec, self%nz_spec))
+    allocate (self%c_plane_send_dev(self%nx_spec, self%nz_spec))
+    allocate (self%c_plane_recv_dev(self%nx_spec, self%nz_spec))
+
+  end subroutine init_dim2_mirror
+
+  subroutine create_plans(self, mesh, fft_n, fft_n_loc, fw_plan_type, &
+                          bw_plan_type)
+    !! Standard R2C/C2R plans on the grid permuted into the spectral layout,
+    !! with cuFFTMp fallback. This serves the 000, 010 and 100 cases. fft_n
+    !! and fft_n_loc are the plan dimensions from cuda_fft_plan_setup.
+    implicit none
+
+    class(cuda_poisson_fft_t) :: self
+    type(mesh_t), intent(in) :: mesh
+    integer, intent(in) :: fft_n(3), fft_n_loc(2)
+    integer, intent(in) :: fw_plan_type, bw_plan_type
+
+    integer :: ierr
+
+    call create_fft_plan_pair(self%plan3D_fw, self%plan3D_bw, &
+                              self%use_cufftmp, fft_n, &
+                              fw_plan_type, bw_plan_type, '')
+
+    ! Allocate storage - cuFFTMp uses xtdesc, cuFFT uses c_dev
+    if (self%use_cufftmp) then
+      ierr = cufftXtMalloc(self%plan3D_fw, self%xtdesc, &
+                           CUFFT_XT_FORMAT_INPLACE)
+      call check_cufft(ierr, 'cufftXtMalloc')
+    else
+      ! For R2C: nx_spec is nx/2+1 (or ny/2+1 for 100 case)
+      allocate (self%c_dev(self%nx_spec, self%ny_spec, self%nz_spec))
+      allocate (self%r_dev(fft_n_loc(1), fft_n_loc(2), self%nz_loc))
+    end if
+
+    if (self%use_cufftmp) then
+      call log_info('Using cuFFTMp for FFT')
+    else
+      call log_info('Using cuFFT for FFT')
+    end if
+
+  end subroutine create_plans
+
+  subroutine create_plans_110(self, mesh, fft_n, fft_n_loc, fw_plan_type, &
+                              bw_plan_type)
+    !! R2C with Z-transpose, on (nz, nx, ny). A single rank keeps the plain
+    !! cuFFT path; on multiple ranks cuFFTMp distributes the transform, and
+    !! the physical Z-slab is redistributed into its Y-slab input through an
+    !! MPI_Alltoall (see redistribute_110_to_yslab).
+    implicit none
+
+    class(cuda_poisson_110_t) :: self
+    type(mesh_t), intent(in) :: mesh
+    integer, intent(in) :: fft_n(3), fft_n_loc(2)
+    integer, intent(in) :: fw_plan_type, bw_plan_type
+
+    integer :: ierr, nx, ny, nz
+
+    nx = self%nx_glob
+    ny = self%ny_glob
+    nz = self%nz_glob
+
+    self%use_cufftmp = mesh%par%nproc > 1
+
+    call create_fft_plan_pair(self%plan3D_fw, self%plan3D_bw, &
+                              self%use_cufftmp, fft_n, &
+                              fw_plan_type, bw_plan_type, ' 110')
+
+    if (self%use_cufftmp) then
+      ierr = cufftXtMalloc(self%plan3D_fw, self%xtdesc, &
+                           CUFFT_XT_FORMAT_INPLACE)
+      call check_cufft(ierr, 'cufftXtMalloc')
+
+      ! All-to-all buffers between the physical Z-slab (nx, ny, nz_l) and
+      ! the cuFFTMp Y-slab (nz, nx, ny_l), sized (nz_l, nx, ny_l, nproc).
+      allocate (self%r_a2a_send_dev(self%nz_loc, nx, &
+                                    ny/mesh%par%nproc_dir(3), &
+                                    mesh%par%nproc_dir(3)))
+      allocate (self%r_a2a_recv_dev(self%nz_loc, nx, &
+                                    ny/mesh%par%nproc_dir(3), &
+                                    mesh%par%nproc_dir(3)))
+
+      call log_info('Using cuFFTMp R2C (Z-transpose) for FFT (110 case)')
+    else
+      ! Transposed real workspace (nz, nx, ny)
+      allocate (self%r_dev_110(nz, nx, ny))
+      ! Spectral complex workspace (nz/2+1, nx, ny)
+      allocate (self%c_dev(self%nx_spec, self%ny_spec, self%nz_spec))
+
+      call log_info('Using cuFFT R2C (Z-transpose) for FFT (110 case)')
+    end if
+
+  end subroutine create_plans_110
+
+  subroutine solve_poisson_000_cuda(self, f, temp)
+    !! The 000 case has nothing to reorder, so it transforms f in place.
+    implicit none
+
+    class(cuda_poisson_000_t) :: self
+    class(field_t), intent(inout) :: f, temp
+
+    call self%fft_forward(f)
+    call self%fft_postprocess
+    call self%fft_backward(f)
+
+  end subroutine solve_poisson_000_cuda
 
   subroutine yslab_view_110(self, d_dev)
     !! Points d_dev at the cuFFTMp Y-slab real view (2*(nz/2+1), nx, ny_l)
     !! of the descriptor allocation.
     implicit none
 
-    class(cuda_poisson_fft_t), intent(in) :: self
+    class(cuda_poisson_110_t), intent(in) :: self
     real(dp), device, pointer, dimension(:, :, :), intent(out) :: d_dev
 
     type(cudaXtDesc), pointer :: descriptor
@@ -544,7 +872,7 @@ contains
     !! Forward FFT for 110 case: transpose (nx,ny,nz)->(nz,nx,ny) then R2C
     implicit none
 
-    class(cuda_poisson_fft_t) :: self
+    class(cuda_poisson_110_t) :: self
     class(field_t), intent(in) :: f
 
     real(dp), device, pointer :: padded_dev(:, :, :), d_dev(:, :, :)
@@ -593,7 +921,7 @@ contains
     !! Backward FFT for 110 case: C2R then transpose (nz,nx,ny)->(nx,ny,nz)
     implicit none
 
-    class(cuda_poisson_fft_t) :: self
+    class(cuda_poisson_110_t) :: self
     class(field_t), intent(inout) :: f
 
     real(dp), device, pointer :: padded_dev(:, :, :), d_dev(:, :, :)
@@ -643,8 +971,8 @@ contains
   end subroutine fft_backward_110_cuda
 
   subroutine redistribution_launch_config(ny_l, nz_l, blocks, threads)
-    !! Launch configuration shared by the four pack and unpack kernels of the
-    !! 110 slab redistribution.
+    !! Launch configuration shared by the pack and unpack kernels of the
+    !! 110 and the stretched 010 slab redistribution.
     implicit none
 
     integer, intent(in) :: ny_l, nz_l
@@ -657,46 +985,41 @@ contains
     threads = dim3(tpb, 1, 1)
   end subroutine redistribution_launch_config
 
-  subroutine redistribution_alltoall(self, ny_l, slab)
-    !! Syncs the device, then swaps the packed 110 slab buffers between all
-    !! ranks. The slab text ('Y' or 'Z') names the target in the failure
-    !! message.
+  subroutine redistribution_alltoall(self, count, slab)
+    !! Syncs the device, then swaps the packed slab buffers between all
+    !! ranks, count reals per rank pair. The slab text ('Y' or 'Z') names the
+    !! target in the failure message.
     implicit none
 
     class(cuda_poisson_fft_t) :: self
-    integer, intent(in) :: ny_l
+    integer, intent(in) :: count
     character(len=*), intent(in) :: slab
 
-    integer :: nx, nz_l, count, ierr_mpi
-
-    nx = self%nx_glob
-    nz_l = self%nz_loc
+    integer :: ierr_mpi
 
     ! Ordinary device memory, but still owed a sync before MPI reads it, for
     ! the same reason as the dim2 mirror exchange (see exchange_dim2_mirror).
-    call sync_or_abort('110 slab redistribution')
-
-    count = nz_l*nx*ny_l
+    call sync_or_abort('slab redistribution')
 
 #ifdef MPI
     call MPI_Alltoall(self%r_a2a_send_dev, count, MPI_X3D2_DP, &
                       self%r_a2a_recv_dev, count, MPI_X3D2_DP, &
                       MPI_COMM_WORLD, ierr_mpi)
 #else
-    call abort_run('The 110 slab redistribution needs more than one rank, but &
+    call abort_run('The slab redistribution needs more than one rank, but &
                    &this build was configured without MPI')
 #endif
-    call check_mpi(ierr_mpi, 'The 110 slab redistribution to the ' &
+    call check_mpi(ierr_mpi, 'The slab redistribution to the ' &
                    //slab//'-slab')
   end subroutine redistribution_alltoall
 
   subroutine redistribute_110_to_yslab(self, zslab, yslab)
     !! Redistributes the 110 field from the physical Z-slab (nx, ny, nz_l)
     !! to the cuFFTMp Y-slab real view (2*(nz/2+1), nx, ny_l), ahead of the
-    !! forward transform. See the comment above pack_110_xyz_to_yslab.
+    !! forward transform. See the comment above pack_zslab_to_alltoall.
     implicit none
 
-    class(cuda_poisson_fft_t) :: self
+    class(cuda_poisson_110_t) :: self
     real(dp), device, dimension(:, :, :), intent(in) :: zslab
     real(dp), device, dimension(:, :, :), intent(inout) :: yslab
 
@@ -710,11 +1033,11 @@ contains
 
     call redistribution_launch_config(ny_l, nz_l, blocks, threads)
 
-    call pack_110_xyz_to_yslab<<<blocks, threads>>>( & !&
+    call pack_zslab_to_alltoall<<<blocks, threads>>>( & !&
       self%r_a2a_send_dev, zslab, nx, ny_l, nz_l, nproc &
       )
 
-    call redistribution_alltoall(self, ny_l, 'Y')
+    call redistribution_alltoall(self, nz_l*nx*ny_l, 'Y')
 
     call unpack_110_yslab<<<blocks, threads>>>( & !&
       yslab, self%r_a2a_recv_dev, nx, ny_l, nz_l, nproc &
@@ -726,7 +1049,7 @@ contains
     !! Inverse of redistribute_110_to_yslab, after the backward transform.
     implicit none
 
-    class(cuda_poisson_fft_t) :: self
+    class(cuda_poisson_110_t) :: self
     real(dp), device, dimension(:, :, :), intent(in) :: yslab
     real(dp), device, dimension(:, :, :), intent(inout) :: zslab
 
@@ -744,13 +1067,75 @@ contains
       self%r_a2a_send_dev, yslab, nx, ny_l, nz_l, nproc &
       )
 
-    call redistribution_alltoall(self, ny_l, 'Z')
+    call redistribution_alltoall(self, nz_l*nx*ny_l, 'Z')
 
-    call unpack_110_yslab_to_xyz<<<blocks, threads>>>( & !&
+    call unpack_alltoall_to_zslab<<<blocks, threads>>>( & !&
       zslab, self%r_a2a_recv_dev, nx, ny_l, nz_l, nproc &
       )
 
   end subroutine redistribute_110_to_zslab
+
+  subroutine redistribute_010_to_zslab(self, yslab, zslab)
+    !! Redistributes the stretched 010 spectral field from the cuFFTMp
+    !! Y-slab real view (2*nx_spec, ny_l, nz) to the Z-slab
+    !! (2*nx_spec, ny, nz_l), ahead of the stretched y solve.
+    implicit none
+
+    class(cuda_poisson_010_t) :: self
+    real(dp), device, dimension(:, :, :), intent(in) :: yslab
+    real(dp), device, dimension(:, :, :), intent(inout) :: zslab
+
+    type(dim3) :: blocks, threads
+    integer :: nx, ny_l, nz_l, nproc
+
+    nx = 2*self%nx_spec
+    ny_l = self%ny_spec
+    nproc = self%mesh%par%nproc
+    nz_l = self%nz_glob/nproc
+
+    call redistribution_launch_config(ny_l, nz_l, blocks, threads)
+
+    call pack_010_yslab<<<blocks, threads>>>( & !&
+      self%r_a2a_send_dev, yslab, nx, ny_l, nz_l, nproc &
+      )
+
+    call redistribution_alltoall(self, nz_l*nx*ny_l, 'Z')
+
+    call unpack_alltoall_to_zslab<<<blocks, threads>>>( & !&
+      zslab, self%r_a2a_recv_dev, nx, ny_l, nz_l, nproc &
+      )
+
+  end subroutine redistribute_010_to_zslab
+
+  subroutine redistribute_010_to_yslab(self, zslab, yslab)
+    !! Inverse of redistribute_010_to_zslab, after the stretched y solve.
+    implicit none
+
+    class(cuda_poisson_010_t) :: self
+    real(dp), device, dimension(:, :, :), intent(in) :: zslab
+    real(dp), device, dimension(:, :, :), intent(inout) :: yslab
+
+    type(dim3) :: blocks, threads
+    integer :: nx, ny_l, nz_l, nproc
+
+    nx = 2*self%nx_spec
+    ny_l = self%ny_spec
+    nproc = self%mesh%par%nproc
+    nz_l = self%nz_glob/nproc
+
+    call redistribution_launch_config(ny_l, nz_l, blocks, threads)
+
+    call pack_zslab_to_alltoall<<<blocks, threads>>>( & !&
+      self%r_a2a_send_dev, zslab, nx, ny_l, nz_l, nproc &
+      )
+
+    call redistribution_alltoall(self, nz_l*nx*ny_l, 'Y')
+
+    call unpack_010_yslab<<<blocks, threads>>>( & !&
+      yslab, self%r_a2a_recv_dev, nx, ny_l, nz_l, nproc &
+      )
+
+  end subroutine redistribute_010_to_yslab
 
   subroutine fft_forward_100_cuda(self, f)
   !! Forward FFT for non-periodic-X case
@@ -758,7 +1143,7 @@ contains
   !! "Y" direction in the transposed space, then use the same FFT approach as 010
     implicit none
 
-    class(cuda_poisson_fft_t) :: self
+    class(cuda_poisson_100_t) :: self
     class(field_t), intent(in) :: f
 
     real(dp), device, pointer :: padded_dev(:, :, :), d_dev(:, :, :)
@@ -820,7 +1205,7 @@ contains
   subroutine fft_backward_100_cuda(self, f)
     implicit none
 
-    class(cuda_poisson_fft_t) :: self
+    class(cuda_poisson_100_t) :: self
     class(field_t), intent(inout) :: f
 
     real(dp), device, pointer :: padded_dev(:, :, :), d_dev(:, :, :)
@@ -1003,7 +1388,7 @@ contains
   subroutine fft_postprocess_000_cuda(self)
     implicit none
 
-    class(cuda_poisson_fft_t) :: self
+    class(cuda_poisson_000_t) :: self
 
     type(cudaXtDesc), pointer :: descriptor
 
@@ -1042,7 +1427,7 @@ contains
   subroutine fft_postprocess_100_cuda(self)
     implicit none
 
-    class(cuda_poisson_fft_t) :: self
+    class(cuda_poisson_100_t) :: self
 
     type(cudaXtDesc), pointer :: descriptor
 
@@ -1090,39 +1475,63 @@ contains
     ! mirror exchange, so the same work is staged across three launches.
     ! The same argument swap as above applies.
 
-    ! Stage 1: normalisation, then the Y (R2C) and Z postprocess
-    call process_spectral_100_fw<<<blocks, threads>>>( & !&
+    call postprocess_dim2_mirror(self, c_dev, blocks, threads, &
+                                 self%ny_glob, self%nx_glob, self%nz_glob, &  ! SWAP nx <-> ny
+                                 self%ay_dev, self%by_dev, &  ! dim1, periodic Y
+                                 self%ax_dev, self%bx_dev, &  ! dim2, non-periodic X
+                                 self%az_dev, self%bz_dev)  ! dim3, Z
+  end subroutine fft_postprocess_100_cuda
+
+  subroutine postprocess_dim2_mirror(self, c_dev, blocks, threads, &
+                                     n1_glob, n2_glob, n3_glob, &
+                                     a1_dev, b1_dev, a2_dev, b2_dev, &
+                                     a3_dev, b3_dev)
+    !! Staged spectral postprocess for a paired split along dim2, which
+    !! reaches its partner modes through a mirror exchange. The dim1, dim2
+    !! and dim3 sizes and coefficients follow the staged kernels, so the 010
+    !! case passes x, y, z and the 100 case passes y, x, z.
+    implicit none
+
+    class(cuda_poisson_fft_t) :: self
+    complex(dp), device, dimension(:, :, :), pointer, intent(inout) :: c_dev
+    type(dim3), intent(in) :: blocks, threads
+    integer, intent(in) :: n1_glob, n2_glob, n3_glob
+    real(dp), device, dimension(:), intent(in) :: a1_dev, b1_dev, a2_dev, &
+                                                  b2_dev, a3_dev, b3_dev
+
+    ! Stage 1: normalisation, then the dim1 (R2C) and dim3 postprocess
+    call process_spectral_fw<<<blocks, threads>>>( & !&
       c_dev, self%nx_spec, self%ny_spec, &
-      self%ny_glob, self%nx_glob, self%nz_glob, &  ! SWAP nx <-> ny
-      self%ay_dev, self%by_dev, &  ! dim1 uses Y coefficients
-      self%az_dev, self%bz_dev &   ! dim3 uses Z coefficients
+      n1_glob, n2_glob, n3_glob, &
+      a1_dev, b1_dev, &  ! dim1 coefficients
+      a3_dev, b3_dev &   ! dim3 coefficients
       )
 
-    ! Fetch the X pairing partners that live on other ranks
+    ! Fetch the dim2 pairing partners that live on other ranks
     call self%exchange_dim2_mirror(c_dev)
 
-    ! Stage 2: X paired split (forward), then the Poisson solve
-    call process_spectral_100_pair_fw<<<blocks, threads>>>( & !&
+    ! Stage 2: dim2 paired split (forward), then the Poisson solve
+    call process_spectral_pair_fw<<<blocks, threads>>>( & !&
       c_dev, self%c_mirror_dev, self%c_plane_recv_dev, self%waves_dev, &
       self%nx_spec, self%ny_spec, self%sp_st(2), &  ! dims and dim2 offset
-      self%ny_glob, self%nz_glob, &  ! SWAP nx <-> ny
-      self%ax_dev, self%bx_dev &  ! dim2 uses X coefficients
+      n1_glob, n3_glob, &
+      a2_dev, b2_dev &  ! dim2 coefficients
       )
 
     ! Stage 2 rewrote every mode, so the mirror is stale and is refreshed
     call self%exchange_dim2_mirror(c_dev)
 
-    ! Stage 3: X paired recombination (backward), then the Y and Z
+    ! Stage 3: dim2 paired recombination (backward), then the dim1 and dim3
     ! postprocess
-    call process_spectral_100_pair_bw<<<blocks, threads>>>( & !&
+    call process_spectral_pair_bw<<<blocks, threads>>>( & !&
       c_dev, self%c_mirror_dev, self%c_plane_recv_dev, &
       self%nx_spec, self%ny_spec, self%sp_st(2), &  ! dims and dim2 offset
-      self%ny_glob, self%nz_glob, &  ! SWAP nx <-> ny
-      self%ay_dev, self%by_dev, &  ! dim1 uses Y coefficients
-      self%ax_dev, self%bx_dev, &  ! dim2 uses X coefficients
-      self%az_dev, self%bz_dev &   ! dim3 uses Z coefficients
+      n1_glob, n3_glob, &
+      a1_dev, b1_dev, &  ! dim1 coefficients
+      a2_dev, b2_dev, &  ! dim2 coefficients
+      a3_dev, b3_dev &   ! dim3 coefficients
       )
-  end subroutine fft_postprocess_100_cuda
+  end subroutine postprocess_dim2_mirror
 
   subroutine exchange_dim2_mirror(self, c_dev)
     !! Fills c_mirror_dev and c_plane_recv_dev with the dim2 mirror of the
@@ -1217,13 +1626,15 @@ contains
   subroutine fft_postprocess_010_cuda(self)
     implicit none
 
-    class(cuda_poisson_fft_t) :: self
+    class(cuda_poisson_010_t) :: self
 
     type(cudaXtDesc), pointer :: descriptor
 
     complex(dp), device, dimension(:, :, :), pointer :: c_dev
+    real(dp), device, dimension(:, :, :), pointer :: r_yslab, r_zslab
     type(dim3) :: blocks, threads
     integer :: tsize, off, inc
+    integer :: ny_solve, y_st_solve, z_off, nz_l
 
     ! tsize is different than SZ, because here we work on a 3D Cartesian
     ! data structure, and free to specify any suitable thread/block size.
@@ -1244,16 +1655,52 @@ contains
     end if
 
     ! Postprocess div_u in spectral space
-    if (.not. self%stretched_y) then
+    if (.not. self%stretched_y .and. self%mesh%par%nproc == 1) then
       call process_spectral_010<<<blocks, threads>>>( & !&
         c_dev, self%waves_dev, self%nx_spec, self%ny_spec, self%sp_st(2), &
         self%nx_glob, self%ny_glob, self%nz_glob, &
         self%ax_dev, self%bx_dev, self%ay_dev, self%by_dev, &
         self%az_dev, self%bz_dev &
         )
+    else if (.not. self%stretched_y) then
+      ! On multiple ranks the y paired split reaches its partner through a
+      ! mirror exchange, so the same work is staged across three launches.
+      ! The staged kernels take the dim1, dim2, dim3 order, which for the
+      ! 010 case is x, y, z.
+      call postprocess_dim2_mirror(self, c_dev, blocks, threads, &
+                                   self%nx_glob, self%ny_glob, self%nz_glob, &
+                                   self%ax_dev, self%bx_dev, &  ! dim1, X
+                                   self%ay_dev, self%by_dev, &  ! dim2, Y
+                                   self%az_dev, self%bz_dev)  ! dim3, Z
     else
+      ny_solve = self%ny_spec
+      y_st_solve = self%sp_st(2)
+      z_off = 0
+
+      ! On multiple ranks each rank holds a y-slab, but the stretched y
+      ! system couples the whole y line. Move the spectral field to the
+      ! z-slab (nx_spec, ny, nz/nproc) of each rank, and run the single rank
+      ! solve on it. The slab redistribution works on the real views.
+      if (self%mesh%par%nproc > 1) then
+        nz_l = self%nz_glob/self%mesh%par%nproc
+        z_off = nz_l*self%mesh%par%nrank
+
+        call c_f_pointer(descriptor%data(1), r_yslab, &
+                         [2*self%nx_spec, self%ny_spec, self%nz_spec])
+        call c_f_pointer(c_loc(self%c_zslab_dev), r_zslab, &
+                         [2*self%nx_spec, self%ny_glob, nz_l])
+
+        call redistribute_010_to_zslab(self, r_yslab, r_zslab)
+
+        call c_f_pointer(c_loc(self%c_zslab_dev), c_dev, &
+                         [self%nx_spec, self%ny_glob, nz_l])
+        ny_solve = self%ny_glob
+        y_st_solve = 0
+        blocks = dim3((self%nx_spec - 1)/tsize + 1, nz_l, 1)
+      end if
+
       call process_spectral_010_fw<<<blocks, threads>>>( & !&
-        c_dev, self%nx_spec, self%ny_spec, self%sp_st(2), &
+        c_dev, self%nx_spec, ny_solve, y_st_solve, z_off, &
         self%nx_glob, self%ny_glob, self%nz_glob, &
         self%ax_dev, self%bx_dev, self%ay_dev, self%by_dev, &
         self%az_dev, self%bz_dev &
@@ -1278,14 +1725,14 @@ contains
         inc = 2
         call process_spectral_010_poisson<<<blocks, threads>>>( & !&
           c_dev, self%a_odd_re_dev, self%a_odd_im_dev, off, inc, &
-          self%nx_spec, self%ny_spec/2, &
+          self%nx_spec, ny_solve/2, z_off, &
           self%nx_glob, self%ny_glob, self%nz_glob &
           )
         ! start from the first even entry and continue with even ones
         off = 1
         call process_spectral_010_poisson<<<blocks, threads>>>( & !&
           c_dev, self%a_even_re_dev, self%a_even_im_dev, off, inc, &
-          self%nx_spec, self%ny_spec/2, &
+          self%nx_spec, ny_solve/2, z_off, &
           self%nx_glob, self%ny_glob, self%nz_glob &
           )
       !! if stretching in y is 'bottom'
@@ -1303,17 +1750,22 @@ contains
         inc = 1
         call process_spectral_010_poisson<<<blocks, threads>>>( & !&
           c_dev, self%a_re_dev, self%a_im_dev, off, inc, &
-          self%nx_spec, self%ny_spec, &
+          self%nx_spec, ny_solve, z_off, &
           self%nx_glob, self%ny_glob, self%nz_glob &
           )
       end if
 
       call process_spectral_010_bw<<<blocks, threads>>>( & !&
-        c_dev, self%nx_spec, self%ny_spec, self%sp_st(2), &
+        c_dev, self%nx_spec, ny_solve, y_st_solve, z_off, &
         self%nx_glob, self%ny_glob, self%nz_glob, &
         self%ax_dev, self%bx_dev, self%ay_dev, self%by_dev, &
         self%az_dev, self%bz_dev &
         )
+
+      ! Move the solution back to the y-slab in the descriptor
+      if (self%mesh%par%nproc > 1) then
+        call redistribute_010_to_yslab(self, r_zslab, r_yslab)
+      end if
     end if
 
   end subroutine fft_postprocess_010_cuda
@@ -1329,7 +1781,7 @@ contains
     !! more launches.
     implicit none
 
-    class(cuda_poisson_fft_t) :: self
+    class(cuda_poisson_110_t) :: self
 
     type(cudaXtDesc), pointer :: descriptor
     complex(dp), device, dimension(:, :, :), pointer :: c_dev
@@ -1392,9 +1844,7 @@ contains
 
     ! Step 4: Poisson solve
     call process_spectral_110_poisson<<<blocks, threads>>>( & !&
-      c_dev, self%waves_dev, nz_h, &
-      self%ny_spec, self%nz_spec, self%nz_glob, self%sp_st(2), &
-      self%nx_glob &
+      c_dev, self%waves_dev, nz_h, self%ny_spec, self%nz_spec &
       )
 
     ! Step 5: Y paired recombine (backward)
@@ -1435,7 +1885,7 @@ contains
   subroutine enforce_periodicity_x_cuda(self, f_out, f_in)
     implicit none
 
-    class(cuda_poisson_fft_t) :: self
+    class(cuda_poisson_100_t) :: self
     class(field_t), intent(inout) :: f_out
     class(field_t), intent(in) :: f_in
 
@@ -1466,7 +1916,7 @@ contains
   subroutine undo_periodicity_x_cuda(self, f_out, f_in)
     implicit none
 
-    class(cuda_poisson_fft_t) :: self
+    class(cuda_poisson_100_t) :: self
     class(field_t), intent(inout) :: f_out
     class(field_t), intent(in) :: f_in
 
@@ -1497,7 +1947,7 @@ contains
   subroutine enforce_periodicity_y_cuda(self, f_out, f_in)
     implicit none
 
-    class(cuda_poisson_fft_t) :: self
+    class(cuda_poisson_010_t) :: self
     class(field_t), intent(inout) :: f_out
     class(field_t), intent(in) :: f_in
 
@@ -1528,7 +1978,7 @@ contains
   subroutine undo_periodicity_y_cuda(self, f_out, f_in)
     implicit none
 
-    class(cuda_poisson_fft_t) :: self
+    class(cuda_poisson_010_t) :: self
     class(field_t), intent(inout) :: f_out
     class(field_t), intent(in) :: f_in
 
@@ -1559,7 +2009,7 @@ contains
   subroutine enforce_periodicity_xy_cuda(self, f_out, f_in)
     implicit none
 
-    class(cuda_poisson_fft_t) :: self
+    class(cuda_poisson_110_t) :: self
     class(field_t), intent(inout) :: f_out
     class(field_t), intent(in) :: f_in
 
@@ -1591,7 +2041,7 @@ contains
   subroutine undo_periodicity_xy_cuda(self, f_out, f_in)
     implicit none
 
-    class(cuda_poisson_fft_t) :: self
+    class(cuda_poisson_110_t) :: self
     class(field_t), intent(inout) :: f_out
     class(field_t), intent(in) :: f_in
 

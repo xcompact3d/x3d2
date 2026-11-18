@@ -83,6 +83,10 @@ backends override it.
      - ✅
      - ✅
      - ✅
+   * - ``x_slice_weighted_sum``
+     - ✅
+     - ✅
+     - ✅
    * - ``field_plane_sums``
      - ✅
      - ✅
@@ -116,6 +120,14 @@ backends override it.
      - ✅
      - ✅
    * - ``field_add_face_from_field``
+     - ✅
+     - ✅
+     - ✅
+   * - ``field_add_const_x_face``
+     - ✅
+     - ✅
+     - ✅
+   * - ``field_set_x_inlet_plane``
      - ✅
      - ✅
      - ✅

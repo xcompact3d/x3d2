@@ -17,16 +17,22 @@ module m_omptgt_kernels_fieldops
 
   private
   public :: copy, axpby, pwmul, field_scale, field_shift
+  public :: sample_points, add_gaussian_sources
   public :: vorticity_from_gradients, qcriterion_from_gradients, &
             smagorinsky_from_gradients, sgs_stress_from_gradients
   public :: buffer_copy
   public :: scalar_product, scalar_product_cart, vector_norm_squared, &
-            field_max_sum, volume_integral, slice_max_sum
+            field_max_sum, volume_integral, slice_max_sum, &
+            x_slice_weighted_sum
   public :: labelled_sums, labelled_axpy
   public :: field_set_x_face, field_set_y_face, field_set_y_plane, &
             field_set_abl_wall_stress, field_set_x_face_from_field, &
-            field_set_y_face_from_field, field_add_x_face_from_field, &
-            field_add_y_face_from_field
+            field_get_x_band, field_blend_x_band, &
+            field_set_y_face_from_field, &
+            field_add_const_x_face, &
+            field_add_x_face_from_field, &
+            field_add_y_face_from_field, &
+            field_set_x_face_from_plane, field_set_y_face_from_plane
   public :: field_plane_partial_sums, field_plane_sums_reduce
   public :: reorder, sum_intox
 
@@ -518,6 +524,34 @@ contains
 
   end subroutine slice_max_sum
 
+  subroutine x_slice_weighted_sum(sum_f, f, w, n_f, i_slice, n_i, &
+                                  n_groups_pad, n_j)
+    !! Sum of the slice f(:, i_slice, :) with the weight w(j) on the points
+    !! of stacked index j.
+    real(dp), intent(out) :: sum_f
+    integer, intent(in) :: n_f, i_slice, n_i, n_groups_pad, n_j
+    real(dp), intent(in) :: f(SZ, n_f, n_groups_pad*n_i), w(n_j)
+
+    integer :: i, b_i, b_j
+
+    sum_f = 0._dp
+    !$omp target teams distribute parallel do collapse(3) &
+    !$omp reduction(+:sum_f) map(tofrom:sum_f) map(to:w) &
+    !$omp OMP_DEVICE_ADDR(f)
+    do b_j = 1, (n_j - 1)/SZ + 1
+      do b_i = 1, n_i
+        do i = 1, SZ
+          if (i + (b_j - 1)*SZ <= n_j) then
+            sum_f = sum_f + w(i + (b_j - 1)*SZ) &
+                    *f(i, i_slice, b_j + (b_i - 1)*n_groups_pad)
+          end if
+        end do
+      end do
+    end do
+    !$omp end target teams distribute parallel do
+
+  end subroutine x_slice_weighted_sum
+
   ! --------------------------------------------------------------------------
   ! Faces and planes of DIR_X fields. The y-block holding y is
   ! (y - 1)/SZ + 1, at lane mod(y - 1, SZ) + 1, and its group at z station z
@@ -589,6 +623,59 @@ contains
     !$omp end target teams distribute parallel do
 
   end subroutine field_set_x_face_from_field
+
+  subroutine field_add_const_x_face(f, c, i_plane, n_f, ny, nz, n_yb_pad)
+    !! Add the constant c to every point of the x plane i_plane of f.
+    integer, intent(in) :: i_plane, n_f, ny, nz, n_yb_pad
+    real(dp), intent(inout) :: f(SZ, n_f, n_yb_pad*nz)
+    real(dp), intent(in) :: c
+
+    integer :: i, y_block, z, b
+
+    !$omp target teams distribute parallel do collapse(3) private(b) &
+    !$omp OMP_DEVICE_ADDR(f)
+    do z = 1, nz
+      do y_block = 1, (ny - 1)/SZ + 1
+        do i = 1, SZ
+          if (i + (y_block - 1)*SZ <= ny) then
+            b = y_block + (z - 1)*n_yb_pad
+            f(i, i_plane, b) = f(i, i_plane, b) + c
+          end if
+        end do
+      end do
+    end do
+    !$omp end target teams distribute parallel do
+
+  end subroutine field_add_const_x_face
+
+  subroutine field_set_x_face_from_plane(f, p_start, p_end, apply_end, n_f, &
+                                         nx, ny, nz, n_yb_pad)
+    !! Writes two (ny, nz) planes into the x = 1 and x = nx planes of f.
+    !! p_end is read only when apply_end is true.
+    integer, intent(in) :: n_f, nx, ny, nz, n_yb_pad
+    real(dp), intent(inout) :: f(SZ, n_f, n_yb_pad*nz)
+    real(dp), intent(in) :: p_start(ny, nz), p_end(ny, nz)
+    logical, intent(in) :: apply_end
+
+    integer :: i, y_block, z, b
+
+    !$omp target teams distribute parallel do collapse(3) private(b) &
+    !$omp OMP_DEVICE_ADDR(f, p_start, p_end)
+    do z = 1, nz
+      do y_block = 1, (ny - 1)/SZ + 1
+        do i = 1, SZ
+          ! Lanes past ny in the last y-block are padding
+          if (i + (y_block - 1)*SZ <= ny) then
+            b = y_block + (z - 1)*n_yb_pad
+            f(i, 1, b) = p_start(i + (y_block - 1)*SZ, z)
+            if (apply_end) f(i, nx, b) = p_end(i + (y_block - 1)*SZ, z)
+          end if
+        end do
+      end do
+    end do
+    !$omp end target teams distribute parallel do
+
+  end subroutine field_set_x_face_from_plane
 
   subroutine field_add_x_face_from_field(f, g, set_start, set_end, n_f, nx, &
                                          ny, nz, n_yb_pad)
@@ -667,6 +754,32 @@ contains
 
   end subroutine field_set_y_face_from_field
 
+  subroutine field_set_y_face_from_plane(f, p_start, p_end, apply_end, n_f, &
+                                         nx, ny, nz, n_yb_pad)
+    !! Writes two (nx, nz) planes into the y = 1 and y = ny planes of f.
+    !! p_end is read only when apply_end is true.
+    integer, intent(in) :: n_f, nx, ny, nz, n_yb_pad
+    real(dp), intent(inout) :: f(SZ, n_f, n_yb_pad*nz)
+    real(dp), intent(in) :: p_start(nx, nz), p_end(nx, nz)
+    logical, intent(in) :: apply_end
+
+    integer :: j, z, i_top, yb_top
+
+    i_top = mod(ny - 1, SZ) + 1
+    yb_top = (ny - 1)/SZ + 1
+
+    !$omp target teams distribute parallel do collapse(2) &
+    !$omp OMP_DEVICE_ADDR(f, p_start, p_end)
+    do z = 1, nz
+      do j = 1, nx
+        f(1, j, 1 + (z - 1)*n_yb_pad) = p_start(j, z)
+        if (apply_end) f(i_top, j, yb_top + (z - 1)*n_yb_pad) = p_end(j, z)
+      end do
+    end do
+    !$omp end target teams distribute parallel do
+
+  end subroutine field_set_y_face_from_plane
+
   subroutine field_add_y_face_from_field(f, g, set_start, set_end, n_f, nx, &
                                          ny, nz, n_yb_pad)
     !! f += g on the y faces flagged by set_start/set_end.
@@ -720,43 +833,99 @@ contains
   end subroutine field_set_y_plane
 
   subroutine field_set_abl_wall_stress(stress, u, w, drag_coeff, &
-                                       sample_plane, stress_plane, n_f, nx, &
+                                       upper_weight, sample_plane, &
+                                       upper_plane, stress_plane, n_f, nx, &
                                        nz, n_yb_pad, component)
     !! Drag law tau = drag_coeff*u_c*|u_h| from each column's own sampled
-    !! velocity, written into one stress plane (component 1: x, 3: z).
-    integer, intent(in) :: sample_plane, stress_plane
+    !! velocity, written into one stress plane (component 1: x, 3: z). The
+    !! velocity is interpolated between sample_plane and upper_plane.
+    integer, intent(in) :: sample_plane, upper_plane, stress_plane
     integer, intent(in) :: n_f, nx, nz, n_yb_pad, component
     real(dp), intent(inout) :: stress(SZ, n_f, n_yb_pad*nz)
     real(dp), intent(in) :: u(SZ, n_f, n_yb_pad*nz), w(SZ, n_f, n_yb_pad*nz)
-    real(dp), intent(in) :: drag_coeff
+    real(dp), intent(in) :: drag_coeff, upper_weight
 
-    integer :: j, z, i_sa, yb_sa, i_st, yb_st
+    integer :: j, z, i_sa, yb_sa, i_up, yb_up, i_st, yb_st
+    real(dp) :: us, ws
 
     i_sa = mod(sample_plane - 1, SZ) + 1
     yb_sa = (sample_plane - 1)/SZ + 1
+    i_up = mod(upper_plane - 1, SZ) + 1
+    yb_up = (upper_plane - 1)/SZ + 1
     i_st = mod(stress_plane - 1, SZ) + 1
     yb_st = (stress_plane - 1)/SZ + 1
 
-    !$omp target teams distribute parallel do collapse(2) &
+    !$omp target teams distribute parallel do collapse(2) private(us, ws) &
     !$omp OMP_DEVICE_ADDR(stress, u, w)
     do z = 1, nz
       do j = 1, nx
+        us = (1._dp - upper_weight)*u(i_sa, j, yb_sa + (z - 1)*n_yb_pad) &
+             + upper_weight*u(i_up, j, yb_up + (z - 1)*n_yb_pad)
+        ws = (1._dp - upper_weight)*w(i_sa, j, yb_sa + (z - 1)*n_yb_pad) &
+             + upper_weight*w(i_up, j, yb_up + (z - 1)*n_yb_pad)
         if (component == 1) then
           stress(i_st, j, yb_st + (z - 1)*n_yb_pad) = &
-            drag_coeff*u(i_sa, j, yb_sa + (z - 1)*n_yb_pad) &
-            *sqrt(u(i_sa, j, yb_sa + (z - 1)*n_yb_pad)**2 &
-                  + w(i_sa, j, yb_sa + (z - 1)*n_yb_pad)**2)
+            drag_coeff*us*sqrt(us**2 + ws**2)
         else
           stress(i_st, j, yb_st + (z - 1)*n_yb_pad) = &
-            drag_coeff*w(i_sa, j, yb_sa + (z - 1)*n_yb_pad) &
-            *sqrt(u(i_sa, j, yb_sa + (z - 1)*n_yb_pad)**2 &
-                  + w(i_sa, j, yb_sa + (z - 1)*n_yb_pad)**2)
+            drag_coeff*ws*sqrt(us**2 + ws**2)
         end if
       end do
     end do
     !$omp end target teams distribute parallel do
 
   end subroutine field_set_abl_wall_stress
+
+  subroutine field_get_x_band(band, f, i_start, nband, ny, nz, n_f, &
+                              n_yb_pad)
+    !! band(i, j, k) = f(i_start + i - 1, j, k) for a DIR_X vertex field
+    integer, intent(in) :: i_start, nband, ny, nz, n_f, n_yb_pad
+    real(dp), intent(out) :: band(nband, ny, nz)
+    real(dp), intent(in) :: f(SZ, n_f, n_yb_pad*nz)
+
+    integer :: i, j, k
+
+    !$omp target teams distribute parallel do collapse(3) &
+    !$omp OMP_DEVICE_ADDR(band, f)
+    do k = 1, nz
+      do j = 1, ny
+        do i = 1, nband
+          band(i, j, k) = f(mod(j - 1, SZ) + 1, i_start + i - 1, &
+                            (j - 1)/SZ + 1 + (k - 1)*n_yb_pad)
+        end do
+      end do
+    end do
+    !$omp end target teams distribute parallel do
+
+  end subroutine field_get_x_band
+
+  subroutine field_blend_x_band(f, band, lambda, i_start, nband, ny, nz, &
+                                n_f, n_yb_pad)
+    !! f(i_start + i - 1, j, k) = lambda(i)*band(i, j, k)
+    !!                            + (1 - lambda(i))*f(i_start + i - 1, j, k)
+    !! for a DIR_X vertex field
+    integer, intent(in) :: i_start, nband, ny, nz, n_f, n_yb_pad
+    real(dp), intent(inout) :: f(SZ, n_f, n_yb_pad*nz)
+    real(dp), intent(in) :: band(nband, ny, nz), lambda(nband)
+
+    integer :: i, j, k, jj, g
+
+    !$omp target teams distribute parallel do collapse(3) private(jj, g) &
+    !$omp OMP_DEVICE_ADDR(f, band, lambda)
+    do k = 1, nz
+      do j = 1, ny
+        do i = 1, nband
+          jj = mod(j - 1, SZ) + 1
+          g = (j - 1)/SZ + 1 + (k - 1)*n_yb_pad
+          f(jj, i_start + i - 1, g) = lambda(i)*band(i, j, k) &
+                                      + (1._dp - lambda(i)) &
+                                      *f(jj, i_start + i - 1, g)
+        end do
+      end do
+    end do
+    !$omp end target teams distribute parallel do
+
+  end subroutine field_blend_x_band
 
   subroutine field_plane_partial_sums(partial, f, n_f, nx, ny, nz, n_yb_pad)
     !! First pass of field_plane_sums: partial(j, z) is the sum over x of y
@@ -977,5 +1146,140 @@ contains
     !$omp end target teams distribute parallel do
 
   end subroutine gather_c
+
+  subroutine sample_points(vals, points, a, b, c, n_points, n_f, n_k, d, &
+                           grid)
+    !! vals(1:3, p) = this rank's part of the trilinear interpolation of the
+    !! DIR_X VERT fields a, b and c at points(:, p), one thread per point;
+    !! see field_sample_points. grid holds the local VERT dims, global VERT
+    !! dims, rank offsets and periodic flags (1/0), three entries each, then
+    !! the padded y-block count of the DIR_X layout.
+    integer, intent(in) :: n_points, n_f, n_k
+    real(dp), intent(out) :: vals(3, n_points)
+    real(dp), intent(in) :: points(3, n_points), d(3)
+    integer, intent(in) :: grid(13)
+    real(dp), intent(in) :: a(SZ, n_f, n_k), b(SZ, n_f, n_k), c(SZ, n_f, n_k)
+
+    real(dp) :: fx, fy, fz, w, sa, sb, sc
+    integer :: p, o1, o2, o3, x0, y0, z0, lx, ly, lz, i, k
+
+    !$omp target teams distribute parallel do &
+    !$omp private(fx, fy, fz, w, sa, sb, sc, o1, o2, o3, x0, y0, z0, &
+    !$omp         lx, ly, lz, i, k) &
+    !$omp map(to: points, d, grid) map(from: vals) OMP_DEVICE_ADDR(a, b, c)
+    do p = 1, n_points
+      fx = points(1, p)/d(1)
+      fy = points(2, p)/d(2)
+      fz = points(3, p)/d(3)
+      x0 = floor(fx)
+      y0 = floor(fy)
+      z0 = floor(fz)
+      fx = fx - x0
+      fy = fy - y0
+      fz = fz - z0
+      sa = 0._dp
+      sb = 0._dp
+      sc = 0._dp
+      do o3 = 0, 1
+        lz = z0 + o3
+        if (grid(12) /= 0) lz = modulo(lz, grid(6))
+        if (lz < 0 .or. lz >= grid(6)) cycle
+        lz = lz - grid(9) + 1
+        if (lz < 1 .or. lz > grid(3)) cycle
+        do o2 = 0, 1
+          ly = y0 + o2
+          if (grid(11) /= 0) ly = modulo(ly, grid(5))
+          if (ly < 0 .or. ly >= grid(5)) cycle
+          ly = ly - grid(8) + 1
+          if (ly < 1 .or. ly > grid(2)) cycle
+          do o1 = 0, 1
+            lx = x0 + o1
+            if (grid(10) /= 0) lx = modulo(lx, grid(4))
+            if (lx < 0 .or. lx >= grid(4)) cycle
+            lx = lx - grid(7) + 1
+            if (lx < 1 .or. lx > grid(1)) cycle
+            w = merge(fx, 1._dp - fx, o1 == 1) &
+                *merge(fy, 1._dp - fy, o2 == 1) &
+                *merge(fz, 1._dp - fz, o3 == 1)
+            i = mod(ly - 1, SZ) + 1
+            k = (ly - 1)/SZ + 1 + (lz - 1)*grid(13)
+            sa = sa + w*a(i, lx, k)
+            sb = sb + w*b(i, lx, k)
+            sc = sc + w*c(i, lx, k)
+          end do
+        end do
+      end do
+      vals(1, p) = sa
+      vals(2, p) = sb
+      vals(3, p) = sc
+    end do
+    !$omp end target teams distribute parallel do
+
+  end subroutine sample_points
+
+  subroutine add_gaussian_sources(a, b, c, src, box, n_src, n_box_y, &
+                                  n_box_z, inv_eps2, r_cut, n_f, n_k, d, &
+                                  grid)
+    !! a, b, c += src(4:6, s)*exp(-dist^2/eps^2) within r_cut of the point
+    !! src(1:3, s), over the global index box box(1:3, s)..box(4:6, s); see
+    !! source_index_boxes. Box indices are wrapped across periodic
+    !! boundaries and skipped where this rank does not own them. One thread
+    !! per (source, z, y) of the box, each sweeping x; sources overlap, so
+    !! the adds are atomic. grid holds the local VERT dims, global VERT dims,
+    !! rank offsets and periodic flags (1/0), three entries each, then the
+    !! padded y-block count.
+    integer, intent(in) :: n_src, n_box_y, n_box_z, n_f, n_k
+    real(dp), intent(in) :: src(6, n_src), inv_eps2, r_cut, d(3)
+    integer, intent(in) :: box(6, n_src), grid(13)
+    real(dp), intent(inout) :: a(SZ, n_f, n_k), b(SZ, n_f, n_k), &
+                               c(SZ, n_f, n_k)
+
+    real(dp) :: dz2, dyz2, dist2, kern
+    integer :: s, ky, kz, g_x, g_y, g_z, x, y, z, i, k
+
+    !$omp target teams distribute parallel do collapse(3) &
+    !$omp private(dz2, dyz2, dist2, kern, g_x, g_y, g_z, x, y, z, i, k) &
+    !$omp map(to: src, box, d, grid) OMP_DEVICE_ADDR(a, b, c)
+    do s = 1, n_src
+      do kz = 0, n_box_z - 1
+        do ky = 0, n_box_y - 1
+          g_z = box(3, s) + kz
+          g_y = box(2, s) + ky
+          if (g_z > box(6, s) .or. g_y > box(5, s)) cycle
+          ! Wrap periodic indices; skip the ones this rank does not own
+          z = g_z
+          if (grid(12) /= 0) z = modulo(g_z, grid(6))
+          z = z - grid(9) + 1
+          if (z < 1 .or. z > grid(3)) cycle
+          y = g_y
+          if (grid(11) /= 0) y = modulo(g_y, grid(5))
+          y = y - grid(8) + 1
+          if (y < 1 .or. y > grid(2)) cycle
+          dz2 = (src(3, s) - g_z*d(3))**2
+          dyz2 = dz2 + (src(2, s) - g_y*d(2))**2
+          if (dyz2 > r_cut**2) cycle
+          i = mod(y - 1, SZ) + 1
+          k = (y - 1)/SZ + 1 + (z - 1)*grid(13)
+          do g_x = box(1, s), box(4, s)
+            x = g_x
+            if (grid(10) /= 0) x = modulo(g_x, grid(4))
+            x = x - grid(7) + 1
+            if (x < 1 .or. x > grid(1)) cycle
+            dist2 = dyz2 + (src(1, s) - g_x*d(1))**2
+            if (dist2 > r_cut**2) cycle
+            kern = exp(-dist2*inv_eps2)
+            !$omp atomic update
+            a(i, x, k) = a(i, x, k) + src(4, s)*kern
+            !$omp atomic update
+            b(i, x, k) = b(i, x, k) + src(5, s)*kern
+            !$omp atomic update
+            c(i, x, k) = c(i, x, k) + src(6, s)*kern
+          end do
+        end do
+      end do
+    end do
+    !$omp end target teams distribute parallel do
+
+  end subroutine add_gaussian_sources
 
 end module m_omptgt_kernels_fieldops

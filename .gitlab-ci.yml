@@ -22,6 +22,10 @@ stages:
   timeout: 1h
   script:
     - echo "Setup environment"
+    # A dropped connection to the Ubuntu mirror fails the job with apt's exit
+    # code 100 before anything is built. Retry each download a few times
+    # instead, for every apt and apt-get call below.
+    - echo 'Acquire::Retries "5";' > /etc/apt/apt.conf.d/80-retries
     - apt update
     - apt install -y environment-modules
     - echo "/apps/modules" >> /etc/environment-modules/modulespath
@@ -47,6 +51,10 @@ stages:
     - cmake -S . -B build-debug -DCMAKE_Fortran_COMPILER=${FORTRAN_COMPILER} -DCMAKE_BUILD_TYPE=Debug -DENABLE_BACKEND=${ENABLE_BACKEND} -DBACKEND_ARCH=${BACKEND_ARCH} -DWITH_MPI=${WITH_MPI} -DWITH_ADIOS2=ON -DUSE_SYSTEM_ADIOS2=ON -DSINGLE_PREC=${SINGLE_PREC}
     - echo "Build tests"
     - make -j12 -C build-debug
+    # The regression cases are the slow part of the suite, so they run once,
+    # in the Release pass, which is the optimised build users run. Debug and
+    # Release builds both match the goldens to the regression tolerances.
+    # Unit and verification tests run in both passes.
     - echo "Run the tests"
     - if [ "${RUN_TEST}" == "ON" ]; then ctest --test-dir build-debug -L "unit|verification" --output-on-failure --output-junit ctest-junit.xml; fi
     - echo "Configure Release build"
@@ -54,7 +62,7 @@ stages:
     - echo "Build tests"
     - make -j12 -C build
     - echo "Run the tests"
-    - if [ "${RUN_TEST}" == "ON" ]; then ctest --test-dir build -L "unit|verification" --output-on-failure --output-junit ctest-junit.xml; fi
+    - if [ "${RUN_TEST}" == "ON" ]; then ctest --test-dir build -L "unit|verification|regression" --output-on-failure --output-junit ctest-junit.xml; fi
   # Surface individual test results in the pipeline's Tests tab. Without a
   # report GitLab shows "Tests 0" and a failing test is only visible by
   # scrolling the raw job log. ctest still sets the job's exit status, so this

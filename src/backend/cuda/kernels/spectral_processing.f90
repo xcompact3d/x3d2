@@ -471,7 +471,8 @@ contains
   end subroutine process_spectral_010
 
   attributes(global) subroutine process_spectral_010_fw( &
-    div_u, nx_spec, ny_spec, y_sp_st, nx, ny, nz, ax, bx, ay, by, az, bz &
+    div_u, nx_spec, ny_spec, y_sp_st, z_off, nx, ny, nz, ax, bx, ay, by, &
+    az, bz &
     )
     !! Post-processes the divergence of velocity in spectral space, including
     !! scaling w.r.t. grid size.
@@ -487,6 +488,8 @@ contains
     integer, value, intent(in) :: nx_spec, ny_spec
     !> Offset in y direction in the permuted slabs in spectral space
     integer, value, intent(in) :: y_sp_st
+    !> Offset in z direction of the block div_u holds
+    integer, value, intent(in) :: z_off
     !> Grid size
     integer, value, intent(in) :: nx, ny, nz
 
@@ -499,7 +502,7 @@ contains
 
     if (i <= nx_spec) then
       do j = 1, ny_spec
-        ix = i; iz = k
+        ix = i; iz = k + z_off
 
         ! normalisation
         div_r = real(div_u(i, j, k), kind=dp)/nx/ny/nz
@@ -530,7 +533,7 @@ contains
   end subroutine process_spectral_010_fw
 
   attributes(global) subroutine process_spectral_010_poisson( &
-    div_u, a_re, a_im, off, inc, nx_spec, n, nx, ny, nz &
+    div_u, a_re, a_im, off, inc, nx_spec, n, z_off, nx, ny, nz &
     )
     !! Solve the Poisson equation at cell centres with non-periodic BC along y
     !!
@@ -545,6 +548,8 @@ contains
     integer, value, intent(in) :: off, inc
     !> Grid size in spectral space
     integer, value, intent(in) :: nx_spec, n, nx, ny, nz
+    !> Offset in z direction of the block div_u holds
+    integer, value, intent(in) :: z_off
 
     integer :: i, j, k, jm, nm
     real(dp) :: tmp_r, tmp_c, div_r, div_c
@@ -652,7 +657,7 @@ contains
         kind=dp &
         )
 
-      if (i == nx/2 + 1 .and. k == nz/2 + 1) then
+      if (i == nx/2 + 1 .and. k + z_off == nz/2 + 1) then
         div_u(i, nm, k) = 0._dp
         div_u(i, nm - inc, k) = 0._dp
       end if
@@ -680,14 +685,15 @@ contains
                  - a_im(i, j, k, 5)*aimag(div_u(i, jm + 2*inc, k))), &
           kind=dp &
           )
-        if (i == nx/2 + 1 .and. k == nz/2 + 1) div_u(i, jm, k) = 0._dp
+        if (i == nx/2 + 1 .and. k + z_off == nz/2 + 1) div_u(i, jm, k) = 0._dp
       end do
     end if
 
   end subroutine process_spectral_010_poisson
 
   attributes(global) subroutine process_spectral_010_bw( &
-    div_u, nx_spec, ny_spec, y_sp_st, nx, ny, nz, ax, bx, ay, by, az, bz &
+    div_u, nx_spec, ny_spec, y_sp_st, z_off, nx, ny, nz, ax, bx, ay, by, &
+    az, bz &
     )
     !! Post-processes the divergence of velocity in spectral space, including
     !! scaling w.r.t. grid size.
@@ -703,6 +709,8 @@ contains
     integer, value, intent(in) :: nx_spec, ny_spec
     !> Offset in y direction in the permuted slabs in spectral space
     integer, value, intent(in) :: y_sp_st
+    !> Offset in z direction of the block div_u holds
+    integer, value, intent(in) :: z_off
     !> Grid size
     integer, value, intent(in) :: nx, ny, nz
 
@@ -730,7 +738,7 @@ contains
 
     if (i <= nx_spec) then
       do j = 1, ny_spec
-        ix = i; iz = k
+        ix = i; iz = k + z_off
 
         div_r = real(div_u(i, j, k), kind=dp)
         div_c = aimag(div_u(i, j, k))
@@ -746,14 +754,15 @@ contains
   end subroutine process_spectral_010_bw
 
   ! ------------------------------------------------------------------
-  ! 100 SPECTRAL KERNELS, MULTIPLE RANKS (3 staged launches)
+  ! STAGED DIM2 MIRROR SPECTRAL KERNELS, MULTIPLE RANKS (3 staged launches)
   !
-  ! Staged form of the 100 postprocess. The X paired split couples
-  ! mode ix with mode n - ix + 2, so once X is distributed over ranks
-  ! the partner value sits on another GPU. Splitting the single 100
-  ! kernel into three launches leaves room for a mirror exchange either
-  ! side of the Poisson solve, and the pairing then reads its partner
-  ! from that mirror instead of from div_u itself.
+  ! Staged form of the dim2 mirror postprocess, shared by the 010 and
+  ! 100 cases. The paired split couples mode j with mode n - j + 2, so
+  ! once dim2 is distributed over ranks the partner value sits on
+  ! another GPU. Splitting the single kernel into three launches leaves
+  ! room for a mirror exchange either side of the Poisson solve, and the
+  ! pairing then reads its partner from that mirror instead of from
+  ! div_u itself.
   !
   ! Every rank updates only the modes it owns. The 010 pairing rule is
   ! symmetric, new(iy) = f(own(iy), partner(n - iy + 2), iy), so nothing
@@ -766,11 +775,12 @@ contains
   ! loop starting at j = 2 leaves it.
   !
   ! These keep the dim1/dim2 naming of the 010 kernels rather than the
-  ! physical directions, so dim1 is the periodic R2C direction (Y here)
-  ! and dim2 is the non-periodic one (X here).
+  ! physical directions. dim1 is the periodic R2C direction and dim2 is
+  ! the non-periodic one. For 100 dim1 = y and dim2 = x, for 010
+  ! dim1 = x and dim2 = y, and dim3 = z in both.
   ! ------------------------------------------------------------------
 
-  attributes(global) subroutine process_spectral_100_fw( &
+  attributes(global) subroutine process_spectral_fw( &
     div_u, nx_spec, ny_spec, nx, ny, nz, ax, bx, az, bz &
     )
     !! Stage 1 (forward): normalisation followed by the dim3 and dim1
@@ -807,9 +817,9 @@ contains
       end do
     end if
 
-  end subroutine process_spectral_100_fw
+  end subroutine process_spectral_fw
 
-  attributes(global) subroutine process_spectral_100_pair_fw( &
+  attributes(global) subroutine process_spectral_pair_fw( &
     div_u, mirror, mirror_plane, waves, nx_spec, ny_spec, y_sp_st, &
     nx, nz, ay, by &
     )
@@ -870,9 +880,9 @@ contains
       end do
     end if
 
-  end subroutine process_spectral_100_pair_fw
+  end subroutine process_spectral_pair_fw
 
-  attributes(global) subroutine process_spectral_100_pair_bw( &
+  attributes(global) subroutine process_spectral_pair_bw( &
     div_u, mirror, mirror_plane, nx_spec, ny_spec, y_sp_st, &
     nx, nz, ax, bx, ay, by, az, bz &
     )
@@ -934,7 +944,7 @@ contains
       end do
     end if
 
-  end subroutine process_spectral_100_pair_bw
+  end subroutine process_spectral_pair_bw
 
   attributes(global) subroutine pack_spectral_plane( &
     plane, div_u, nx_spec, nz_spec &
@@ -1104,25 +1114,26 @@ contains
   end subroutine process_spectral_110_y_pair_fw
 
   attributes(global) subroutine process_spectral_110_poisson( &
-    div_u, waves, nz_h, nx, ny, nz, x_sp_st, nx_glob &
+    div_u, waves, nz_h, nx, ny &
     )
     !! Step 4: Poisson solve — divide by waves
-    !! nx is the local loop bound; the Nyquist test always needs nx_glob.
+    !! x and y are cosine transformed, so neither has a Nyquist mode and the
+    !! only singular entry is the mean, which the eps_wave test handles. The
+    !! x Nyquist zeroing of the 010 case must not be copied here: in this
+    !! layout x index nx/2 + 1 is the regular cosine mode N/2 (#465).
     implicit none
 
     complex(dp), device, intent(inout), dimension(:, :, :) :: div_u ! (nz/2+1, nx, ny)
     complex(dp), device, intent(in), dimension(:, :, :) :: waves    ! (nz/2+1, nx, ny)
-    integer, value, intent(in) :: nz_h, nx, ny, nz
-    integer, value, intent(in) :: x_sp_st, nx_glob
+    integer, value, intent(in) :: nz_h, nx, ny
 
-    integer :: i, j, k, ix
+    integer :: i, j, k
     real(dp) :: div_r, div_c, tmp_r, tmp_c
 
     i = threadIdx%x + (blockIdx%x - 1)*blockDim%x  ! X index
     k = blockIdx%y                                   ! Y index
 
     if (i <= nx .and. k <= ny) then
-      ix = i + x_sp_st
       do j = 1, nz_h
         div_r = real(div_u(j, i, k), kind=dp)
         div_c = aimag(div_u(j, i, k))
@@ -1141,8 +1152,6 @@ contains
         end if
 
         div_u(j, i, k) = cmplx(div_r, div_c, kind=dp)
-        ! Zero Nyquist modes
-        if (ix == nx_glob/2 + 1 .and. j == nz/2 + 1) div_u(j, i, k) = 0._dp
       end do
     end if
 
@@ -1361,12 +1370,13 @@ contains
   ! threads = dim3(min(ny_l, tpb), 1, 1), modelled on transpose_xyz_to_zxy.
   ! ------------------------------------------------------------------
 
-  attributes(global) subroutine pack_110_xyz_to_yslab( &
+  attributes(global) subroutine pack_zslab_to_alltoall( &
     sendbuf, src, nx, ny_l, nz_l, nproc &
     )
     !! Packs the physical Z-slab field block (nx, ny, nz_l) into the
     !! MPI_Alltoall send buffer, selecting for each destination rank s the
-    !! Y range [s*ny_l+1, (s+1)*ny_l] it owns in the Y-slab layout.
+    !! Y range [s*ny_l+1, (s+1)*ny_l] it owns after the redistribution.
+    !! Shared by the 110 and 010 multi-rank paths.
     implicit none
 
     real(dp), device, intent(out), dimension(:, :, :, :) :: sendbuf ! (nz_l, nx, ny_l, nproc)
@@ -1386,7 +1396,7 @@ contains
       end do
     end if
 
-  end subroutine pack_110_xyz_to_yslab
+  end subroutine pack_zslab_to_alltoall
 
   attributes(global) subroutine unpack_110_yslab( &
     dst, recvbuf, nx, ny_l, nz_l, nproc &
@@ -1443,10 +1453,10 @@ contains
 
   end subroutine pack_110_yslab
 
-  attributes(global) subroutine unpack_110_yslab_to_xyz( &
+  attributes(global) subroutine unpack_alltoall_to_zslab( &
     dst, recvbuf, nx, ny_l, nz_l, nproc &
     )
-    !! Inverse of pack_110_xyz_to_yslab: unpacks into the physical Z-slab
+    !! Inverse of pack_zslab_to_alltoall: unpacks into the physical Z-slab
     !! field block (nx, ny, nz_l). dst must be zeroed by the caller first,
     !! as fft_backward_110_cuda already does for the single rank path.
     implicit none
@@ -1468,7 +1478,75 @@ contains
       end do
     end if
 
-  end subroutine unpack_110_yslab_to_xyz
+  end subroutine unpack_alltoall_to_zslab
+
+  ! ------------------------------------------------------------------
+  ! 010 MULTI-RANK SPECTRAL REDISTRIBUTION
+  !
+  ! On multiple ranks the stretched y solve of the 010 case needs whole y
+  ! lines, but the cuFFTMp spectral slab (nx_spec, ny_l, nz) is split along
+  ! Y. The field moves to a Z-slab (nx_spec, ny, nz_l) and back through the
+  ! same MPI_Alltoall buffer (nz_l, nx, ny_l, nproc) as the 110 case, with
+  ! nx = 2*nx_spec on the real view. The Z-slab side reuses
+  ! pack_zslab_to_alltoall and unpack_alltoall_to_zslab. These two kernels
+  ! handle the Y-slab side, which has the order (x, y_l, z).
+  !
+  ! Launch config: the same as the 110 slab redistribution.
+  ! ------------------------------------------------------------------
+
+  attributes(global) subroutine pack_010_yslab( &
+    sendbuf, src, nx, ny_l, nz_l, nproc &
+    )
+    !! Packs the real view of the Y-slab (nx, ny_l, nz) into the
+    !! MPI_Alltoall send buffer, selecting for each destination rank s the
+    !! Z range [s*nz_l+1, (s+1)*nz_l] it owns in the Z-slab layout.
+    implicit none
+
+    real(dp), device, intent(out), dimension(:, :, :, :) :: sendbuf ! (nz_l, nx, ny_l, nproc)
+    real(dp), device, intent(in), dimension(:, :, :) :: src ! (nx, ny_l, nz)
+    integer, value, intent(in) :: nx, ny_l, nz_l, nproc
+
+    integer :: i, j, k, s
+
+    k = blockIdx%x                                  ! nz_l
+    j = (blockIdx%y - 1)*blockDim%x + threadIdx%x    ! ny_l
+
+    if (j <= ny_l) then
+      do s = 0, nproc - 1
+        do i = 1, nx
+          sendbuf(k, i, j, s + 1) = src(i, j, s*nz_l + k)
+        end do
+      end do
+    end if
+
+  end subroutine pack_010_yslab
+
+  attributes(global) subroutine unpack_010_yslab( &
+    dst, recvbuf, nx, ny_l, nz_l, nproc &
+    )
+    !! Inverse of pack_010_yslab: unpacks the MPI_Alltoall receive buffer
+    !! into the real view of the Y-slab (nx, ny_l, nz). Data received from
+    !! source rank s fills the global Z range [s*nz_l+1, (s+1)*nz_l].
+    implicit none
+
+    real(dp), device, intent(inout), dimension(:, :, :) :: dst ! (nx, ny_l, nz)
+    real(dp), device, intent(in), dimension(:, :, :, :) :: recvbuf ! (nz_l, nx, ny_l, nproc)
+    integer, value, intent(in) :: nx, ny_l, nz_l, nproc
+
+    integer :: i, j, k, s
+
+    k = blockIdx%x                                  ! nz_l
+    j = (blockIdx%y - 1)*blockDim%x + threadIdx%x    ! ny_l
+
+    if (j <= ny_l) then
+      do s = 0, nproc - 1
+        do i = 1, nx
+          dst(i, j, s*nz_l + k) = recvbuf(k, i, j, s + 1)
+        end do
+      end do
+    end if
+
+  end subroutine unpack_010_yslab
 
   attributes(global) subroutine enforce_periodicity_x(f_out, f_in, nx)
     implicit none
@@ -1477,26 +1555,14 @@ contains
     real(dp), device, intent(in), dimension(:, :, :) :: f_in
     integer, value, intent(in) :: nx
 
-    integer :: i, j, k, n2
+    integer :: i, j, k
 
     j = threadIdx%x
     k = blockIdx%x
-    n2 = nx/2
 
-    do i = 1, n2
-      f_out(i, j, k) = f_in(2*i - 1, j, k)
+    do i = 1, nx
+      f_out(i, j, k) = f_in(fold_index(i, nx), j, k)
     end do
-    if (mod(nx, 2) == 1) then
-      ! odd-size center entry
-      f_out(n2 + 1, j, k) = f_in(nx, j, k)
-      do i = n2 + 2, nx
-        f_out(i, j, k) = f_in(2*nx - 2*i + 2, j, k)
-      end do
-    else
-      do i = n2 + 1, nx
-        f_out(i, j, k) = f_in(2*nx - 2*i + 2, j, k)
-      end do
-    end if
 
   end subroutine enforce_periodicity_x
 
@@ -1507,20 +1573,14 @@ contains
     real(dp), device, intent(in), dimension(:, :, :) :: f_in
     integer, value, intent(in) :: nx
 
-    integer :: i, j, k, n2
+    integer :: i, j, k
 
     j = threadIdx%x
     k = blockIdx%x
-    n2 = nx/2
 
-    do i = 1, n2
-      f_out(2*i - 1, j, k) = f_in(i, j, k)
-      f_out(2*i, j, k) = f_in(nx - i + 1, j, k)
+    do i = 1, nx
+      f_out(fold_index(i, nx), j, k) = f_in(i, j, k)
     end do
-    if (mod(nx, 2) == 1) then
-      ! odd-size center entry
-      f_out(nx, j, k) = f_in(n2 + 1, j, k)
-    end if
 
   end subroutine undo_periodicity_x
 
@@ -1531,26 +1591,14 @@ contains
     real(dp), device, intent(in), dimension(:, :, :) :: f_in
     integer, value, intent(in) :: ny
 
-    integer :: i, j, k, n2
+    integer :: i, j, k
 
     i = threadIdx%x
     k = blockIdx%x
-    n2 = ny/2
 
-    do j = 1, n2
-      f_out(i, j, k) = f_in(i, 2*j - 1, k)
+    do j = 1, ny
+      f_out(i, j, k) = f_in(i, fold_index(j, ny), k)
     end do
-    if (mod(ny, 2) == 1) then
-      ! odd-size center entry
-      f_out(i, n2 + 1, k) = f_in(i, ny, k)
-      do j = n2 + 2, ny
-        f_out(i, j, k) = f_in(i, 2*ny - 2*j + 2, k)
-      end do
-    else
-      do j = n2 + 1, ny
-        f_out(i, j, k) = f_in(i, 2*ny - 2*j + 2, k)
-      end do
-    end if
 
   end subroutine enforce_periodicity_y
 
@@ -1561,20 +1609,14 @@ contains
     real(dp), device, intent(in), dimension(:, :, :) :: f_in
     integer, value, intent(in) :: ny
 
-    integer :: i, j, k, n2
+    integer :: i, j, k
 
     i = threadIdx%x
     k = blockIdx%x
-    n2 = ny/2
 
-    do j = 1, n2
-      f_out(i, 2*j - 1, k) = f_in(i, j, k)
-      f_out(i, 2*j, k) = f_in(i, ny - j + 1, k)
+    do j = 1, ny
+      f_out(i, fold_index(j, ny), k) = f_in(i, j, k)
     end do
-    if (mod(ny, 2) == 1) then
-      ! odd-size center entry
-      f_out(i, ny, k) = f_in(i, n2 + 1, k)
-    end if
 
   end subroutine undo_periodicity_y
 
@@ -1586,35 +1628,15 @@ contains
     real(dp), device, intent(in), dimension(:, :, :) :: f_in
     integer, value, intent(in) :: nx, ny
 
-    integer :: i, j, k
-    integer :: n2x, n2y
-    integer :: src_i, src_j
-
-    n2x = nx/2
-    n2y = ny/2
+    integer :: i, j, k, src_j
 
     k = blockIdx%x
     j = (blockIdx%y - 1)*blockDim%x + threadIdx%x
     if (j > ny) return
 
-    if (j <= n2y) then
-      src_j = 2*j - 1
-    else if (mod(ny, 2) == 1 .and. j == n2y + 1) then
-      src_j = ny
-    else
-      src_j = 2*ny - 2*j + 2
-    end if
-
+    src_j = fold_index(j, ny)
     do i = 1, nx
-      if (i <= n2x) then
-        src_i = 2*i - 1
-      else if (mod(nx, 2) == 1 .and. i == n2x + 1) then
-        src_i = nx
-      else
-        src_i = 2*nx - 2*i + 2
-      end if
-
-      f_out(i, j, k) = f_in(src_i, src_j, k)
+      f_out(i, j, k) = f_in(fold_index(i, nx), src_j, k)
     end do
 
   end subroutine enforce_periodicity_xy
@@ -1627,37 +1649,40 @@ contains
     real(dp), device, intent(in), dimension(:, :, :) :: f_in
     integer, value, intent(in) :: nx, ny
 
-    integer :: i, j, k
-    integer :: n2x, n2y
-    integer :: src_i, src_j
-
-    n2x = nx/2
-    n2y = ny/2
+    integer :: i, j, k, dst_j
 
     k = blockIdx%x
     j = (blockIdx%y - 1)*blockDim%x + threadIdx%x
     if (j > ny) return
 
-    if (mod(ny, 2) == 1 .and. j == ny) then
-      src_j = n2y + 1
-    else if (mod(j, 2) == 1) then
-      src_j = (j + 1)/2
-    else
-      src_j = ny - j/2 + 1
-    end if
-
+    dst_j = fold_index(j, ny)
     do i = 1, nx
-      if (mod(nx, 2) == 1 .and. i == nx) then
-        src_i = n2x + 1
-      else if (mod(i, 2) == 1) then
-        src_i = (i + 1)/2
-      else
-        src_i = nx - i/2 + 1
-      end if
-
-      f_out(i, j, k) = f_in(src_i, src_j, k)
+      f_out(fold_index(i, nx), dst_j, k) = f_in(i, j, k)
     end do
 
   end subroutine undo_periodicity_xy
+
+  attributes(device) integer function fold_index(i, n) result(src)
+    !! Source index of entry i of a non-periodic line of n points gathered
+    !! into a periodic one: the odd entries ascending, then the even
+    !! entries descending, so that a plain FFT can stand in for the cosine
+    !! transform. For an odd n the last entry lands at the centre, n/2 + 1.
+    !! The single definition of the fold for the periodicity kernels: the
+    !! enforce kernels gather through it and the undo kernels scatter
+    !! through it, which keeps their reads contiguous. The OpenMP backend
+    !! has the same function.
+    implicit none
+
+    integer, value, intent(in) :: i, n
+
+    if (i <= n/2) then
+      src = 2*i - 1
+    else if (mod(n, 2) == 1 .and. i == n/2 + 1) then
+      src = n
+    else
+      src = 2*n - 2*i + 2
+    end if
+
+  end function fold_index
 
 end module m_cuda_spectral

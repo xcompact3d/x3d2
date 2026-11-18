@@ -1,6 +1,7 @@
 # 1. Set source files
 set(SRC
   config.f90
+  memory_estimate.f90
   solver.f90
   les/les.f90
   postprocess/postprocess.f90
@@ -11,6 +12,13 @@ set(SRC
   turbine/turbine_model.f90
   turbine/turbine_dummy.f90
   turbine/adm.f90
+  turbine/alm/alm_airfoil.f90
+  turbine/alm/alm_element.f90
+  turbine/alm/alm_controller.f90
+  turbine/alm/alm_turbine.f90
+  turbine/alm/alm_output.f90
+  turbine/alm/alm.f90
+  turbine/turbine_setup.f90
   case/base_case.f90
   case/abl.f90
   case/channel.f90
@@ -18,6 +26,7 @@ set(SRC
   case/generic.f90
   case/tgv.f90
   case/wind_turbine.f90
+  case/case_factory.f90
   abl/abl.f90
   abl/diagnostics.f90
   module/ibm.f90
@@ -38,6 +47,7 @@ set(POISSONSRC
   mesh_content.f90
   mesh.f90
   ordering.f90
+  dist_reduced.f90
   tdsops.f90
   tdsops_setup.f90
   poisson_fft.f90
@@ -109,6 +119,7 @@ list(APPEND SRC
   io/checkpoint_state.f90
   io/snapshot_manager.f90
   io/stats.f90
+  io/inflow_planes.f90
   io/io_manager.f90
 )
 
@@ -170,11 +181,14 @@ if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "GNU" OR
     # Flang assumes OpenMP 3.1, which rejects both `declare target` in a pure
     # procedure (4.5) and the `loop` construct (5.0) used by the sources.
     set(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} -fopenmp-version=51")
-    set(CMAKE_Fortran_FLAGS_RELEASE "-O3 -ffast-math -funroll-loops -march=native")
+    set(CMAKE_Fortran_FLAGS_RELEASE "-O3 -funroll-loops -march=native")
     set(CMAKE_Fortran_FLAGS_DEBUG "-g -Wall -Wno-ambiguous-structure-constructor -Werror")
   else()
-    set(CMAKE_Fortran_FLAGS_RELEASE "-O3 -ffast-math -funroll-loops -floop-optimize -march=native")
+    set(CMAKE_Fortran_FLAGS_RELEASE "-O3 -funroll-loops -floop-optimize -march=native")
     set(CMAKE_Fortran_FLAGS_DEBUG "-g -Og -Wall -Wpedantic -Werror -Wimplicit-interface -Wimplicit-procedure -Wno-unused-dummy-argument")
+  endif()
+  if(X3D2_FAST_MATH)
+    string(APPEND CMAKE_Fortran_FLAGS_RELEASE " -ffast-math")
   endif()
 elseif(${CMAKE_Fortran_COMPILER_ID} STREQUAL "IntelLLVM" OR
        ${CMAKE_Fortran_COMPILER_ID} STREQUAL "Intel")
@@ -186,7 +200,7 @@ elseif(${CMAKE_Fortran_COMPILER_ID} STREQUAL "IntelLLVM" OR
   # uninit is deliberately absent: ifx implements it with MemorySanitizer,
   # which needs the whole program instrumented and fails to link otherwise.
   set(CMAKE_Fortran_FLAGS "-fpp -stand f18")
-  set(CMAKE_Fortran_FLAGS_RELEASE "-O3 -xHost -fp-model=fast")
+  set(CMAKE_Fortran_FLAGS_RELEASE "-O3 -xHost")
   set(CMAKE_Fortran_FLAGS_DEBUG "-g -O0 -traceback -check bounds,pointers -warn all,nounused")
 elseif(${CMAKE_Fortran_COMPILER_ID} STREQUAL "NVHPC" OR
        ${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI")
@@ -226,6 +240,40 @@ if (${ENABLE_BACKEND} STREQUAL "CUDA")
   endif()
   # Selects the CUDA backend in backend/setup.f90
   target_compile_options(x3d2_backends PRIVATE "-DCUDA")
+
+  if(WITH_MPI)
+    # x3d2-memcheck (the static memory estimator) only exists for the CUDA
+    # backend because its device is the CUDA one
+    # (backend/cuda/memcheck_device.f90).  It also needs cuFFTMp, which only
+    # links into an MPI build, so a WITH_MPI=OFF build skips it.
+    add_library(x3d2_memcheck STATIC
+      memcheck/context.f90
+      memcheck/estimate.f90
+      memcheck/report.f90
+      memcheck/build.f90
+      backend/cuda/memcheck_device.f90
+    )
+    set_target_properties(x3d2_memcheck PROPERTIES
+      Fortran_MODULE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/modules/x3d2_memcheck")
+    target_include_directories(x3d2_memcheck INTERFACE
+      ${CMAKE_CURRENT_BINARY_DIR}/modules/x3d2_memcheck)
+    target_link_libraries(x3d2_memcheck PRIVATE x3d2_backends x3d2)
+    target_compile_options(x3d2_memcheck PRIVATE "-DCUDA")
+
+    # NVML tells x3d2-memcheck when another process changes its memory on the
+    # card, so the --build CHECK is skipped then.
+    find_package(CUDAToolkit REQUIRED)
+    target_link_libraries(x3d2_memcheck PRIVATE CUDA::nvml)
+
+    add_executable(x3d2-memcheck memcheck.f90)
+    target_link_libraries(x3d2-memcheck PRIVATE x3d2_memcheck)
+    target_link_libraries(x3d2-memcheck PRIVATE x3d2_backends)
+    target_link_libraries(x3d2-memcheck PRIVATE x3d2)
+    target_compile_options(x3d2-memcheck PRIVATE "-DCUDA")
+  else()
+    message(STATUS "x3d2-memcheck needs an MPI build with cuFFTMp: skipping it because WITH_MPI is OFF")
+  endif()
+
   # NVTX ranges label the ADIOS2 write paths in Nsight Systems (see
   # io/nvtx.f90). Without ADIOS2 there is no output to label.
   if(WITH_ADIOS2)
@@ -268,6 +316,10 @@ target_link_libraries(x3d2 PRIVATE OpenMP::OpenMP_Fortran)
 target_link_libraries(x3d2_poisson PRIVATE OpenMP::OpenMP_Fortran)
 target_link_libraries(x3d2_backends PRIVATE OpenMP::OpenMP_Fortran)
 target_link_libraries(xcompact PRIVATE OpenMP::OpenMP_Fortran)
+if(TARGET x3d2-memcheck)
+  target_link_libraries(x3d2-memcheck PRIVATE OpenMP::OpenMP_Fortran)
+  target_link_libraries(x3d2_memcheck PRIVATE OpenMP::OpenMP_Fortran)
+endif()
 
 if(WITH_MPI)
   target_link_libraries(x3d2 PRIVATE MPI::MPI_Fortran)
@@ -275,6 +327,11 @@ if(WITH_MPI)
   target_link_libraries(x3d2_backends PRIVATE MPI::MPI_Fortran)
   target_link_libraries(xcompact PRIVATE MPI::MPI_Fortran)
   target_link_libraries(x3d2_poisson_solver PRIVATE MPI::MPI_Fortran)
+endif()
+
+if(TARGET x3d2-memcheck)
+  target_link_libraries(x3d2-memcheck PRIVATE MPI::MPI_Fortran)
+  target_link_libraries(x3d2_memcheck PRIVATE MPI::MPI_Fortran)
 endif()
 
 # 5. Set thirdparty libary dependencies
@@ -292,9 +349,20 @@ if(WITH_ADIOS2)
   target_link_libraries(xcompact PRIVATE ${ADIOS2_FORTRAN_TARGET})
   target_compile_options(x3d2 PRIVATE "-DWITH_ADIOS2")
 
+  # x3d2-memcheck's --build path now builds a real case (m_case_*), which
+  # needs ADIOS2 the same way xcompact does.
+  if(TARGET x3d2-memcheck)
+    target_link_libraries(x3d2-memcheck PRIVATE ${ADIOS2_FORTRAN_TARGET})
+    target_link_libraries(x3d2_memcheck PRIVATE ${ADIOS2_FORTRAN_TARGET})
+  endif()
+
   # GPU-aware I/O requires C API (called via iso_c_binding)
   if(WITH_ADIOS2_GPU_AWARE)
     target_link_libraries(x3d2 PRIVATE ${ADIOS2_C_TARGET})
     target_link_libraries(xcompact PRIVATE ${ADIOS2_C_TARGET})
+    if(TARGET x3d2-memcheck)
+      target_link_libraries(x3d2-memcheck PRIVATE ${ADIOS2_C_TARGET})
+      target_link_libraries(x3d2_memcheck PRIVATE ${ADIOS2_C_TARGET})
+    endif()
   endif()
 endif()

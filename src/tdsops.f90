@@ -42,6 +42,11 @@ module m_tdsops
     !! serial along the line, so this is only valid when the direction is not
     !! decomposed.
     logical :: prefer_thomas = .false.
+    !! Where the direction is decomposed, solve the reduced system of the
+    !! distributed solver exactly instead (m_dist_reduced) rather than with
+    !! the neighbour-only approximation. It costs a gather along the
+    !! direction, so it is kept for the operators that need it.
+    logical :: dist_exact = .false.
     integer :: n_tds !! Tridiagonal system size
     integer :: n_rhs !! Right-hand-side builder size
     integer :: move = 0 !! move between vertices and cell centres
@@ -205,8 +210,11 @@ contains
 
     ! For pentadiag schemes, dist_sa holds the l2 (sub-2) LU factor, not the
     ! distributed-algorithm reduction coefficient. Skip the distributed-solver
-    ! health check in that case.
-    if (.not. tdsops%pentadiag .and. tdsops%dist_sa(n_tds) > tol) then
+    ! health check in that case. The filter is skipped too: it is solved with
+    ! Thomas unless its direction is decomposed, which only the caller knows,
+    ! so tdsops_setup reports its truncation there.
+    if (.not. tdsops%pentadiag .and. operation /= 'filter' &
+        .and. tdsops%dist_sa(n_tds) > tol) then
       ! The subdomain size can differ between ranks, so each reports its own.
       call log_warn('There are '//str(n_tds)//' points in a subdomain, ' &
                     //'it may be too few! The entry the distributed solver ' &

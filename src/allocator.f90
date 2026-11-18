@@ -59,6 +59,14 @@ module m_allocator
 
 contains
 
+  pure integer function padded_dim(n, sz) result(n_padded)
+    !! Smallest multiple of sz that is >= n. Used for the x/y padding in
+    !! allocator_init; z is never padded so is not covered here.
+    integer, intent(in) :: n, sz
+
+    n_padded = n - 1 + mod(-(n - 1), sz) + sz
+  end function padded_dim
+
   function allocator_init(dims, sz) result(allocator)
     integer, intent(in) :: dims(3), sz
     type(allocator_t) :: allocator
@@ -68,8 +76,8 @@ contains
     nx = dims(1); ny = dims(2); nz = dims(3)
 
     ! Apply padding based on sz
-    nx_padded = nx - 1 + mod(-(nx - 1), sz) + sz
-    ny_padded = ny - 1 + mod(-(ny - 1), sz) + sz
+    nx_padded = padded_dim(nx, sz)
+    ny_padded = padded_dim(ny, sz)
     ! Current reorder functions do not require a padding in z-direction.
     nz_padded = nz
 

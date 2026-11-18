@@ -2,20 +2,19 @@ module m_case_wind_turbine
   !! Case for wind-turbine simulations (the `two_turbines` setup):
   !! uniform inflow and convective outflow in x, periodic in y and z.
   !!
-  !! The case owns a polymorphic turbine forcing model (turbine_model_t) and is
-  !! the only place the `iturbine` switch appears (at allocation time). It drives
-  !! the model from its forcings()/postprocess() hooks.
+  !! The case owns a polymorphic turbine forcing model (turbine_model_t), set up
+  !! by m_turbine_setup from the `iturbine` switch. It drives the model from its
+  !! forcings()/postprocess() hooks.
   !!
   !! The inflow/outflow boundary treatment mirrors m_case_cylinder. BCs are
   !! dirichlet/periodic/periodic for the same reason cylinder uses them: the FFT
   !! Poisson solver requires z periodic and only supports a single rank for
   !! non-periodic directions. The two_turbines case uses free-slip walls
   !! in y and z (wind-tunnel walls), which the FFT solver cannot currently do.
-  use m_mpi, only: MPI_COMM_WORLD, MPI_IN_PLACE, MPI_SUM, MPI_MAX, &
+  use m_mpi, only: MPI_COMM_WORLD, MPI_IN_PLACE, MPI_SUM, &
                    MPI_Allreduce
 
   use m_allocator, only: allocator_t
-  use m_adm, only: adm_t
   use m_base_backend, only: base_backend_t
   use m_base_case, only: base_case_t
   use m_common, only: dp, MPI_X3D2_DP, get_argument, DIR_C, DIR_X, &
@@ -25,7 +24,7 @@ module m_case_wind_turbine
   use m_mesh, only: mesh_t
   use m_solver, only: init
   use m_turbine_model, only: turbine_model_t
-  use m_turbine_dummy, only: turbine_dummy_t
+  use m_turbine_setup, only: init_turbine_model, finalise_turbine_model
   use m_logger, only: log_info, abort_run, str
 
   implicit none
@@ -39,8 +38,8 @@ module m_case_wind_turbine
     procedure :: forcings => forcings_wind_turbine
     procedure :: apply_BC => apply_BC_wind_turbine
     procedure :: postprocess => postprocess_wind_turbine
+    procedure :: post_step => post_step_wind_turbine
     procedure :: finalise_case_specific => finalise_wind_turbine
-    procedure :: compute_outflow_params
   end type case_wind_turbine_t
 
   interface case_wind_turbine_t
@@ -79,40 +78,8 @@ contains
                   flow_case%solver%mesh%par%nproc, &
                   flow_case%solver%current_iter)
 
-    ! Select and initialise the turbine forcing model. This is the only place
-    ! the iturbine switch lives; downstream the case calls the polymorphic
-    ! turbine object with no branching.
-    select case (flow_case%wt_cfg%iturbine)
-    case (1)
-      ! Actuator line model - falls back to dummy until landed.
-      allocate (turbine_dummy_t :: flow_case%turbine)
-    case (2)
-      allocate (adm_t :: flow_case%turbine)
-      select type (turbine => flow_case%turbine)
-      type is (adm_t)
-        turbine%coords_file = flow_case%wt_cfg%adm_coords
-        turbine%rho_air = flow_case%wt_cfg%rho_air
-        turbine%T_relax = flow_case%wt_cfg%T_relax
-        turbine%stats_start = &
-          max(1, flow_case%io_mgr%stats_mgr%config%initstat)
-        turbine%stats_freq = &
-          max(1, flow_case%io_mgr%stats_mgr%config%istatfreq)
-      end select
-    case (0)
-      allocate (turbine_dummy_t :: flow_case%turbine)
-    case default
-      call abort_run('Unsupported wind turbine model selected.', &
-                     collective=.true.)
-    end select
-
-    call flow_case%turbine%init(flow_case%solver%backend, &
-                                flow_case%solver%mesh, &
-                                flow_case%solver%host_allocator, &
-                                flow_case%solver%dt)
-    call flow_case%io_mgr%register_checkpoint_state(flow_case%turbine)
-    call flow_case%turbine%setup_output( &
-      flow_case%solver%mesh%par%is_root(), flow_case%io_mgr%is_restart() &
-      )
+    call init_turbine_model(flow_case%turbine, flow_case%wt_cfg, &
+                            flow_case%solver, flow_case%io_mgr)
   end function case_wind_turbine_init
 
   subroutine seed_rng(nrank, nproc, iter)
@@ -176,34 +143,6 @@ contains
     call self%solver%v%set_data_loc(VERT)
     call self%solver%w%set_data_loc(VERT)
   end subroutine initial_conditions_wind_turbine
-
-  ! Convective outflow velocity cx = uxmax*gdt/dx, where uxmax is the global
-  ! max of the streamwise velocity on the x = nx-1 plane of the
-  ! post-integration field. This matches the cylinder case rather than
-  ! Incompact3d's outflow, which uses 0.5*(uxmax + uxmin).
-  subroutine compute_outflow_params(self, out_vel)
-    implicit none
-    class(case_wind_turbine_t) :: self
-    real(dp), intent(out) :: out_vel
-
-    integer :: dims(3), nx, ierr
-    real(dp) :: uxmax, sum_discard
-    real(dp) :: dx, gdt
-
-    dims = self%solver%mesh%get_dims(VERT)
-    nx = dims(1)
-    dx = self%solver%mesh%geo%d(1)
-    gdt = self%solver%time_integrator%gdt
-
-    call self%solver%backend%slice_max_sum( &
-      uxmax, sum_discard, self%solver%u, nx - 1)
-
-    call MPI_Allreduce(MPI_IN_PLACE, uxmax, 1, MPI_X3D2_DP, &
-                       MPI_MAX, MPI_COMM_WORLD, ierr)
-
-    out_vel = uxmax*gdt/dx
-
-  end subroutine compute_outflow_params
 
   subroutine define_BC_wind_turbine(self)
     !! Boundary Conditions hook (called per substep before transeq).
@@ -282,7 +221,7 @@ contains
     class(field_t), intent(inout) :: u, v, w
 
     integer :: dims(3), nx, ierr
-    real(dp) :: out_vel, ny_nz, udif, max_discard
+    real(dp) :: out_vel, ny_nz, udif, max_discard, flow_rate_diff_discard
     real(dp) :: fl_sums(2)
     integer :: gdims(3)
 
@@ -293,8 +232,10 @@ contains
     gdims = self%solver%mesh%get_global_dims(VERT)
     ny_nz = real(gdims(2)*gdims(3), dp)
 
-    ! Convective speed from the already-integrated velocity field.
-    call self%compute_outflow_params(out_vel)
+    ! Convective speed from the already-integrated velocity field. The
+    ! flow-rate imbalance is not used: the mass correction below measures the
+    ! outlet after the convective update instead.
+    call self%compute_outflow_params(out_vel, flow_rate_diff_discard)
 
     ! Dirichlet inflow + convective outflow (no mass correction yet).
     call self%solver%backend%field_set_face_from_field( &
@@ -337,18 +278,26 @@ contains
                                      self%solver%w)
   end subroutine forcings_wind_turbine
 
-  ! Post-processing: turbine diagnostics + flow diagnostics.
-  subroutine postprocess_wind_turbine(self, iter, t)
+  ! Turbine diagnostics every iturboutput steps, independent of n_output.
+  subroutine post_step_wind_turbine(self, iter, t)
     implicit none
     class(case_wind_turbine_t) :: self
     integer, intent(in) :: iter
     real(dp), intent(in) :: t
 
     if (self%wt_cfg%iturboutput > 0) then
-      if (iter > 0 .and. mod(iter, self%wt_cfg%iturboutput) == 0) then
+      if (mod(iter, self%wt_cfg%iturboutput) == 0) then
         call self%turbine%write_output(iter, self%solver%mesh%par%is_root())
       end if
     end if
+  end subroutine post_step_wind_turbine
+
+  ! Post-processing: flow diagnostics.
+  subroutine postprocess_wind_turbine(self, iter, t)
+    implicit none
+    class(case_wind_turbine_t) :: self
+    integer, intent(in) :: iter
+    real(dp), intent(in) :: t
 
     call log_info('time = '//str(t)//' iteration = '//str(iter))
     call self%monitoring%write_step( &
@@ -358,9 +307,7 @@ contains
   subroutine finalise_wind_turbine(self)
     class(case_wind_turbine_t) :: self
 
-    call self%turbine%finalise()
-    call self%io_mgr%unregister_checkpoint_state()
-    deallocate (self%turbine)
+    call finalise_turbine_model(self%turbine, self%io_mgr)
   end subroutine finalise_wind_turbine
 
 end module m_case_wind_turbine

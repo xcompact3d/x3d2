@@ -219,7 +219,7 @@ program test_les_field
   ! A plane-mean drag would be constant in i and fail this check.
   call wall_nut%fill(0._dp)
   call backend%field_set_abl_wall_stress( &
-    wall_nut, u, w, 4, 2, drag_coeff, 1)
+    wall_nut, u, w, 4, 0._dp, 2, drag_coeff, 1)
   call backend%get_field_data(nut_data, wall_nut)
   max_error = 0._dp
   do k = 1, dims(3)
@@ -231,7 +231,7 @@ program test_les_field
   call check_error('local ABL tau_xy', max_error, tolerance, all_pass)
 
   call backend%field_set_abl_wall_stress( &
-    wall_nut, u, w, 4, 2, drag_coeff, 3)
+    wall_nut, u, w, 4, 0._dp, 2, drag_coeff, 3)
   call backend%get_field_data(nut_data, wall_nut)
   max_error = 0._dp
   do k = 1, dims(3)
@@ -241,6 +241,34 @@ program test_les_field
     end do
   end do
   call check_error('local ABL tau_yz', max_error, tolerance, all_pass)
+
+  ! A non-integer dsampling interpolates between two y-vertices, as in
+  ! Incompact3d. With u = i*j and w = 2*i*j, sampling a quarter of the way
+  ! from vertex 32 to vertex 33 gives u = 32.25*i. The two vertices sit in
+  ! different SZ blocks on the GPU, so this also checks the block lookup.
+  do k = 1, dims(3)
+    do j = 1, dims(2)
+      do i = 1, dims(1)
+        u_data(i, j, k) = real(i*j, dp)
+        nut_data(i, j, k) = 2._dp*real(i*j, dp)
+      end do
+    end do
+  end do
+  call backend%set_field_data(u, u_data)
+  call backend%set_field_data(w, nut_data)
+  call wall_nut%fill(0._dp)
+  call backend%field_set_abl_wall_stress( &
+    wall_nut, u, w, 32, 0.25_dp, 2, drag_coeff, 1)
+  call backend%get_field_data(nut_data, wall_nut)
+  max_error = 0._dp
+  do k = 1, dims(3)
+    do i = 1, dims(1)
+      expected = drag_coeff*(32.25_dp*real(i, dp))**2*sqrt(5._dp)
+      max_error = max(max_error, abs(nut_data(i, 2, k) - expected)/expected)
+    end do
+  end do
+  call check_error('interpolated ABL tau_xy', max_error, tolerance, &
+                   all_pass)
 
   ! A wall at rest exerts no stress.
   call neutral_wall_stress(0._dp, 0._dp, kappa, roughness, sampling_height, &

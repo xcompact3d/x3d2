@@ -23,16 +23,23 @@ jobs:
     # self-hosted GPU runner and build with the NVHPC/CUDA toolchain instead
     # (the golden files are backend-specific, so bless a *_cuda.csv alongside).
     runs-on: ubuntu-24.04
+    # Both precisions diff against the same double precision golden. Without
+    # the single precision leg its nightly tolerance would never be exercised.
+    strategy:
+      fail-fast: false
+      matrix:
+        precision: [double, single]
     steps:
       - uses: actions/checkout@v4
 
       - name: Install OpenMPI
         run: sudo apt-get update && sudo apt-get install -y openmpi-bin libopenmpi-dev
 
-      - name: Configure (GNU, double precision, nightly regression on)
+      - name: Configure (GNU, ${{ matrix.precision }} precision, nightly regression on)
         run: >-
           FC=mpif90 cmake -S . -B build-nightly
           -DCMAKE_BUILD_TYPE=Debug
+          -DSINGLE_PREC=${{ matrix.precision == 'single' && 'ON' || 'OFF' }}
           -DWITH_ADIOS2=OFF
           -DWITH_NIGHTLY_REGRESSION=ON
 
@@ -50,7 +57,7 @@ jobs:
       - name: Report timing (non-gating)
         if: always()
         run: |
-          echo "## Nightly regression timing" >> "$GITHUB_STEP_SUMMARY"
+          echo "## Nightly regression timing (${{ matrix.precision }})" >> "$GITHUB_STEP_SUMMARY"
           grep "Averaged time per step" \
             build-nightly/Testing/Temporary/LastTest.log \
             >> "$GITHUB_STEP_SUMMARY" || true
@@ -60,6 +67,6 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: nightly-monitoring
+          name: nightly-monitoring-${{ matrix.precision }}
           path: build-nightly/tests/regression/**/monitoring.csv
           if-no-files-found: ignore

@@ -1,5 +1,6 @@
 module m_config
   !! Contains all the namelist configurations used in x3d2
+  use iso_fortran_env, only: iostat_end
   use m_common
   use m_logger, only: log_warn, abort_run
 
@@ -11,6 +12,9 @@ module m_config
   !! input file. Some entries, such as ``species``, can expand to multiple
   !! written snapshot fields.
   integer, parameter :: MAX_OUTPUT_FIELDS = 10
+
+  !! Maximum number of actuator-line turbine files in wind_turbine_nml
+  integer, parameter :: max_alm_turbines = 100
 
   type, abstract :: base_config_t
     !! All config types have a method read to initialise their data
@@ -87,6 +91,12 @@ module m_config
     character(len=256) :: adm_coords = '' !! actuator-disc (.ad) coords file
     real(dp) :: rho_air = 1._dp      !! air density used in thrust/power
     real(dp) :: T_relax = -1._dp     !! ADM velocity-filter time; < 0 disables
+    !! actuator-line turbine (.turb) files, one per turbine
+    character(len=256), allocatable :: alm_turbines(:)
+    real(dp) :: eps_factor = 2._dp   !! ALM kernel width in cell sizes
+    !> When false, a missing wind_turbine_nml keeps the defaults (no
+    !> turbines), for a case that carries turbines optionally (the ABL)
+    logical :: required = .true.
   contains
     procedure :: read => read_wind_turbine_nml
   end type wind_turbine_config_t
@@ -109,9 +119,29 @@ module m_config
     logical :: coriolis = .false.
     logical :: mass_conserve = .false.
     logical :: damping = .false.
+    !> Blend the outlet towards a spanwise-shifted copy of the flow
+    !> (Incompact3d ishiftedper); periodic x only
+    logical :: shifted_periodic = .false.
   contains
     procedure :: read => read_abl_nml
   end type abl_config_t
+
+  type, extends(base_config_t) :: inflow_config_t
+    !! Precursor inflow planes (docs/source/user/input_file.rst)
+    logical :: write_planes = .false.  !! sample and write y-z planes
+    !> Global x vertex index of the sampling plane; 0 selects the last one
+    integer :: plane_x_index = 0
+    integer :: ntimesteps = 100        !! planes per file
+    integer :: sample_every = 1        !! iterations between samples
+    integer :: start_iter = 0          !! first sample at start_iter + sample_every
+    character(len=256) :: inflow_prefix = 'inflow'
+    !> Successor: impose planes read from inflow_read_prefix at the x inlet
+    logical :: read_planes = .false.
+    integer :: ninflows = 1            !! files cycled through by a successor
+    character(len=256) :: inflow_read_prefix = 'inflow'
+  contains
+    procedure :: read => read_inflow_nml
+  end type inflow_config_t
 
   type, extends(base_config_t) :: stats_config_t
     integer :: initstat = 0          !! iteration to start accumulating (0 = disabled)
@@ -422,7 +452,8 @@ contains
     character(*), optional, intent(in) :: nml_file
     character(*), optional, intent(in) :: nml_string
 
-    integer :: unit
+    integer :: unit, ierr
+    character(len=256) :: msg
 
     real(dp) :: init_noise(3) = 0._dp
     real(dp) :: inlet_noise(3) = 0._dp
@@ -434,18 +465,30 @@ contains
     character(len=256) :: adm_coords = ''
     real(dp) :: rho_air = 1._dp
     real(dp) :: T_relax = -1._dp
+    character(len=256) :: alm_turbines(max_alm_turbines) = ''
+    real(dp) :: eps_factor = 2._dp
 
     namelist /wind_turbine_nml/ init_noise, inlet_noise, bc_start_u, &
       bc_start_v, bc_start_w, iturbine, iturboutput, adm_coords, &
-      rho_air, T_relax
+      rho_air, T_relax, alm_turbines, eps_factor
 
     if (present(nml_file) .and. present(nml_string)) then
       call abort_run('Reading wind_turbine config failed! Provide only a file &
                      &name or source, not both.', collective=.true.)
     else if (present(nml_file)) then
       open (newunit=unit, file=nml_file)
-      read (unit, nml=wind_turbine_nml)
+      read (unit, nml=wind_turbine_nml, iostat=ierr, iomsg=msg)
       close (unit)
+      ! An end of file means the namelist is absent, unless its group is in
+      ! the file and only the closing / is missing
+      if (ierr == iostat_end .and. .not. self%required) then
+        if (nml_group_in_file(nml_file, 'wind_turbine_nml')) &
+          call abort_run('Reading wind_turbine_nml failed: the file ends &
+                         &before its closing /.', collective=.true.)
+      else if (ierr /= 0) then
+        call abort_run('Reading wind_turbine_nml failed: '//trim(msg), &
+                       collective=.true.)
+      end if
     else if (present(nml_string)) then
       read (nml_string, nml=wind_turbine_nml)
     else
@@ -464,6 +507,15 @@ contains
     self%adm_coords = adm_coords
     self%rho_air = rho_air
     self%T_relax = T_relax
+    self%alm_turbines = pack(alm_turbines, len_trim(alm_turbines) > 0)
+    self%eps_factor = eps_factor
+
+    if (self%iturboutput < 0) &
+      call abort_run('wind_turbine_nml: iturboutput must be non-negative.', &
+                     collective=.true.)
+    if (self%iturbine == 2 .and. len_trim(self%adm_coords) == 0) &
+      call abort_run('wind_turbine_nml: iturbine = 2 needs adm_coords.', &
+                     collective=.true.)
 
   end subroutine read_wind_turbine_nml
 
@@ -481,11 +533,12 @@ contains
     integer :: profile_start_iter, seed
     character(len=256) :: profile_file
     logical :: pressure_gradient, coriolis, mass_conserve, damping
+    logical :: shifted_periodic
 
     namelist /abl_nml/ z0, u_star, delta, kappa, dsampling, &
       u_geo, coriolis_freq, &
       init_noise, seed, u_bulk, profile_start_iter, profile_file, &
-      pressure_gradient, coriolis, mass_conserve, damping
+      pressure_gradient, coriolis, mass_conserve, damping, shifted_periodic
 
     ! Defaults
     z0 = 0.1_dp
@@ -504,6 +557,7 @@ contains
     coriolis = .false.
     mass_conserve = .false.
     damping = .false.
+    shifted_periodic = .false.
 
     if (present(nml_file) .and. present(nml_string)) then
       call abort_run('Reading ABL config failed! Provide only a file name or &
@@ -535,6 +589,7 @@ contains
     self%coriolis = coriolis
     self%mass_conserve = mass_conserve
     self%damping = damping
+    self%shifted_periodic = shifted_periodic
 
     call validate_abl_config(self)
 
@@ -544,11 +599,8 @@ contains
     !! Validate relationships between ABL namelist values in one place.
     type(abl_config_t), intent(in) :: config
 
-    ! Damping is a sponge rather than a driving mechanism.
-    if (.not. (config%pressure_gradient .or. config%coriolis .or. &
-               config%mass_conserve)) &
-      call abort_run('ABL config error: enable pressure_gradient, coriolis, &
-                     &or mass_conserve.', collective=.true.)
+    ! The driving mechanism is checked by the case, which may instead be
+    ! driven by a precursor inflow.
 
     if (config%z0 <= 0._dp .or. config%delta <= config%z0 .or. &
         config%kappa <= 0._dp) &
@@ -627,6 +679,86 @@ contains
     self%output_fields = output_fields
   end subroutine read_checkpoint_nml
 
+  subroutine read_inflow_nml(self, nml_file, nml_string)
+    !! The namelist is optional: a missing inflow_nml keeps the defaults.
+    implicit none
+
+    class(inflow_config_t) :: self
+    character(*), optional, intent(in) :: nml_file
+    character(*), optional, intent(in) :: nml_string
+
+    integer :: unit, ierr
+
+    logical :: write_planes, read_planes
+    integer :: plane_x_index, ntimesteps, sample_every, start_iter, ninflows
+    character(len=256) :: inflow_prefix, inflow_read_prefix
+
+    namelist /inflow_nml/ write_planes, plane_x_index, ntimesteps, &
+      sample_every, start_iter, inflow_prefix, read_planes, ninflows, &
+      inflow_read_prefix
+
+    write_planes = .false.
+    plane_x_index = 0
+    ntimesteps = 100
+    sample_every = 1
+    start_iter = 0
+    inflow_prefix = 'inflow'
+    read_planes = .false.
+    ninflows = 1
+    inflow_read_prefix = 'inflow'
+
+    if (present(nml_file) .and. present(nml_string)) then
+      call abort_run('Reading inflow config failed! Provide only a file name &
+                     &or source, not both.', collective=.true.)
+    else if (present(nml_file)) then
+      open (newunit=unit, file=nml_file, iostat=ierr)
+      if (ierr == 0) then
+        read (unit, nml=inflow_nml, iostat=ierr)
+        ! -1 is end of file: the namelist is absent
+        if (ierr /= 0 .and. ierr /= -1) &
+          call abort_run('Reading inflow config failed! Error in &
+                         &inflow_nml.', collective=.true.)
+      end if
+      close (unit)
+    else if (present(nml_string)) then
+      read (nml_string, nml=inflow_nml)
+    else
+      call abort_run('Reading inflow config failed! Provide at least one of &
+                     &the following: file name or source', collective=.true.)
+    end if
+
+    self%write_planes = write_planes
+    self%plane_x_index = plane_x_index
+    self%ntimesteps = ntimesteps
+    self%sample_every = sample_every
+    self%start_iter = start_iter
+    self%inflow_prefix = trim(inflow_prefix)
+    self%read_planes = read_planes
+    self%ninflows = ninflows
+    self%inflow_read_prefix = trim(inflow_read_prefix)
+
+    if (self%ntimesteps < 1) &
+      call abort_run('inflow_nml: ntimesteps must be at least 1.', &
+                     collective=.true.)
+    if (self%sample_every < 1) &
+      call abort_run('inflow_nml: sample_every must be at least 1.', &
+                     collective=.true.)
+    if (self%start_iter < 0) &
+      call abort_run('inflow_nml: start_iter must be non-negative.', &
+                     collective=.true.)
+    if (self%plane_x_index < 0) &
+      call abort_run('inflow_nml: plane_x_index must be non-negative.', &
+                     collective=.true.)
+    if (self%ninflows < 1) &
+      call abort_run('inflow_nml: ninflows must be at least 1.', &
+                     collective=.true.)
+    if (self%write_planes .and. self%read_planes .and. &
+        self%inflow_prefix == self%inflow_read_prefix) &
+      call abort_run('inflow_nml: inflow_prefix and inflow_read_prefix must &
+                     &differ, or the run overwrites the planes it reads.', &
+                     collective=.true.)
+  end subroutine read_inflow_nml
+
   subroutine read_stats_nml(self, nml_file, nml_string)
     implicit none
 
@@ -674,5 +806,50 @@ contains
 
     has_output_field = any(config%output_fields == name)
   end function has_output_field
+
+  pure logical function output_field_active(checkpoint_cfg, name) &
+    result(active)
+    !! Whether a snapshot output field is actually driven at runtime - a
+    !! field only triggers its associated allocations if BOTH it is listed
+    !! in output_fields AND snapshotting is enabled. Mirrors the pattern
+    !! used for keep_pressure (src/case/base_case.f90:120-122), shared by
+    !! run() and x3d2-memcheck.
+    type(checkpoint_config_t), intent(in) :: checkpoint_cfg
+    character(*), intent(in) :: name
+
+    active = has_output_field(checkpoint_cfg, name) .and. &
+             checkpoint_cfg%snapshot_freq > 0
+  end function output_field_active
+
+  logical function nml_group_in_file(nml_file, group) result(found)
+    !! Whether a line of the file opens the namelist group (&group, in any
+    !! case), so an optional namelist that is present but unterminated can be
+    !! told apart from an absent one.
+    character(*), intent(in) :: nml_file
+    character(*), intent(in) :: group
+
+    character(len=1024) :: line
+    integer :: unit, ios, i, c, n
+
+    found = .false.
+    n = len(group) + 1
+    open (newunit=unit, file=nml_file, status='old', action='read', &
+          iostat=ios)
+    if (ios /= 0) return
+    do
+      read (unit, '(a)', iostat=ios) line
+      if (ios /= 0) exit
+      line = adjustl(line)
+      do i = 1, n
+        c = iachar(line(i:i))
+        if (c >= iachar('A') .and. c <= iachar('Z')) &
+          line(i:i) = achar(c + 32)
+      end do
+      ! A blank after the name, so a longer group name does not match
+      found = line(1:n) == '&'//group .and. line(n + 1:n + 1) == ' '
+      if (found) exit
+    end do
+    close (unit)
+  end function nml_group_in_file
 
 end module m_config

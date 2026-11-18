@@ -39,6 +39,7 @@ module m_mesh_content
     integer, dimension(3) :: cell_dims ! local number of cells in each direction without padding (cartesian structure)
     logical, dimension(3) :: periodic_BC ! Whether or not a direction has a periodic BC
     integer, dimension(3, 2) :: BCs_global
+    integer :: bc_code ! FFT_BC_* class of the periodicity (see m_mesh)
     integer, dimension(3, 2) :: BCs
   contains
     procedure :: copy_cell2vert_dims  ! Copies cell_dims to vert_dims taking periodicity into account

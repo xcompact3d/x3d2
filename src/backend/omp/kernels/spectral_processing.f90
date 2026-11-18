@@ -404,11 +404,13 @@ contains
   end subroutine process_spectral_110_fw
 
   subroutine process_spectral_110_solve( &
-    div_u, waves, n1, n2, n3, st1, st2, st3, nx, ny, nz, ay, by &
+    div_u, waves, n1, n2, n3, st3, ay, by &
     )
     !! Middle third of the spectral post-process for the 110 case: the Y
     !! paired even/odd split, the Poisson divide, and the Y paired
-    !! even/odd recombine.
+    !! even/odd recombine. x and y are cosine transformed, so neither has a
+    !! Nyquist mode and only the mean is singular (handled by eps_wave); the
+    !! x Nyquist zeroing of the 010 case does not apply here (#465).
     !!
     !! Layout: div_u(n1, n2, n3) with dim1 = Z r2c modes, dim2 = X modes,
     !! dim3 = Y modes (ay, by). Dim3 must span the whole global y range
@@ -423,10 +425,8 @@ contains
     real(dp), intent(in), dimension(:) :: ay, by
     !> Local extents of div_u
     integer, intent(in) :: n1, n2, n3
-    !> Offsets of the local block within the global spectral array
-    integer, intent(in) :: st1, st2, st3
-    !> Global cell size
-    integer, intent(in) :: nx, ny, nz
+    !> Offset of the local block in dim3 within the global spectral array
+    integer, intent(in) :: st3
 
     integer :: i, j, k, iy, iy_pair
     real(dp) :: div_r, div_c, tmp_r, tmp_c, l_r, l_c, r_r, r_c
@@ -483,9 +483,6 @@ contains
 
           ! update the entry
           div_u(i, j, k) = cmplx(div_r, div_c, kind=dp)
-          ! Zero Nyquist modes
-          if (j + st2 == nx/2 + 1 .and. i + st1 == nz/2 + 1) &
-            div_u(i, j, k) = 0._dp
         end do
       end do
     end do
@@ -632,8 +629,7 @@ contains
                                  st1=st1, st2=st2, nx=nx, ny=ny, nz=nz, &
                                  ax=ax, bx=bx, az=az, bz=bz)
     call process_spectral_110_solve(div_u=div_u, waves=waves, n1=n1, n2=n2, &
-                                    n3=n3, st1=st1, st2=st2, st3=st3, &
-                                    nx=nx, ny=ny, nz=nz, ay=ay, by=by)
+                                    n3=n3, st3=st3, ay=ay, by=by)
     call process_spectral_110_bw(div_u=div_u, n1=n1, n2=n2, n3=n3, &
                                  st1=st1, st2=st2, nx=nx, ny=ny, nz=nz, &
                                  ax=ax, bx=bx, az=az, bz=bz)

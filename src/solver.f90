@@ -805,6 +805,10 @@ contains
       self%dpdx_last => dpdx
       self%dpdy_last => dpdy
       self%dpdz_last => dpdz
+      ! Vertex gradients; precorrect_walls stamps their faces
+      call self%dpdx_last%set_data_loc(VERT)
+      call self%dpdy_last%set_data_loc(VERT)
+      call self%dpdz_last%set_data_loc(VERT)
       self%dp_last_dt = self%time_integrator%stage_dt
     else
       call self%backend%allocator%release_block(dpdx)
@@ -849,17 +853,28 @@ contains
 
     ! Local BCs, so only the ranks that own a face touch it
     bcs = self%mesh%grid%BCs
-    if (any(bcs(1, :) == BC_DIRICHLET)) then
-      call self%backend%field_add_face_from_field( &
-        v, self%dpdy_last, X_FACE, bcs(1, 1), bcs(1, 2))
-      call self%backend%field_add_face_from_field( &
-        w, self%dpdz_last, X_FACE, bcs(1, 1), bcs(1, 2))
-    end if
     if (any(bcs(2, :) == BC_DIRICHLET)) then
       call self%backend%field_add_face_from_field( &
         u, self%dpdx_last, Y_FACE, bcs(2, 1), bcs(2, 2))
       call self%backend%field_add_face_from_field( &
         w, self%dpdz_last, Y_FACE, bcs(2, 1), bcs(2, 2))
+    end if
+    if (any(bcs(1, :) == BC_DIRICHLET)) then
+      ! An edge shared with a Dirichlet y-face has had its correction from
+      ! the y-face pass; adding the x-face one too would apply it twice and
+      ! the projection would remove it only once, a feedback that grows on
+      ! the edge. Incompact3d sets the y-faces last, so they own the edge.
+      ! The kept fields are not used again before the next projection.
+      if (any(bcs(2, :) == BC_DIRICHLET)) then
+        call self%backend%field_set_face(self%dpdy_last, 0._dp, 0._dp, &
+                                         Y_FACE, bcs(2, 1), bcs(2, 2))
+        call self%backend%field_set_face(self%dpdz_last, 0._dp, 0._dp, &
+                                         Y_FACE, bcs(2, 1), bcs(2, 2))
+      end if
+      call self%backend%field_add_face_from_field( &
+        v, self%dpdy_last, X_FACE, bcs(1, 1), bcs(1, 2))
+      call self%backend%field_add_face_from_field( &
+        w, self%dpdz_last, X_FACE, bcs(1, 1), bcs(1, 2))
     end if
     if (any(bcs(3, :) == BC_DIRICHLET)) &
       call abort_run('precorrect_walls: Dirichlet z-faces are not supported.')

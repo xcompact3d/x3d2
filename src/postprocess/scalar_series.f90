@@ -6,7 +6,10 @@ module m_scalar_series
   implicit none
 
   private
-  public :: scalar_series_t
+  public :: scalar_series_t, scalar_series_default_enabled
+
+  !! When .false., init opens no file and write_step writes nothing.
+  logical :: scalar_series_default_enabled = .true.
 
   type :: scalar_series_t
     integer, private :: file_unit = -1
@@ -31,7 +34,8 @@ contains
 
     self%is_root = is_root
     self%n_columns = size(column_names)
-    if (.not. is_root) return
+    if (.not. scalar_series_default_enabled) self%is_root = .false.
+    if (.not. is_root .or. .not. scalar_series_default_enabled) return
 
     inquire (file=filename, exist=exists)
     if (append .and. exists) then

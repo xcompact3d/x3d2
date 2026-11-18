@@ -1,10 +1,8 @@
 module m_case_cylinder
-  use m_mpi, only: MPI_COMM_WORLD, MPI_IN_PLACE, MPI_MAX, MPI_SUM, &
-                   MPI_Allreduce
   use m_allocator, only: allocator_t
   use m_base_backend, only: base_backend_t
   use m_base_case, only: base_case_t
-  use m_common, only: dp, MPI_X3D2_DP, get_argument, DIR_C, DIR_X, &
+  use m_common, only: dp, get_argument, DIR_C, DIR_X, &
                       VERT, X_FACE, BC_DIRICHLET
   use m_field, only: field_t
   use m_config, only: cylinder_config_t
@@ -28,7 +26,6 @@ module m_case_cylinder
     procedure :: forcings => forcings_cylinder
     procedure :: apply_BC => apply_BC_cylinder
     procedure :: postprocess => postprocess_cylinder
-    procedure :: compute_outflow_params
   end type case_cylinder_t
 
   interface case_cylinder_t
@@ -103,53 +100,6 @@ contains
   end subroutine initial_conditions_cylinder
 
   ! ==========================================================================
-  ! Compute outflow velocity number and inlet/outlet flow-rate imbalance.
-  ! Three slice reductions on the GPU, two batched MPI_Allreduces (MAX
-  ! scalar, SUM 2-vector). No D2H copy of the full field.
-  ! ==========================================================================
-  subroutine compute_outflow_params(self, out_vel, flow_rate_diff)
-    implicit none
-    class(case_cylinder_t) :: self
-    real(dp), intent(out) :: out_vel, flow_rate_diff
-
-    integer :: dims(3), dims_glob(3), nx, ierr
-    real(dp) :: uxmax, uxmax_discard
-    real(dp) :: flow_rate_in, flow_rate_out
-    real(dp) :: flow_rate_in_max_discard, flow_rate_out_max_discard
-    real(dp) :: fl_sums(2), ny_nz
-    real(dp) :: dx, gdt
-
-    dims = self%solver%mesh%get_dims(VERT)
-    nx = dims(1)
-    dx = self%solver%mesh%geo%d(1)
-    ! The slice sums are rank local and the Allreduce below adds them up
-    ! across the whole y-z plane, so the divisor is the global vertex count
-    ! in y and z rather than this rank's share of it.
-    dims_glob = self%solver%mesh%get_global_dims(VERT)
-    ny_nz = real(dims_glob(2)*dims_glob(3), dp)
-    gdt = self%solver%time_integrator%gdt
-
-    call self%solver%backend%slice_max_sum( &
-      uxmax, uxmax_discard, self%solver%u, nx - 1)
-    call self%solver%backend%slice_max_sum( &
-      flow_rate_in_max_discard, flow_rate_in, self%solver%u, 1)
-    call self%solver%backend%slice_max_sum( &
-      flow_rate_out_max_discard, flow_rate_out, self%solver%u, nx)
-
-    call MPI_Allreduce(MPI_IN_PLACE, uxmax, 1, MPI_X3D2_DP, &
-                       MPI_MAX, MPI_COMM_WORLD, ierr)
-    fl_sums(1) = flow_rate_in
-    fl_sums(2) = flow_rate_out
-    call MPI_Allreduce(MPI_IN_PLACE, fl_sums, 2, MPI_X3D2_DP, MPI_SUM, &
-                       MPI_COMM_WORLD, ierr)
-    flow_rate_in = fl_sums(1)/ny_nz
-    flow_rate_out = fl_sums(2)/ny_nz
-
-    out_vel = uxmax*gdt/dx
-    flow_rate_diff = flow_rate_in - flow_rate_out
-  end subroutine compute_outflow_params
-
-  ! ==========================================================================
   ! Boundary Conditions hook (called per substep before transeq).
   ! Sets up / refreshes the inflow profile fields. No writes to
   ! solver%u/v/w here.
@@ -163,7 +113,7 @@ contains
     implicit none
     class(case_cylinder_t) :: self
 
-    class(field_t), pointer :: hu, hv, hw
+    real(dp), dimension(:, :), allocatable :: u_in, v_in, w_in
     integer :: j, k, dims(3)
     real(dp) :: noise(3), um, half_L
 
@@ -192,33 +142,32 @@ contains
       call self%bc_start_w_x%set_data_loc(VERT)
     end if
 
-    ! Build the inflow profile in DIR_C host buffers, then upload.
-    hu => self%solver%host_allocator%get_block(DIR_C)
-    hv => self%solver%host_allocator%get_block(DIR_C)
-    hw => self%solver%host_allocator%get_block(DIR_C)
+    ! Build the inflow profile as (ny, nz) host planes, then upload only
+    ! the inlet plane (i = 1), which is the only one read by the kernel.
+    allocate (u_in(dims(2), dims(3)))
+    allocate (v_in(dims(2), dims(3)))
+    allocate (w_in(dims(2), dims(3)))
 
     ! Fill the inlet plane with random numbers in [0, 1); the loop below
-    ! maps these onto noise in [-1, 1). Blocks returned by get_block are
-    ! uninitialised, so this must run before the read-modify-write below.
-    call random_number(hu%data(1, 1:dims(2), 1:dims(3)))
-    call random_number(hv%data(1, 1:dims(2), 1:dims(3)))
-    call random_number(hw%data(1, 1:dims(2), 1:dims(3)))
+    ! maps these onto noise in [-1, 1).
+    call random_number(u_in)
+    call random_number(v_in)
+    call random_number(w_in)
 
     do k = 1, dims(3)
       do j = 1, dims(2)
-        hu%data(1, j, k) = 1._dp + noise(1)*um*(2._dp*hu%data(1, j, k) - 1._dp)
-        hv%data(1, j, k) = noise(2)*um*(2._dp*hv%data(1, j, k) - 1._dp)
-        hw%data(1, j, k) = noise(3)*um*(2._dp*hw%data(1, j, k) - 1._dp)
+        u_in(j, k) = 1._dp + noise(1)*um*(2._dp*u_in(j, k) - 1._dp)
+        v_in(j, k) = noise(2)*um*(2._dp*v_in(j, k) - 1._dp)
+        w_in(j, k) = noise(3)*um*(2._dp*w_in(j, k) - 1._dp)
       end do
     end do
 
-    call self%solver%backend%set_field_data(self%bc_start_u_x, hu%data)
-    call self%solver%backend%set_field_data(self%bc_start_v_x, hv%data)
-    call self%solver%backend%set_field_data(self%bc_start_w_x, hw%data)
-
-    call self%solver%host_allocator%release_block(hu)
-    call self%solver%host_allocator%release_block(hv)
-    call self%solver%host_allocator%release_block(hw)
+    call self%solver%backend%set_field_face_data( &
+      self%bc_start_u_x, u_in, face=X_FACE)
+    call self%solver%backend%set_field_face_data( &
+      self%bc_start_v_x, v_in, face=X_FACE)
+    call self%solver%backend%set_field_face_data( &
+      self%bc_start_w_x, w_in, face=X_FACE)
   end subroutine define_BC_cylinder
 
   ! ==========================================================================

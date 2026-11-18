@@ -2,10 +2,13 @@ module m_base_backend
   use iso_c_binding, only: c_ptr
 
   use m_allocator, only: allocator_t
-  use m_common, only: dp, DIR_C, get_rdr_from_dirs
+  use m_common, only: dp, DIR_C, DIR_X, VERT, NULL_LOC, X_FACE, MPI_X3D2_DP, &
+                      get_rdr_from_dirs
   use m_field, only: field_t
   use m_logger, only: abort_run
   use m_mesh, only: mesh_t
+  use m_mpi, only: MPI_COMM_WORLD, MPI_STATUSES_IGNORE, MPI_Irecv, &
+                   MPI_Isend, MPI_Waitall
   use m_poisson_fft, only: poisson_fft_t
   use m_tdsops, only: tdsops_t, dirps_t
 
@@ -59,8 +62,12 @@ module m_base_backend
     procedure :: vector_norm_squared => vector_norm_squared_base
     procedure :: field_labelled_sums => field_labelled_sums_base
     procedure :: field_labelled_axpy => field_labelled_axpy_base
+    procedure :: field_sample_points => field_sample_points_base
+    procedure :: field_add_gaussian_sources => &
+      field_add_gaussian_sources_base
     procedure :: field_max_mean => field_max_mean_base
     procedure :: slice_max_sum => slice_max_sum_base
+    procedure :: x_slice_weighted_sum => x_slice_weighted_sum_base
     procedure :: field_plane_sums => field_plane_sums_base
     procedure :: field_scale => field_scale_base
     procedure :: field_shift => field_shift_base
@@ -68,7 +75,9 @@ module m_base_backend
     procedure :: field_set_face => field_set_face_base
     procedure :: field_set_y_plane => field_set_y_plane_base
     procedure :: field_set_abl_wall_stress => field_set_abl_wall_stress_base
+    procedure :: field_shift_blend_x_band => field_shift_blend_x_band_base
     procedure :: field_set_face_from_field => field_set_face_from_field_base
+    procedure :: set_field_face_data => set_field_face_data_base
     procedure :: field_add_face_from_field => field_add_face_from_field_base
     procedure :: field_add_const_x_face => field_add_const_x_face_base
     procedure :: field_set_x_inlet_plane => field_set_x_inlet_plane_base
@@ -103,6 +112,25 @@ contains
     call abort_run(trim(operation)//': not implemented by the active backend')
 
   end subroutine not_implemented
+
+  function abl_wall_upper_plane(sample_plane, sample_weight, ny) &
+    result(upper_plane)
+    !! The y-vertex above the ABL wall-model sample plane, checked against
+    !! the interpolation weight. With a zero weight the upper plane is not
+    !! read, so the sample may then sit on the last vertex.
+    implicit none
+
+    integer, intent(in) :: sample_plane, ny
+    real(dp), intent(in) :: sample_weight
+    integer :: upper_plane
+
+    if (sample_weight < 0._dp .or. sample_weight >= 1._dp) &
+      call abort_run('ABL wall stress sample weight must be in [0, 1).')
+    upper_plane = min(sample_plane + 1, ny)
+    if (sample_weight > 0._dp .and. upper_plane == sample_plane) &
+      call abort_run('ABL wall stress interpolates above the domain.')
+
+  end function abl_wall_upper_plane
 
   subroutine base_init(self)
     implicit none
@@ -458,6 +486,116 @@ contains
 
   end subroutine field_labelled_axpy_base
 
+  subroutine field_sample_points_base(self, vals, points, a, b, c)
+    !! Computes this rank's part of the trilinear interpolation of the DIR_X
+    !! VERT fields a, b and c at `points(1:3, p)`: vals(1:3, p) sums the
+    !! interpolation weight times a, b and c over the corners of the cell
+    !! holding point p that this rank owns. Every grid point is owned by one
+    !! rank, so an MPI sum over ranks gives the full interpolation without a
+    !! halo exchange. Corners beyond a periodic boundary wrap around; corners
+    !! outside a non-periodic boundary are skipped. Needs a uniform grid.
+    !! No MPI reduction is done, so the caller can reduce once for all points.
+    implicit none
+
+    class(base_backend_t) :: self
+    real(dp), intent(out) :: vals(:, :)
+    real(dp), intent(in) :: points(:, :)
+    class(field_t), intent(in) :: a, b, c
+
+    vals = 0._dp
+    call not_implemented('field_sample_points')
+
+  end subroutine field_sample_points_base
+
+  subroutine field_add_gaussian_sources_base(self, a, b, c, points, coeffs, &
+                                             eps, r_cut)
+    !! Adds isotropic Gaussian sources to the DIR_X VERT fields a, b and c:
+    !! at every grid point x within distance r_cut of points(1:3, s),
+    !! a += coeffs(1, s)*exp(-|x - points(:, s)|^2/eps^2), and likewise b
+    !! and c with coeffs(2, s) and coeffs(3, s). The kernel wraps across
+    !! periodic boundaries, consistent with field_sample_points, and is cut
+    !! at non-periodic ones. Needs a uniform grid.
+    implicit none
+
+    class(base_backend_t) :: self
+    class(field_t), intent(inout) :: a, b, c
+    real(dp), intent(in) :: points(:, :), coeffs(:, :)
+    real(dp), intent(in) :: eps, r_cut
+
+    call not_implemented('field_add_gaussian_sources')
+
+  end subroutine field_add_gaussian_sources_base
+
+  subroutine source_index_boxes(mesh, points, r_cut, lo, hi)
+    !! Global zero-based VERT index box [lo, hi] of the grid points within
+    !! r_cut of each point, on a uniform grid. In a periodic direction the
+    !! box is left unclipped, so it may run past either end of the domain;
+    !! the projection wraps those indices onto the grid, which keeps the
+    !! whole kernel. In a non-periodic direction it is clipped to the domain,
+    !! so a kernel crossing an inflow, outflow or wall loses that part, as in
+    !! Incompact3d. Stops the run if a box is wider than a periodic
+    !! direction, as the wrapped kernel would then cover points twice.
+    implicit none
+
+    type(mesh_t), intent(in) :: mesh
+    real(dp), intent(in) :: points(:, :), r_cut
+    integer, intent(out) :: lo(:, :), hi(:, :)
+
+    integer :: gdims(3), dir, s
+
+    gdims = mesh%get_global_dims(VERT)
+    do s = 1, size(points, 2)
+      do dir = 1, 3
+        lo(dir, s) = ceiling((points(dir, s) - r_cut)/mesh%geo%d(dir))
+        hi(dir, s) = floor((points(dir, s) + r_cut)/mesh%geo%d(dir))
+        if (mesh%grid%periodic_BC(dir)) then
+          if (hi(dir, s) - lo(dir, s) + 1 > gdims(dir)) &
+            call abort_run('Gaussian source kernel wider than the periodic &
+                           &domain: reduce eps_factor or refine the grid.')
+        else
+          lo(dir, s) = max(lo(dir, s), 0)
+          hi(dir, s) = min(hi(dir, s), gdims(dir) - 1)
+        end if
+      end do
+    end do
+
+  end subroutine source_index_boxes
+
+  subroutine check_point_fields(a, b, c)
+    !! Checks the fields passed to the point sampling and source operations
+    !! are DIR_X VERT fields.
+    implicit none
+
+    class(field_t), intent(in) :: a, b, c
+
+    if (a%dir /= DIR_X .or. b%dir /= DIR_X .or. c%dir /= DIR_X) &
+      call abort_run('Point sampling and sources need DIR_X fields.')
+    if (a%data_loc /= VERT .or. b%data_loc /= VERT .or. c%data_loc /= VERT) &
+      call abort_run('Point sampling and sources need VERT fields.')
+  end subroutine check_point_fields
+
+  subroutine check_labelled_fields(g, label, a, b, c)
+    !! Checks the fields passed to the labelled field operations share a
+    !! valid data location and the DIR_X layout.
+    implicit none
+
+    class(field_t), intent(in) :: g, label, a, b, c
+
+    if (g%data_loc == NULL_LOC .or. label%data_loc == NULL_LOC .or. &
+        a%data_loc == NULL_LOC .or. b%data_loc == NULL_LOC .or. &
+        c%data_loc == NULL_LOC) then
+      call abort_run('You must set data_loc before labelled field operations.')
+    end if
+    if (label%data_loc /= g%data_loc .or. a%data_loc /= g%data_loc .or. &
+        b%data_loc /= g%data_loc .or. c%data_loc /= g%data_loc) then
+      call abort_run('Labelled field operations need one data location.')
+    end if
+    if (g%dir /= DIR_X .or. label%dir /= DIR_X .or. a%dir /= DIR_X .or. &
+        b%dir /= DIR_X .or. c%dir /= DIR_X) then
+      call abort_run('Labelled field operations need DIR_X layout.')
+    end if
+  end subroutine check_labelled_fields
+
   subroutine field_max_mean_base(self, max_val, mean_val, f, &
                                  enforced_data_loc)
     !! Obtains maximum and mean values in a field
@@ -492,6 +630,25 @@ contains
     call not_implemented('slice_max_sum')
 
   end subroutine slice_max_sum_base
+
+  subroutine x_slice_weighted_sum_base(self, sum_val, f, i_slice, y_weights)
+  !! Weighted sum of the x slice f(i_slice, :, :) of a DIR_X field: the
+  !! point with local y index j counts y_weights(j) times. Gives the flow
+  !! rate through an x face as the discrete divergence sees it, whose y
+  !! interpolation weights the boundary planes differently from the
+  !! interior ones. Caller is responsible for MPI_Allreduce across ranks.
+    implicit none
+
+    class(base_backend_t) :: self
+    real(dp), intent(out) :: sum_val
+    class(field_t), intent(in) :: f
+    integer, intent(in) :: i_slice
+    real(dp), intent(in) :: y_weights(:)
+
+    sum_val = 0._dp
+    call not_implemented('x_slice_weighted_sum')
+
+  end subroutine x_slice_weighted_sum_base
 
   subroutine field_plane_sums_base(self, sums, f)
     !! Sum a DIR_X field over x and z on every local y-plane:
@@ -586,20 +743,139 @@ contains
   end subroutine field_set_y_plane_base
 
   subroutine field_set_abl_wall_stress_base(self, stress, u, w, &
-                                            sample_plane, stress_plane, &
-                                            drag_coeff, component)
+                                            sample_plane, sample_weight, &
+                                            stress_plane, drag_coeff, &
+                                            component)
     !! Replace one SGS stress plane using the local sampled velocity.
+    !! The velocity is interpolated linearly between y-vertices
+    !! sample_plane and sample_plane + 1, with weight sample_weight on the
+    !! upper one, as Incompact3d samples at a non-integer dsampling.
     implicit none
 
     class(base_backend_t) :: self
     class(field_t), intent(inout) :: stress
     class(field_t), intent(in) :: u, w
     integer, intent(in) :: sample_plane, stress_plane, component
+    real(dp), intent(in) :: sample_weight !! in [0, 1)
     real(dp), intent(in) :: drag_coeff
 
     call not_implemented('field_set_abl_wall_stress')
 
   end subroutine field_set_abl_wall_stress_base
+
+  subroutine field_shift_blend_x_band_base(self, f, lambda, i_start, &
+                                           i_offset, nshift, z_plane_rank)
+    !! Blend an x band of a DIR_X vertex field towards a spanwise-shifted
+    !! copy of an upstream band (the ABL shifted periodic fringe):
+    !! f(i + i_offset, j, k) = lambda*f(i, j, k - nshift)
+    !!                         + (1 - lambda)*f(i + i_offset, j, k)
+    !! for i = i_start, ..., i_start + size(lambda) - 1, with k circular over
+    !! the global z planes. x and y must not be decomposed; z_plane_rank(kg)
+    !! is the rank holding global z plane kg.
+    !!
+    !! This default works on the host through get_field_data and
+    !! set_field_data, so it suits a host backend; a device backend should
+    !! override it to keep the field on the device.
+    implicit none
+
+    class(base_backend_t) :: self
+    class(field_t), intent(inout) :: f
+    real(dp), intent(in) :: lambda(:)
+    integer, intent(in) :: i_start, i_offset, nshift
+    integer, intent(in) :: z_plane_rank(:)
+
+    real(dp), allocatable :: host(:, :, :), band(:, :, :), shifted(:, :, :)
+    integer, allocatable :: requests(:)
+    integer :: dims(3), padded(3), nband, z_offset, nz, rank, k, k_src
+    integer :: n_req, i, i_dst, j, ierr
+
+    dims = self%mesh%get_dims(VERT)
+    padded = self%allocator%get_padded_dims(DIR_C)
+    nband = size(lambda)
+    nz = size(z_plane_rank)
+    z_offset = self%mesh%par%n_offset(3)
+    rank = self%mesh%par%nrank
+
+    allocate (host(padded(1), padded(2), padded(3)))
+    call self%get_field_data(host, f)
+    band = host(i_start:i_start + nband - 1, 1:dims(2), 1:dims(3))
+    allocate (shifted(nband, dims(2), dims(3)))
+    allocate (requests(2*dims(3)))
+
+    n_req = 0
+    do k = 1, dims(3)
+      k_src = shifted_z_source(z_offset + k, nshift, nz)
+      if (z_plane_rank(k_src) == rank) then
+        shifted(:, :, k) = band(:, :, k_src - z_offset)
+      end if
+    end do
+    call post_z_shift_exchange(band, shifted, nband*dims(2), dims(3), &
+                               z_offset, nshift, z_plane_rank, rank, &
+                               requests, n_req)
+    if (n_req > 0) &
+      call MPI_Waitall(n_req, requests, MPI_STATUSES_IGNORE, ierr)
+
+    do k = 1, dims(3)
+      do j = 1, dims(2)
+        do i = 1, nband
+          i_dst = i_start + i - 1 + i_offset
+          host(i_dst, j, k) = lambda(i)*shifted(i, j, k) &
+                              + (1._dp - lambda(i))*host(i_dst, j, k)
+        end do
+      end do
+    end do
+
+    call self%set_field_data(f, host)
+
+  end subroutine field_shift_blend_x_band_base
+
+  subroutine post_z_shift_exchange(band, shifted, n_plane, nz_local, &
+                                   z_offset, nshift, z_plane_rank, rank, &
+                                   requests, n_req)
+    !! Post the sends and receives of a circular z shift by nshift planes
+    !! for the planes held by other ranks; band(:, :, k) and
+    !! shifted(:, :, k) are this rank's local plane k. The tag is the
+    !! receiving global plane.
+    implicit none
+
+    real(dp), intent(in) :: band(:, :, :)
+    real(dp), intent(inout) :: shifted(:, :, :)
+    integer, intent(in) :: n_plane, nz_local, z_offset, nshift, rank
+    integer, intent(in) :: z_plane_rank(:)
+    integer, intent(inout) :: requests(:)
+    integer, intent(out) :: n_req
+
+    integer :: k, kg, k_src, k_dst, nz, ierr
+
+    nz = size(z_plane_rank)
+    n_req = 0
+    do k = 1, nz_local
+      kg = z_offset + k
+      k_src = shifted_z_source(kg, nshift, nz)
+      if (z_plane_rank(k_src) /= rank) then
+        n_req = n_req + 1
+        call MPI_Irecv(shifted(1, 1, k), n_plane, MPI_X3D2_DP, &
+                       z_plane_rank(k_src), kg, MPI_COMM_WORLD, &
+                       requests(n_req), ierr)
+      end if
+      k_dst = shifted_z_source(kg, -nshift, nz)
+      if (z_plane_rank(k_dst) /= rank) then
+        n_req = n_req + 1
+        call MPI_Isend(band(1, 1, k), n_plane, MPI_X3D2_DP, &
+                       z_plane_rank(k_dst), k_dst, MPI_COMM_WORLD, &
+                       requests(n_req), ierr)
+      end if
+    end do
+
+  end subroutine post_z_shift_exchange
+
+  pure integer function shifted_z_source(kg, nshift, nz)
+    !! Global z plane that global plane kg takes its value from in a
+    !! circular shift by nshift planes
+    integer, intent(in) :: kg, nshift, nz
+
+    shifted_z_source = modulo(kg - 1 - nshift, nz) + 1
+  end function shifted_z_source
 
   subroutine field_set_face_from_field_base(self, f, f_start, c_end, face, &
                                             bc_start, bc_end, flow_rate_diff)
@@ -619,6 +895,25 @@ contains
     call not_implemented('field_set_face_from_field')
 
   end subroutine field_set_face_from_field_base
+
+  subroutine set_field_face_data_base(self, f, data_start, data_end, face)
+    !! Write host 2D planes into the face planes of a DIR_X field and
+    !! touch nothing else. For Y_FACE the planes are (nx, nz) and are
+    !! written to y = 1 (data_start) and y = ny (data_end). For X_FACE
+    !! the planes are (ny, nz) and are written to x = 1 (data_start)
+    !! and x = nx (data_end). data_end is optional, when absent only
+    !! the start face is written.
+    implicit none
+
+    class(base_backend_t) :: self
+    class(field_t), intent(inout) :: f
+    real(dp), dimension(:, :), intent(in) :: data_start
+    real(dp), dimension(:, :), optional, intent(in) :: data_end
+    integer, intent(in) :: face
+
+    call not_implemented('set_field_face_data')
+
+  end subroutine set_field_face_data_base
 
   subroutine field_add_face_from_field_base(self, f, g, face, bc_start, bc_end)
     !! Add the face planes of `g` onto those of `f`, on Dirichlet faces
@@ -658,13 +953,14 @@ contains
     !! the host array `plane(ny, nz)`, in local VERT dims. Only the plane
     !! crosses to the device, so a time-varying inlet can be refreshed
     !! without uploading and reordering a full 3D field.
+    !! A thin wrapper on set_field_face_data with face = X_FACE.
     implicit none
 
     class(base_backend_t) :: self
     class(field_t), intent(inout) :: f
     real(dp), dimension(:, :), intent(in) :: plane
 
-    call not_implemented('field_set_x_inlet_plane')
+    call self%set_field_face_data(f, plane, face=X_FACE)
 
   end subroutine field_set_x_inlet_plane_base
 

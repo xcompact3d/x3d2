@@ -2,10 +2,13 @@ module m_cuda_backend
   use iso_c_binding, only: c_ptr
   use cudafor
   use m_mpi, only: MPI_COMM_WORLD, MPI_IN_PLACE, MPI_MAX, MPI_SUM, &
-                   MPI_Allreduce
+                   MPI_STATUSES_IGNORE, MPI_Allreduce, MPI_Irecv, MPI_Isend, &
+                   MPI_Waitall
 
   use m_allocator, only: allocator_t
-  use m_base_backend, only: base_backend_t
+  use m_base_backend, only: base_backend_t, source_index_boxes, &
+                            check_point_fields, check_labelled_fields, &
+                            abl_wall_upper_plane, shifted_z_source
   use m_common, only: dp, sp, MPI_X3D2_DP, move_data_loc, get_rdr_from_dirs, &
                       RDR_X2Y, RDR_X2Z, RDR_Y2X, RDR_Y2Z, RDR_Z2X, RDR_Z2Y, &
                       RDR_C2X, RDR_C2Y, RDR_C2Z, RDR_X2C, RDR_Y2C, RDR_Z2C, &
@@ -19,24 +22,28 @@ module m_cuda_backend
   use m_cuda_common, only: SZ
   use m_cuda_exec_dist, only: exec_dist_transeq_3fused, exec_dist_tds_compact
   use m_cuda_exec_thom, only: exec_thom_tds_compact
-  use m_cuda_poisson_fft, only: cuda_poisson_fft_t, init_cuda_poisson_fft_t
+  use m_cuda_poisson_fft, only: create_cuda_poisson_fft
   use m_cuda_sendrecv, only: sendrecv_fields, sendrecv_3fields
   use m_cuda_tdsops, only: cuda_tdsops_t
   use m_cuda_kernels_dist, only: transeq_3fused_dist, transeq_3fused_subs
   use m_cuda_kernels_fieldops, only: axpby, buffer_copy, field_scale, &
                                      field_shift, scalar_product, &
                                      vector_norm_squared, labelled_sums, &
-                                     labelled_axpy, &
+                                     labelled_axpy, sample_points, &
+                                     add_gaussian_sources, &
                                      field_max_sum, field_set_y_face, &
                                      field_set_x_face, field_set_y_plane, &
                                      field_set_abl_wall_stress, &
+                                     field_get_x_band, field_blend_x_band, &
                                      field_set_x_face_from_field, &
                                      field_set_y_face_from_field, &
-                                     add_scalar_x_face, set_x_inlet_plane, &
+                                     add_scalar_x_face, &
                                      field_add_x_face_from_field, &
                                      field_plane_partial_sums, &
                                      field_plane_sums_reduce, &
                                      field_add_y_face_from_field, &
+                                     field_set_x_face_from_plane, &
+                                     field_set_y_face_from_plane, &
                                      pwmul, volume_integral, &
                                      vorticity_from_gradients, &
                                      qcriterion_from_gradients, &
@@ -83,17 +90,22 @@ module m_cuda_backend
     procedure :: vector_norm_squared => vector_norm_squared_cuda
     procedure :: field_labelled_sums => field_labelled_sums_cuda
     procedure :: field_labelled_axpy => field_labelled_axpy_cuda
+    procedure :: field_sample_points => field_sample_points_cuda
+    procedure :: field_add_gaussian_sources => &
+      field_add_gaussian_sources_cuda
     procedure :: field_max_mean => field_max_mean_cuda
     procedure :: slice_max_sum => slice_max_sum_cuda
+    procedure :: x_slice_weighted_sum => x_slice_weighted_sum_cuda
     procedure :: field_scale => field_scale_cuda
     procedure :: field_shift => field_shift_cuda
     procedure :: field_set_face => field_set_face_cuda
     procedure :: field_set_y_plane => field_set_y_plane_cuda
     procedure :: field_plane_sums => field_plane_sums_cuda
     procedure :: field_set_abl_wall_stress => field_set_abl_wall_stress_cuda
+    procedure :: field_shift_blend_x_band => field_shift_blend_x_band_cuda
     procedure :: field_set_face_from_field => field_set_face_from_field_cuda
+    procedure :: set_field_face_data => set_field_face_data_cuda
     procedure :: field_add_const_x_face => field_add_const_x_face_cuda
-    procedure :: field_set_x_inlet_plane => field_set_x_inlet_plane_cuda
     procedure :: field_add_face_from_field => field_add_face_from_field_cuda
     procedure :: compute_vorticity => compute_vorticity_cuda
     procedure :: compute_qcriterion => compute_qcriterion_cuda
@@ -126,7 +138,6 @@ contains
     class(allocator_t), target, intent(inout) :: allocator
     type(cuda_backend_t) :: backend
 
-    type(cuda_poisson_fft_t) :: cuda_poisson_fft
     integer :: n_groups
 
     call backend%base_init()
@@ -702,15 +713,12 @@ contains
                          self%mesh%par%pprev(dir), &
                          self%mesh%par%pnext(dir))
 
-    ! call exec_dist
     call exec_dist_tds_compact( &
       du_dev, u_dev, &
       self%u_recv_s_dev, self%u_recv_e_dev, &
       self%du_send_s_dev, self%du_send_e_dev, &
       self%du_recv_s_dev, self%du_recv_e_dev, &
-      tdsops_dev, self%mesh%par%nproc_dir(dir), &
-      self%mesh%par%pprev(dir), self%mesh%par%pnext(dir), &
-      blocks, threads &
+      tdsops_dev, self%mesh%par, dir, blocks, threads &
       )
 
   end subroutine tds_solve_dist
@@ -1244,27 +1252,106 @@ contains
 
   end subroutine field_labelled_axpy_cuda
 
-  subroutine check_labelled_fields(g, label, a, b, c)
-    !! Checks the fields passed to the labelled field operations share a
-    !! valid data location and the DIR_X layout.
+  subroutine field_sample_points_cuda(self, vals, points, a, b, c)
+    !! [[m_base_backend(module):field_sample_points_base(subroutine)]]
     implicit none
 
-    class(field_t), intent(in) :: g, label, a, b, c
+    class(cuda_backend_t) :: self
+    real(dp), intent(out) :: vals(:, :)
+    real(dp), intent(in) :: points(:, :)
+    class(field_t), intent(in) :: a, b, c
 
-    if (g%data_loc == NULL_LOC .or. label%data_loc == NULL_LOC .or. &
-        a%data_loc == NULL_LOC .or. b%data_loc == NULL_LOC .or. &
-        c%data_loc == NULL_LOC) then
-      call abort_run('You must set data_loc before labelled field operations.')
-    end if
-    if (label%data_loc /= g%data_loc .or. a%data_loc /= g%data_loc .or. &
-        b%data_loc /= g%data_loc .or. c%data_loc /= g%data_loc) then
-      call abort_run('Labelled field operations need one data location.')
-    end if
-    if (g%dir /= DIR_X .or. label%dir /= DIR_X .or. a%dir /= DIR_X .or. &
-        b%dir /= DIR_X .or. c%dir /= DIR_X) then
-      call abort_run('Labelled field operations need DIR_X layout.')
-    end if
-  end subroutine check_labelled_fields
+    real(dp), device, pointer, dimension(:, :, :) :: a_d, b_d, c_d
+    real(dp), device, allocatable :: vals_d(:, :), points_d(:, :)
+    integer :: dims(3), gdims(3), offset(3), dims_padded(3), n
+    real(dp) :: d(3)
+    type(dim3) :: blocks, threads
+
+    call check_point_fields(a, b, c)
+
+    n = size(points, 2)
+    vals = 0._dp
+    if (n == 0) return
+
+    call resolve_field_t(a_d, a)
+    call resolve_field_t(b_d, b)
+    call resolve_field_t(c_d, c)
+
+    allocate (vals_d(3, n))
+    points_d = points
+    d = self%mesh%geo%d
+    dims = self%mesh%get_dims(VERT)
+    gdims = self%mesh%get_global_dims(VERT)
+    offset = self%mesh%par%n_offset
+    dims_padded = self%allocator%get_padded_dims(DIR_C)
+
+    threads = dim3(64, 1, 1)
+    blocks = dim3((n - 1)/64 + 1, 1, 1)
+    call sample_points<<<blocks, threads>>>( & !&
+      vals_d, points_d, a_d, b_d, c_d, n, d(1), d(2), d(3), &
+      dims(1), dims(2), dims(3), gdims(1), gdims(2), gdims(3), &
+      offset(1), offset(2), offset(3), self%mesh%grid%periodic_BC(1), &
+      self%mesh%grid%periodic_BC(2), self%mesh%grid%periodic_BC(3), &
+      dims_padded(3))
+
+    vals = vals_d
+
+  end subroutine field_sample_points_cuda
+
+  subroutine field_add_gaussian_sources_cuda(self, a, b, c, points, coeffs, &
+                                             eps, r_cut)
+    !! [[m_base_backend(module):field_add_gaussian_sources_base(subroutine)]]
+    implicit none
+
+    class(cuda_backend_t) :: self
+    class(field_t), intent(inout) :: a, b, c
+    real(dp), intent(in) :: points(:, :), coeffs(:, :)
+    real(dp), intent(in) :: eps, r_cut
+
+    real(dp), device, pointer, dimension(:, :, :) :: a_d, b_d, c_d
+    real(dp), device, allocatable :: src_d(:, :)
+    integer, device, allocatable :: box_d(:, :)
+    integer :: box(6, size(points, 2)), offset(3), dims_padded(3), n, nz_box
+    integer :: dims(3), gdims(3)
+    real(dp) :: src(6, size(points, 2)), d(3)
+    logical :: periodic(3)
+    type(dim3) :: blocks, threads
+
+    call check_point_fields(a, b, c)
+
+    n = size(points, 2)
+    if (n == 0) return
+    call source_index_boxes(self%mesh, points, r_cut, box(1:3, :), &
+                            box(4:6, :))
+    nz_box = maxval(box(6, :) - box(3, :) + 1)
+    if (nz_box < 1) return
+
+    call resolve_field_t(a_d, a)
+    call resolve_field_t(b_d, b)
+    call resolve_field_t(c_d, c)
+
+    ! One copy each for the sources and their boxes
+    allocate (src_d(6, n), box_d(6, n))
+    src(1:3, :) = points
+    src(4:6, :) = coeffs
+    src_d = src
+    box_d = box
+    d = self%mesh%geo%d
+    dims = self%mesh%get_dims(VERT)
+    gdims = self%mesh%get_global_dims(VERT)
+    offset = self%mesh%par%n_offset
+    periodic = self%mesh%grid%periodic_BC
+    dims_padded = self%allocator%get_padded_dims(DIR_C)
+
+    threads = dim3(64, 1, 1)
+    blocks = dim3(n, nz_box, 1)
+    call add_gaussian_sources<<<blocks, threads>>>( & !&
+      a_d, b_d, c_d, src_d, box_d, n, 1._dp/eps**2, r_cut**2, &
+      d(1), d(2), d(3), dims(1), dims(2), dims(3), &
+      gdims(1), gdims(2), gdims(3), offset(1), offset(2), offset(3), &
+      periodic(1), periodic(2), periodic(3), dims_padded(3))
+
+  end subroutine field_add_gaussian_sources_cuda
 
   subroutine copy_into_buffers(u_send_s_dev, u_send_e_dev, u_dev, n)
     implicit none
@@ -1427,6 +1514,67 @@ contains
     sum_val = sum_d
 
   end subroutine slice_max_sum_cuda
+
+  attributes(global) subroutine x_slice_weighted_sum_kernel( &
+    sum_f, f, w, i_slice, n_i_pad, n_j)
+    !! Weighted sum of the x slice f(:, i_slice, :) of a DIR_X field, w(j)
+    !! on the points of y index j. One thread per (y, z) point; z is the
+    !! fast-varying component of the group index.
+    implicit none
+    real(dp), device, intent(inout) :: sum_f
+    real(dp), device, intent(in), dimension(:, :, :) :: f
+    real(dp), device, intent(in), dimension(:) :: w
+    integer, value, intent(in) :: i_slice, n_i_pad, n_j
+    integer :: i, j, b, ierr
+
+    i = threadIdx%x
+    j = i + (blockIdx%y - 1)*blockDim%x
+    b = blockIdx%x + (blockIdx%y - 1)*n_i_pad
+
+    if (j <= n_j) ierr = atomicadd(sum_f, w(j)*f(i, i_slice, b))
+  end subroutine x_slice_weighted_sum_kernel
+
+  subroutine x_slice_weighted_sum_cuda(self, sum_val, f, i_slice, y_weights)
+    !! [[m_base_backend(module):x_slice_weighted_sum_base(subroutine)]]
+    implicit none
+    class(cuda_backend_t) :: self
+    real(dp), intent(out) :: sum_val
+    class(field_t), intent(in) :: f
+    integer, intent(in) :: i_slice
+    real(dp), intent(in) :: y_weights(:)
+
+    real(dp), device, pointer, dimension(:, :, :) :: f_d
+    real(dp), device, allocatable :: sum_d, w_d(:)
+    integer :: dims(3), dims_padded(3)
+    type(dim3) :: blocks, threads
+
+    if (f%dir /= DIR_X) &
+      call abort_run('x_slice_weighted_sum: only supported for DIR_X fields.')
+    if (f%data_loc == NULL_LOC) &
+      call abort_run('x_slice_weighted_sum: requires a valid data_loc.')
+
+    dims = self%mesh%get_dims(f%data_loc)
+    dims_padded = self%allocator%get_padded_dims(DIR_C)
+
+    if (i_slice < 1 .or. i_slice > dims(1)) &
+      call abort_run('x_slice_weighted_sum: i_slice out of range')
+    if (size(y_weights) /= dims(2)) &
+      call abort_run('x_slice_weighted_sum: one weight per y point needed')
+
+    call resolve_field_t(f_d, f)
+    allocate (sum_d, w_d(dims(2)))
+    sum_d = 0._dp
+    w_d = y_weights
+
+    blocks = dim3(dims(3), (dims(2) - 1)/SZ + 1, 1)
+    threads = dim3(SZ, 1, 1)
+    call x_slice_weighted_sum_kernel<<<blocks, threads>>>( & !&
+      sum_d, f_d, w_d, i_slice, dims_padded(3), dims(2))
+
+    ! Rank-local value; caller is responsible for MPI_Allreduce.
+    sum_val = sum_d
+
+  end subroutine x_slice_weighted_sum_cuda
 
   subroutine field_scale_cuda(self, f, a)
     implicit none
@@ -1611,17 +1759,19 @@ contains
   end subroutine field_plane_sums_cuda
 
   subroutine field_set_abl_wall_stress_cuda( &
-    self, stress, u, w, sample_plane, stress_plane, drag_coeff, component)
+    self, stress, u, w, sample_plane, sample_weight, stress_plane, &
+    drag_coeff, component)
     !! [[m_base_backend(module):field_set_abl_wall_stress(subroutine)]]
     implicit none
     class(cuda_backend_t) :: self
     class(field_t), intent(inout) :: stress
     class(field_t), intent(in) :: u, w
     integer, intent(in) :: sample_plane, stress_plane, component
-    real(dp), intent(in) :: drag_coeff
+    real(dp), intent(in) :: sample_weight, drag_coeff
     real(dp), device, pointer, dimension(:, :, :) :: stress_d, u_d, w_d
     type(dim3) :: blocks, threads
-    integer :: dims(3), sample_i, stress_i, sample_offset, stress_offset
+    integer :: dims(3), upper_plane, sample_i, upper_i, stress_i
+    integer :: sample_offset, upper_offset, stress_offset
 
     if (stress%dir /= DIR_X .or. u%dir /= DIR_X .or. w%dir /= DIR_X) &
       call abort_run('ABL wall stress requires DIR_X fields.')
@@ -1634,20 +1784,110 @@ contains
       call abort_run('ABL wall stress plane is outside the domain.')
     if (component /= 1 .and. component /= 3) &
       call abort_run('Invalid ABL wall stress component.')
+    upper_plane = abl_wall_upper_plane(sample_plane, sample_weight, dims(2))
 
     call resolve_field_t(stress_d, stress)
     call resolve_field_t(u_d, u)
     call resolve_field_t(w_d, w)
     sample_i = mod(sample_plane - 1, SZ) + 1
+    upper_i = mod(upper_plane - 1, SZ) + 1
     stress_i = mod(stress_plane - 1, SZ) + 1
     sample_offset = dims(3)*((sample_plane - 1)/SZ)
+    upper_offset = dims(3)*((upper_plane - 1)/SZ)
     stress_offset = dims(3)*((stress_plane - 1)/SZ)
     blocks = dim3((dims(1) - 1)/64 + 1, dims(3), 1)
     threads = dim3(64, 1, 1)
     call field_set_abl_wall_stress<<<blocks, threads>>>( &      !&
-      stress_d, u_d, w_d, drag_coeff, sample_i, stress_i, &
-      sample_offset, stress_offset, dims(1), component)
+      stress_d, u_d, w_d, drag_coeff, sample_weight, sample_i, upper_i, &
+      stress_i, sample_offset, upper_offset, stress_offset, dims(1), &
+      component)
   end subroutine field_set_abl_wall_stress_cuda
+
+  subroutine field_shift_blend_x_band_cuda(self, f, lambda, i_start, &
+                                           i_offset, nshift, z_plane_rank)
+    !! [[m_base_backend(module):field_shift_blend_x_band(subroutine)]]
+    !!
+    !! The band stays on the device: it is gathered into a buffer, shifted
+    !! in z with device-to-device copies and GPU-aware MPI for the planes
+    !! held by other ranks, and blended back.
+    implicit none
+    class(cuda_backend_t) :: self
+    class(field_t), intent(inout) :: f
+    real(dp), intent(in) :: lambda(:)
+    integer, intent(in) :: i_start, i_offset, nshift
+    integer, intent(in) :: z_plane_rank(:)
+    real(dp), device, pointer, dimension(:, :, :) :: f_d
+    real(dp), device, allocatable :: band_d(:, :, :), shifted_d(:, :, :)
+    real(dp), device, allocatable :: lambda_d(:)
+    integer, allocatable :: requests(:)
+    type(dim3) :: blocks, threads
+    integer :: dims(3), nband, nz, z_offset, rank, k, kg, k_src, k_dst
+    integer :: n_plane, n_req, ierr
+
+    if (f%dir /= DIR_X .or. f%data_loc /= VERT) &
+      call abort_run('Shifted x band blend requires a DIR_X vertex field.')
+    dims = self%mesh%get_dims(VERT)
+    nband = size(lambda)
+    nz = size(z_plane_rank)
+    z_offset = self%mesh%par%n_offset(3)
+    rank = self%mesh%par%nrank
+    n_plane = nband*dims(2)
+
+    call resolve_field_t(f_d, f)
+    allocate (band_d(nband, dims(2), dims(3)))
+    allocate (shifted_d(nband, dims(2), dims(3)))
+    allocate (lambda_d(nband))
+    lambda_d = lambda
+
+    threads = dim3(32, 1, 1)
+    blocks = dim3((nband - 1)/32 + 1, dims(2), dims(3))
+    call field_get_x_band<<<blocks, threads>>>( &      !&
+      band_d, f_d, i_start, dims(3))
+
+    do k = 1, dims(3)
+      k_src = shifted_z_source(z_offset + k, nshift, nz)
+      if (z_plane_rank(k_src) == rank) &
+        shifted_d(:, :, k) = band_d(:, :, k_src - z_offset)
+    end do
+
+    allocate (requests(2*dims(3)))
+    n_req = 0
+#ifdef MPI
+    ! The band must be complete before MPI reads device memory
+    ierr = cudaDeviceSynchronize()
+    call check_cuda(ierr, 'cudaDeviceSynchronize in field_shift_blend_x_band')
+    do k = 1, dims(3)
+      kg = z_offset + k
+      k_src = shifted_z_source(kg, nshift, nz)
+      if (z_plane_rank(k_src) /= rank) then
+        n_req = n_req + 1
+        call MPI_Irecv(shifted_d(:, :, k), n_plane, MPI_X3D2_DP, &
+                       z_plane_rank(k_src), kg, MPI_COMM_WORLD, &
+                       requests(n_req), ierr)
+      end if
+      k_dst = shifted_z_source(kg, -nshift, nz)
+      if (z_plane_rank(k_dst) /= rank) then
+        n_req = n_req + 1
+        call MPI_Isend(band_d(:, :, k), n_plane, MPI_X3D2_DP, &
+                       z_plane_rank(k_dst), k_dst, MPI_COMM_WORLD, &
+                       requests(n_req), ierr)
+      end if
+    end do
+    if (n_req > 0) &
+      call MPI_Waitall(n_req, requests, MPI_STATUSES_IGNORE, ierr)
+#else
+    if (any(z_plane_rank /= rank)) &
+      call abort_run('Shifted x band blend needs MPI for a decomposed z.')
+#endif
+
+    call field_blend_x_band<<<blocks, threads>>>( &      !&
+      f_d, shifted_d, lambda_d, i_start + i_offset, dims(3))
+
+    ! Keep the buffers alive until the blend has read them
+    ierr = cudaDeviceSynchronize()
+    call check_cuda(ierr, 'cudaDeviceSynchronize in field_shift_blend_x_band')
+    deallocate (band_d, shifted_d, lambda_d)
+  end subroutine field_shift_blend_x_band_cuda
 
   subroutine field_set_face_from_field_cuda(self, f, f_start, c_end, face, &
                                             bc_start, bc_end, flow_rate_diff)
@@ -1722,6 +1962,80 @@ contains
 
   end subroutine field_set_face_from_field_cuda
 
+  subroutine set_field_face_data_cuda(self, f, data_start, data_end, face)
+    !! [[m_base_backend(module):set_field_face_data(subroutine)]]
+    !! The host planes are copied to small device arrays and one kernel
+    !! scatters them into the face planes of the DIR_X field.
+    implicit none
+    class(cuda_backend_t) :: self
+    class(field_t), intent(inout) :: f
+    real(dp), dimension(:, :), intent(in) :: data_start
+    real(dp), dimension(:, :), optional, intent(in) :: data_end
+    integer, intent(in) :: face
+
+    real(dp), device, pointer, dimension(:, :, :) :: f_d
+    real(dp), device, allocatable, dimension(:, :) :: p_start_d, p_end_d
+    type(dim3) :: blocks, threads
+    integer :: dims(3), apply_end
+
+    if (f%dir /= DIR_X) &
+      call abort_run('set_field_face_data: only supported for DIR_X fields.')
+    if (f%data_loc == NULL_LOC) &
+      call abort_run('set_field_face_data: requires a valid data_loc.')
+
+    call resolve_field_t(f_d, f)
+    dims = self%mesh%get_dims(f%data_loc)
+
+    apply_end = 0
+    if (present(data_end)) apply_end = 1
+
+    allocate (p_start_d(size(data_start, 1), size(data_start, 2)))
+    p_start_d = data_start
+    ! When data_end is absent the kernel never reads its end plane argument,
+    ! so p_end_d is a 1x1 placeholder instead of a full plane.
+    if (present(data_end)) then
+      allocate (p_end_d(size(data_end, 1), size(data_end, 2)))
+      p_end_d = data_end
+    else
+      allocate (p_end_d(1, 1))
+    end if
+
+    select case (face)
+    case (X_FACE)
+      if (size(data_start, 1) /= dims(2) .or. size(data_start, 2) /= dims(3)) &
+        call abort_run('set_field_face_data: X_FACE planes must be (ny, nz).')
+      if (present(data_end)) then
+        if (size(data_end, 1) /= dims(2) .or. size(data_end, 2) /= dims(3)) &
+          call abort_run('set_field_face_data: X_FACE planes must be &
+                         &(ny, nz).')
+      end if
+      blocks = dim3((SZ - 1)/64 + 1, ((dims(2) - 1)/SZ + 1)*dims(3), 1)
+      threads = dim3(64, 1, 1)
+      call field_set_x_face_from_plane<<<blocks, threads>>>( &      !&
+          f_d, p_start_d, p_end_d, apply_end, dims(1), dims(2), dims(3))
+
+    case (Y_FACE)
+      if (size(data_start, 1) /= dims(1) .or. size(data_start, 2) /= dims(3)) &
+        call abort_run('set_field_face_data: Y_FACE planes must be (nx, nz).')
+      if (present(data_end)) then
+        if (size(data_end, 1) /= dims(1) .or. size(data_end, 2) /= dims(3)) &
+          call abort_run('set_field_face_data: Y_FACE planes must be &
+                         &(nx, nz).')
+      end if
+      blocks = dim3((dims(1) - 1)/64 + 1, dims(3), 1)
+      threads = dim3(64, 1, 1)
+      call field_set_y_face_from_plane<<<blocks, threads>>>( &      !&
+          f_d, p_start_d, p_end_d, apply_end, dims(1), dims(2), dims(3))
+
+    case default
+      call abort_run('set_field_face_data: only X_FACE and Y_FACE supported.')
+    end select
+
+    ! Deallocation of the plane arrays synchronises with the kernel.
+    deallocate (p_start_d, p_end_d)
+
+  end subroutine set_field_face_data_cuda
+
   subroutine field_add_const_x_face_cuda(self, f, c, at_end)
     !! [[m_base_backend(module):field_add_const_x_face_base(subroutine)]]
     implicit none
@@ -1756,39 +2070,6 @@ contains
         f_d, c, i_plane, dims(1), dims(2), dims(3))
 
   end subroutine field_add_const_x_face_cuda
-
-  subroutine field_set_x_inlet_plane_cuda(self, f, plane)
-    !! [[m_base_backend(module):field_set_x_inlet_plane_base(subroutine)]]
-    implicit none
-    class(cuda_backend_t) :: self
-    class(field_t), intent(inout) :: f
-    real(dp), dimension(:, :), intent(in) :: plane
-
-    real(dp), device, pointer, dimension(:, :, :) :: f_d
-    real(dp), device, allocatable, dimension(:, :) :: plane_d
-    type(dim3) :: blocks, threads
-    integer :: dims(3)
-
-    if (f%dir /= DIR_X) &
-      call abort_run('field_set_x_inlet_plane: only supported for DIR_X &
-                     &fields.')
-    if (f%data_loc == NULL_LOC) &
-      call abort_run('field_set_x_inlet_plane: requires a valid data_loc.')
-
-    call resolve_field_t(f_d, f)
-    dims = self%mesh%get_dims(f%data_loc)
-    if (size(plane, 1) /= dims(2) .or. size(plane, 2) /= dims(3)) &
-      call abort_run('field_set_x_inlet_plane: plane must be (ny, nz).')
-
-    plane_d = plane
-
-    ! Same launch shape as field_set_x_face - one thread per (i, b).
-    blocks = dim3((SZ - 1)/64 + 1, ((dims(2) - 1)/SZ + 1)*dims(3), 1)
-    threads = dim3(64, 1, 1)
-    call set_x_inlet_plane<<<blocks, threads>>>( &      !&
-        f_d, plane_d, dims(1), dims(2), dims(3))
-
-  end subroutine field_set_x_inlet_plane_cuda
 
   subroutine field_add_face_from_field_cuda(self, f, g, face, bc_start, bc_end)
     !! [[m_base_backend(module):field_add_face_from_field(subroutine)]]
@@ -1898,13 +2179,8 @@ contains
     type(dirps_t), intent(in) :: xdirps, ydirps, zdirps
     logical, optional, intent(in) :: lowmem
 
-    allocate (cuda_poisson_fft_t :: self%poisson_fft)
-
-    select type (poisson_fft => self%poisson_fft)
-    type is (cuda_poisson_fft_t)
-      call init_cuda_poisson_fft_t(poisson_fft, mesh, xdirps, ydirps, &
-                                   zdirps, lowmem)
-    end select
+    call create_cuda_poisson_fft(self%poisson_fft, mesh, xdirps, ydirps, &
+                                 zdirps, lowmem)
 
   end subroutine init_cuda_poisson_fft
 
