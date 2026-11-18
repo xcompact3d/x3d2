@@ -56,7 +56,8 @@ module m_io_backend
                     adios2_set_selection, adios2_put, &
                     adios2_get, adios2_remove_all_variables, &
                     adios2_found, adios2_constant_dims, &
-                    adios2_type_dp, adios2_type_integer4, adios2_type_real
+                    adios2_type_dp, adios2_type_integer4, &
+                    adios2_type_integer8, adios2_type_real
 #ifdef X3D2_ADIOS2_CUDA
   use adios2, only: adios2_set_memory_space, adios2_memory_space_gpu
   use cudafor, only: c_devloc, c_devptr
@@ -1030,9 +1031,8 @@ contains
       call adios2_inquire_variable(var, self%io_handle, variable_name, ierr)
 
       if (ierr /= adios2_found) then
-        ! Use integer4 type for i8 compatibility - ADIOS2 will handle the conversion
         call adios2_define_variable( &
-          var, self%io_handle, variable_name, adios2_type_integer4, ierr)
+          var, self%io_handle, variable_name, adios2_type_integer8, ierr)
         call self%handle_error(ierr, &
                                "Error defining ADIOS2 scalar i8 variable")
       end if
