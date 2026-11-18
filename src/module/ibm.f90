@@ -94,11 +94,12 @@ contains
                        collective=.true.)
       end if
 
-      ! Read the vertex mask ep1
+      ! Read the local block of the vertex mask ep1
       !
-      ! The mask was written in python in C order
-      ! start_dims and count_dims are thus reversed
-      ! The resulting output is in reversed order
+      ! A mask written in C order (from Python, say) has the shape
+      ! [nz, ny, nx] in the file. ADIOS2 reverses the shape and selection
+      ! for a Fortran reader, so start_dims and count_dims are in x, y, z
+      ! order here whichever language wrote the file
       dims = mesh%get_dims(VERT)
       start_dims = int(ibm%mesh%par%n_offset, i8)
       count_dims = int(dims, i8)

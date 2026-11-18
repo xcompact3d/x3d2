@@ -554,6 +554,18 @@ function(define_backend_tests backend)
     define_test(unit/test_adios2_read_write.f90 ${np} ${backend})
     define_test(unit/test_io_session.f90 ${np} ${backend})
     define_test(unit/test_ab_checkpoint.f90 ${serial} ${backend})
+    # ibm_t reads the mask onto the right points, and stops on a mask of the
+    # wrong shape. ctest checks the output of the second one, not its exit
+    # code: MPI_Abort's depends on the launcher.
+    define_test(unit/test_ibm_mask_read.f90 ${np} ${backend})
+    set(X3D2_TEST_NAME_SUFFIX _mismatch)
+    define_test(unit/test_ibm_mask_read.f90 ${np} ${backend} mismatch)
+    set_tests_properties(test_ibm_mask_read_${backend}_${np}_mismatch
+      PROPERTIES
+      PASS_REGULAR_EXPRESSION "ERROR: IBM mask in test_ibm_mask_read_.* is .* but the mesh has"
+      FAIL_REGULAR_EXPRESSION "must never be reached"
+      TIMEOUT 60)
+    unset(X3D2_TEST_NAME_SUFFIX)
   endif()
   if(WITH_ADIOS2 AND (is_omp OR ${backend} STREQUAL cuda))
     # Writes on one rank layout and reads back on another: needs exactly 4.
