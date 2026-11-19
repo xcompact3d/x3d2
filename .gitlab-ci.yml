@@ -47,6 +47,24 @@ stages:
     # FORTRAN_COMPILER is the MPI wrapper for an MPI build and the compiler
     # itself for a WITH_MPI=OFF one, where the wrapper would put MPI back on
     # the compile and link lines. Each job sets it.
+    # The GPU runner is shared, and the same test can take 5 s in one job and
+    # several minutes in the next. A test that runs past the timeout is
+    # stopped and run once more, so a stall costs that test rather than the
+    # whole 1 h job. The timeout is well above the slowest test seen in a
+    # passing job (about 600 s on a busy runner). A test with its own TIMEOUT
+    # property keeps it.
+    - CTEST_ARGS="--output-on-failure --timeout 900 --repeat after-timeout:2"
+    # The Debug pass reruns the unit and verification tests of the Release
+    # pass, which is half the test time of a job. Pull request pipelines still
+    # build Debug, to catch compile errors, but run its tests only on main,
+    # on tags, in manual runs, or when DEBUG_TESTS=ON is set.
+    - |
+      RUN_DEBUG_TESTS=OFF
+      if [ "${CI_COMMIT_BRANCH}" == "main" ] || [ -n "${CI_COMMIT_TAG}" ] \
+         || [ "${CI_PIPELINE_SOURCE}" == "web" ] || [ "${DEBUG_TESTS}" == "ON" ]; then
+        RUN_DEBUG_TESTS=ON
+      fi
+      echo "Debug tests: ${RUN_DEBUG_TESTS}"
     - echo "Configure Debug build"
     - cmake -S . -B build-debug -DCMAKE_Fortran_COMPILER=${FORTRAN_COMPILER} -DCMAKE_BUILD_TYPE=Debug -DENABLE_BACKEND=${ENABLE_BACKEND} -DBACKEND_ARCH=${BACKEND_ARCH} -DWITH_MPI=${WITH_MPI} -DWITH_ADIOS2=ON -DUSE_SYSTEM_ADIOS2=ON -DSINGLE_PREC=${SINGLE_PREC}
     - echo "Build tests"
@@ -54,15 +72,30 @@ stages:
     # The regression cases are the slow part of the suite, so they run once,
     # in the Release pass, which is the optimised build users run. Debug and
     # Release builds both match the goldens to the regression tolerances.
-    # Unit and verification tests run in both passes.
-    - echo "Run the tests"
-    - if [ "${RUN_TEST}" == "ON" ]; then ctest --test-dir build-debug -L "unit|verification" --output-on-failure --output-junit ctest-junit.xml; fi
+    # Unit and verification tests run in both passes when the Debug pass runs.
+    - |
+      if [ "${RUN_TEST}" == "ON" ] && [ "${RUN_DEBUG_TESTS}" == "ON" ]; then
+        echo "Run the Debug tests"
+        nvidia-smi || true
+        ctest --test-dir build-debug -L "unit|verification" ${CTEST_ARGS} --output-junit ctest-junit.xml
+      fi
     - echo "Configure Release build"
     - cmake -S . -B build -DCMAKE_Fortran_COMPILER=${FORTRAN_COMPILER} -DCMAKE_BUILD_TYPE=Release -DENABLE_BACKEND=${ENABLE_BACKEND} -DBACKEND_ARCH=${BACKEND_ARCH} -DWITH_MPI=${WITH_MPI} -DWITH_ADIOS2=ON -DUSE_SYSTEM_ADIOS2=ON -DSINGLE_PREC=${SINGLE_PREC}
     - echo "Build tests"
     - make -j12 -C build
-    - echo "Run the tests"
-    - if [ "${RUN_TEST}" == "ON" ]; then ctest --test-dir build -L "unit|verification|regression" --output-on-failure --output-junit ctest-junit.xml; fi
+    - |
+      if [ "${RUN_TEST}" == "ON" ]; then
+        echo "Run the Release tests"
+        nvidia-smi || true
+        nvidia-smi -q -d PERFORMANCE,CLOCK || true
+        ctest --test-dir build -L "unit|verification|regression" ${CTEST_ARGS} --output-junit ctest-junit.xml
+      fi
+  # The GPU state at the end, also after a failure or a timeout: memory used
+  # by other processes, utilisation, and why the clocks are held down (power,
+  # thermal or applications clocks), which explains a slow job.
+  after_script:
+    - nvidia-smi || true
+    - nvidia-smi -q -d PERFORMANCE,CLOCK || true
   # Surface individual test results in the pipeline's Tests tab. Without a
   # report GitLab shows "Tests 0" and a failing test is only visible by
   # scrolling the raw job log. ctest still sets the job's exit status, so this
