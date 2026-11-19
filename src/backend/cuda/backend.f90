@@ -8,7 +8,8 @@ module m_cuda_backend
   use m_allocator, only: allocator_t
   use m_base_backend, only: base_backend_t, source_index_boxes, &
                             check_point_fields, check_labelled_fields, &
-                            abl_wall_upper_plane, shifted_z_source
+                            abl_wall_upper_plane, shifted_z_source, &
+                            z_weight_line
   use m_common, only: dp, sp, MPI_X3D2_DP, move_data_loc, get_rdr_from_dirs, &
                       RDR_X2Y, RDR_X2Z, RDR_Y2X, RDR_Y2Z, RDR_Z2X, RDR_Z2Y, &
                       RDR_C2X, RDR_C2Y, RDR_C2Z, RDR_X2C, RDR_Y2C, RDR_Z2C, &
@@ -33,6 +34,7 @@ module m_cuda_backend
                                      labelled_axpy, sample_points, &
                                      add_gaussian_sources, &
                                      field_max_sum, field_set_y_face, &
+                                     field_set_z_face, &
                                      field_set_x_face, field_set_y_plane, &
                                      field_set_abl_wall_stress, &
                                      field_get_x_band, field_blend_x_band, &
@@ -1546,14 +1548,14 @@ contains
   end subroutine slice_max_sum_cuda
 
   attributes(global) subroutine x_slice_weighted_sum_kernel( &
-    sum_f, f, w, i_slice, n_i_pad, n_j)
-    !! Weighted sum of the x slice f(:, i_slice, :) of a DIR_X field, w(j)
-    !! on the points of y index j. One thread per (y, z) point; z is the
-    !! fast-varying component of the group index.
+    sum_f, f, w, wz, i_slice, n_i_pad, n_j)
+    !! Weighted sum of the x slice f(:, i_slice, :) of a DIR_X field,
+    !! w(j)*wz(k) on the point of y index j and z index k. One thread per
+    !! (y, z) point; z is the fast-varying component of the group index.
     implicit none
     real(dp), device, intent(inout) :: sum_f
     real(dp), device, intent(in), dimension(:, :, :) :: f
-    real(dp), device, intent(in), dimension(:) :: w
+    real(dp), device, intent(in), dimension(:) :: w, wz
     integer, value, intent(in) :: i_slice, n_i_pad, n_j
     integer :: i, j, b, ierr
 
@@ -1561,10 +1563,12 @@ contains
     j = i + (blockIdx%y - 1)*blockDim%x
     b = blockIdx%x + (blockIdx%y - 1)*n_i_pad
 
-    if (j <= n_j) ierr = atomicadd(sum_f, w(j)*f(i, i_slice, b))
+    if (j <= n_j) &
+      ierr = atomicadd(sum_f, w(j)*wz(blockIdx%x)*f(i, i_slice, b))
   end subroutine x_slice_weighted_sum_kernel
 
-  subroutine x_slice_weighted_sum_cuda(self, sum_val, f, i_slice, y_weights)
+  subroutine x_slice_weighted_sum_cuda(self, sum_val, f, i_slice, y_weights, &
+                                       z_weights)
     !! [[m_base_backend(module):x_slice_weighted_sum_base(subroutine)]]
     implicit none
     class(cuda_backend_t) :: self
@@ -1572,9 +1576,10 @@ contains
     class(field_t), intent(in) :: f
     integer, intent(in) :: i_slice
     real(dp), intent(in) :: y_weights(:)
+    real(dp), optional, intent(in) :: z_weights(:)
 
     real(dp), device, pointer, dimension(:, :, :) :: f_d
-    real(dp), device, allocatable :: sum_d, w_d(:)
+    real(dp), device, allocatable :: sum_d, w_d(:), wz_d(:)
     integer :: dims(3), dims_padded(3)
     type(dim3) :: blocks, threads
 
@@ -1592,14 +1597,15 @@ contains
       call abort_run('x_slice_weighted_sum: one weight per y point needed')
 
     call resolve_field_t(f_d, f)
-    allocate (sum_d, w_d(dims(2)))
+    allocate (sum_d, w_d(dims(2)), wz_d(dims(3)))
     sum_d = 0._dp
     w_d = y_weights
+    wz_d = z_weight_line(z_weights, dims(3))
 
     blocks = dim3(dims(3), (dims(2) - 1)/SZ + 1, 1)
     threads = dim3(SZ, 1, 1)
     call x_slice_weighted_sum_kernel<<<blocks, threads>>>( & !&
-      sum_d, f_d, w_d, i_slice, dims_padded(3), dims(2))
+      sum_d, f_d, w_d, wz_d, i_slice, dims_padded(3), dims(2))
 
     ! Rank-local value; caller is responsible for MPI_Allreduce.
     sum_val = sum_d
@@ -1662,6 +1668,7 @@ contains
     integer :: dims(3), dims_padded(3)
     integer :: bc_s, bc_e
     real(dp) :: flow_rate_diff_val
+    logical :: set_start, set_end
 
     if (f%dir /= DIR_X) then
       call abort_run('Setting a field face is only supported for DIR_X &
@@ -1705,7 +1712,14 @@ contains
           dims(1), dims(2), dims_padded(3))
 
     case (Z_FACE)
-      call abort_run('Setting Z_FACE is not yet supported.')
+      ! z is decomposed: only the ranks holding a global z face set it
+      call self%z_face_owned(bc_start, bc_end, set_start, set_end)
+      dims_padded = self%allocator%get_padded_dims(DIR_C)
+      blocks = dim3((dims(1) - 1)/64 + 1, (dims(2) - 1)/SZ + 1, 1)
+      threads = dim3(64, 1, 1)
+      call field_set_z_face<<<blocks, threads>>>( &              !&
+          f_d, c_start, c_end, set_start, set_end, &
+          dims(1), dims(2), dims(3), dims_padded(3))
 
     case default
       call abort_run('face is undefined.')

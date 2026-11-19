@@ -415,6 +415,8 @@ function(define_backend_tests backend)
   define_test(unit/test_scalar_product.f90 ${np} ${backend})
   define_test(unit/test_sum_intox.f90 ${np} ${backend})
   define_test(unit/test_boundary_planes.f90 ${serial} ${backend})
+  # z split over two ranks: a Z_FACE belongs to one rank only
+  define_test(unit/test_boundary_planes.f90 2 ${backend})
   define_test(unit/test_abl_seed.f90 ${serial} ${backend})
   # Two ranks in z must draw different noise.
   define_test(unit/test_channel_noise.f90 ${serial} ${backend})

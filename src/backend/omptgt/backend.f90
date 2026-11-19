@@ -24,7 +24,8 @@ module m_omptgt_backend
   use m_allocator, only: allocator_t
   use m_base_backend, only: base_backend_t, source_index_boxes, &
                             check_point_fields, check_labelled_fields, &
-                            abl_wall_upper_plane, shifted_z_source
+                            abl_wall_upper_plane, shifted_z_source, &
+                            z_weight_line
   use m_common, only: dp, MPI_X3D2_DP, move_data_loc, get_dirs_from_rdr, &
                       DIR_X, DIR_Y, DIR_Z, DIR_C, VERT, NULL_LOC, &
                       X_FACE, Y_FACE, Z_FACE, BC_DIRICHLET
@@ -54,6 +55,7 @@ module m_omptgt_backend
                                        volume_integral, slice_max_sum, &
                                        x_slice_weighted_sum, &
                                        field_set_x_face, field_set_y_face, &
+                                       field_set_z_face, &
                                        field_set_y_plane, &
                                        field_set_abl_wall_stress, &
                                        field_get_x_band, &
@@ -1227,7 +1229,7 @@ contains
   end subroutine slice_max_sum_omptgt
 
   subroutine x_slice_weighted_sum_omptgt(self, sum_val, f, i_slice, &
-                                         y_weights)
+                                         y_weights, z_weights)
     !! [[m_base_backend(module):x_slice_weighted_sum_base(subroutine)]]
     implicit none
 
@@ -1236,6 +1238,7 @@ contains
     class(field_t), intent(in) :: f
     integer, intent(in) :: i_slice
     real(dp), intent(in) :: y_weights(:)
+    real(dp), optional, intent(in) :: z_weights(:)
 
     real(dp), pointer, contiguous, dimension(:, :, :) :: f_d
     integer :: n, n_i, n_groups_pad, n_j
@@ -1253,7 +1256,8 @@ contains
 
     ! Rank-local value; caller is responsible for MPI_Allreduce.
     call resolve_field_t(f_d, f)
-    call x_slice_weighted_sum(sum_val, f_d, y_weights, size(f_d, 2), &
+    call x_slice_weighted_sum(sum_val, f_d, y_weights, &
+                              z_weight_line(z_weights, n_i), size(f_d, 2), &
                               i_slice, n_i, n_groups_pad, n_j)
 
   end subroutine x_slice_weighted_sum_omptgt
@@ -1341,6 +1345,7 @@ contains
     integer :: dims(3)
     integer :: bc_s, bc_e
     real(dp) :: flow_rate_diff_val
+    logical :: set_start, set_end
 
     if (f%dir /= DIR_X) then
       call abort_run('Setting a field face is only supported for DIR_X &
@@ -1373,7 +1378,11 @@ contains
                             bc_e == BC_DIRICHLET, size(f_d, 2), &
                             dims(1), dims(2), dims(3), n_yb_pad(self))
     case (Z_FACE)
-      call abort_run('Setting Z_FACE is not yet supported.')
+      ! z is decomposed: only the ranks holding a global z face set it
+      call self%z_face_owned(bc_start, bc_end, set_start, set_end)
+      call field_set_z_face(f_d, c_start, c_end, set_start, set_end, &
+                            size(f_d, 2), dims(1), dims(2), dims(3), &
+                            n_yb_pad(self))
     case default
       call abort_run('face is undefined.')
     end select
