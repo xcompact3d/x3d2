@@ -448,6 +448,34 @@ contains
 
   end subroutine field_plane_partial_sums
 
+  attributes(global) subroutine vector_norm_squared_plane_partial_sums( &
+    partial, a, b, c, nx, ny, nz)
+  !! First pass of vector_norm_squared_plane_sums: partial(j, z) is the sum
+  !! over x of a**2 + b**2 + c**2 at y index j and z. Launch as
+  !! field_plane_partial_sums.
+    implicit none
+
+    real(dp), device, intent(out), dimension(:, :) :: partial
+    real(dp), device, intent(in), dimension(:, :, :) :: a, b, c
+    integer, value, intent(in) :: nx, ny, nz
+
+    integer :: i, j, k, g
+    real(dp) :: line_sum
+
+    i = threadIdx%x
+    j = i + (blockIdx%x - 1)*SZ
+    if (j > ny) return
+
+    ! DIR_X groups are ordered z fastest: g = (y_block - 1)*nz + z
+    g = (blockIdx%x - 1)*nz + blockIdx%y
+    line_sum = 0._dp
+    do k = 1, nx
+      line_sum = line_sum + a(i, k, g)**2 + b(i, k, g)**2 + c(i, k, g)**2
+    end do
+    partial(j, blockIdx%y) = line_sum
+
+  end subroutine vector_norm_squared_plane_partial_sums
+
   attributes(global) subroutine field_plane_sums_reduce(sums, partial, ny, nz)
   !! Second pass of field_plane_sums: sums(j) = sum over z of partial(j, z),
   !! in a fixed order. Launch with one thread per y index.

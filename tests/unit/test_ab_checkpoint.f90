@@ -141,7 +141,6 @@ contains
     solver%n_iters = 0
     solver%n_output = 0
     solver%current_iter = 0
-    solver%ngrid = product(mesh%get_global_dims(VERT))
     solver%u => allocator%get_block(DIR_X)
     solver%v => allocator%get_block(DIR_X)
     solver%w => allocator%get_block(DIR_X)
