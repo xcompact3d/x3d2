@@ -411,6 +411,8 @@ function(define_backend_tests backend)
   # The y direction is split over the ranks, so 1 and 2 ranks are both run.
   define_test(unit/test_channel_bulk_velocity.f90 1 ${backend})
   define_test(unit/test_channel_bulk_velocity.f90 2 ${backend})
+  define_test(unit/test_monitoring_volume_mean.f90 1 ${backend})
+  define_test(unit/test_monitoring_volume_mean.f90 2 ${backend})
   define_test(unit/test_snapshot_species_fields.f90 ${serial} ${backend})
   define_test(unit/test_scalar_product.f90 ${np} ${backend})
   define_test(unit/test_sum_intox.f90 ${np} ${backend})

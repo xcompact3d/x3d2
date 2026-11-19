@@ -3,17 +3,29 @@ module m_monitoring
   !!
   !! Tracks the following quantities:
   !!
-  !! - Kinetic energy: \( E_k = \frac{1}{2N} \sum |\mathbf{u}|^2 \)
-  !! - Enstrophy: \( \mathcal{E} = \frac{1}{2N} \sum |\nabla \times \mathbf{u}|^2 \)
-  !! - Divergence: \( \max |\nabla \cdot \mathbf{u}| \) and mean (divergence-free check)
+  !! - Kinetic energy: \( E_k = \frac{1}{2} \langle |\mathbf{u}|^2 \rangle \)
+  !! - Enstrophy:
+  !!   \( \mathcal{E} = \frac{1}{2} \langle |\nabla \times \mathbf{u}|^2 \rangle \)
+  !! - Divergence: \( \max |\nabla \cdot \mathbf{u}| \) and mean
+  !!   (divergence-free check)
+  !!
+  !! \( \langle \cdot \rangle \) is the volume mean. On a uniform mesh it is
+  !! the mean over the points. On a mesh with y stretching, each y plane has
+  !! the weight of the y stretching metric, as in the channel bulk velocity.
 
+  use iso_fortran_env, only: int64
+  use m_base_backend, only: base_backend_t
   use m_common, only: dp, DIR_X, DIR_Z, VERT
   use m_field, only: field_t
   use m_logger, only: log_info, str
+  use m_mesh, only: mesh_t
   use m_scalar_series, only: scalar_series_t
   use m_solver, only: solver_t
 
   implicit none
+
+  private
+  public :: monitoring_t, monitoring_default_enabled, volume_mean_norm_squared
 
   !> Whether a monitoring_t that init sees writes monitoring.csv. A tool that
   !> builds a case and drives it, such as x3d2-memcheck, sets this to false
@@ -68,19 +80,20 @@ contains
 
     if (.not. self%enabled) return
 
-    !! Kinetic energy: \( E_k = \frac{1}{2N} \sum |\mathbf{u}|^2 \)
-    kinetic_energy = 0.5_dp*solver%backend%vector_norm_squared(u, v, w) &
-                     /solver%ngrid
+    !! Kinetic energy: \( E_k = \frac{1}{2} \langle |\mathbf{u}|^2 \rangle \)
+    kinetic_energy = 0.5_dp*volume_mean_norm_squared(solver%backend, &
+                                                     solver%mesh, u, v, w)
 
-    !! Enstrophy: \( \mathcal{E} = \frac{1}{2N} \sum |\nabla \times \mathbf{u}|^2 \)
+    !! Enstrophy:
+    !! \( \mathcal{E} = \frac{1}{2} \langle |\nabla \times \mathbf{u}|^2 \rangle \)
     du => solver%backend%allocator%get_block(DIR_X, VERT)
     dv => solver%backend%allocator%get_block(DIR_X, VERT)
     dw => solver%backend%allocator%get_block(DIR_X, VERT)
 
     call solver%curl(du, dv, dw, u, v, w)
 
-    enstrophy = 0.5_dp*solver%backend%vector_norm_squared(du, dv, dw) &
-                /solver%ngrid
+    enstrophy = 0.5_dp*volume_mean_norm_squared(solver%backend, &
+                                                solver%mesh, du, dv, dw)
 
     call solver%backend%allocator%release_block(du)
     call solver%backend%allocator%release_block(dv)
@@ -108,6 +121,33 @@ contains
     end if
 
   end subroutine write_step
+
+  function volume_mean_norm_squared(backend, mesh, a, b, c) result(mean)
+    !! Volume mean of \( a^2 + b^2 + c^2 \) over the whole domain, for
+    !! DIR_X fields at the vertices, in one pass over the data. On a uniform
+    !! mesh this is the mean over the points. On a mesh with y stretching,
+    !! each y plane has the weight of the stretching metric
+    !! ([[m_mesh(module):y_stretched_mean(function)]]).
+    class(base_backend_t), intent(inout) :: backend
+    type(mesh_t), intent(in) :: mesh
+    class(field_t), intent(in) :: a, b, c
+    real(dp) :: mean
+
+    real(dp), allocatable :: sums(:)
+    integer :: dims(3)
+
+    if (mesh%geo%stretched(2)) then
+      dims = mesh%get_dims(VERT)
+      allocate (sums(dims(2)))
+      call backend%vector_norm_squared_plane_sums(sums, a, b, c)
+      mean = mesh%y_stretched_mean(sums)
+    else
+      ! vector_norm_squared is already reduced over all ranks.
+      mean = backend%vector_norm_squared(a, b, c) &
+             /real(product(int(mesh%get_global_dims(VERT), int64)), dp)
+    end if
+
+  end function volume_mean_norm_squared
 
   subroutine finalise(self)
     class(monitoring_t), intent(inout) :: self
