@@ -1659,7 +1659,7 @@ contains
 
     real(dp), device, pointer, dimension(:, :, :) :: f_d
     type(dim3) :: blocks, threads
-    integer :: dims(3)
+    integer :: dims(3), dims_padded(3)
     integer :: bc_s, bc_e
     real(dp) :: flow_rate_diff_val
 
@@ -1696,12 +1696,13 @@ contains
       ! is left untouched so the two y-faces can differ (ABL: no-slip floor,
       ! free-slip lid). Both default to Dirichlet, preserving the historical
       ! behaviour of writing both faces.
+      dims_padded = self%allocator%get_padded_dims(DIR_C)
       blocks = dim3((dims(1) - 1)/64 + 1, dims(3), 1)
       threads = dim3(64, 1, 1)
       call field_set_y_face<<<blocks, threads>>>( &              !&
           f_d, c_start, c_end, bc_s == BC_DIRICHLET, &
           bc_e == BC_DIRICHLET, flow_rate_diff_val, &
-          dims(1), dims(2), dims(3))
+          dims(1), dims(2), dims_padded(3))
 
     case (Z_FACE)
       call abort_run('Setting Z_FACE is not yet supported.')

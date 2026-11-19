@@ -426,10 +426,12 @@ contains
     integer :: i, j, b, n_mod, b_end
 
     j = threadIdx%x + (blockIdx%x - 1)*blockDim%x ! from 1 to nx
-    b = blockIdx%y ! from 1 to nz
+    b = blockIdx%y ! from 1 to the local z count of the field
 
     ! DIR_X groups are ordered z fastest: b = (y_block - 1)*nz + z, so the
     ! bottom face lives in groups 1..nz and the top face nz*(n_y_blocks-1)+z.
+    ! nz is the padded z count, the group stride: a cell field on a
+    ! non-periodic z holds one z station fewer on the last rank.
     n_mod = mod(ny - 1, SZ) + 1
     b_end = b + (ny - 1)/SZ*nz
 
