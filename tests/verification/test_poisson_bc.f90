@@ -2,14 +2,16 @@ program test_poisson
   !! Poisson Solver Validation Test (self-contained, no input files)
   !!
   !! Validates the Poisson solver across the boundary condition
-  !! configurations listed in the table cases, 7 on a uniform mesh:
+  !! configurations listed in the table cases, 9 on a uniform mesh:
   !!   ppp     : all periodic          (128 x 64 x 32)
   !!   pdp     : y-dirichlet           (128 x 65 x 128)
   !!   dpp     : x-dirichlet           (129 x 64 x 128)
   !!   ddp     : x,y-dirichlet         (129 x 257 x 64)
+  !!   ddd     : x,y,z-dirichlet       (65 x 65 x 129)
   !!   pdp_odd : y-dirichlet, odd      (128 x 82 x 128)
   !!   dpp_odd : x-dirichlet, odd      (82 x 64 x 128)
   !!   ddp_odd : x,y-dirichlet, odd    (82 x 82 x 64)
+  !!   ddd_odd : x,y,z-dirichlet, odd  (82 x 82 x 82)
   !! The y-stretched rows are described in the table itself.
   !! The code is one letter per direction in x,y,z order: d = dirichlet,
   !! n = neumann, p = periodic. The solver works on cells, and a
@@ -45,7 +47,9 @@ program test_poisson
   !! grid indices, and only Check 2 applies (the analytical solution uses the
   !! exact wavenumber, which a mode this close to the grid scale cannot
   !! match). That x index is the Nyquist mode only when x is periodic, so a
-  !! solver that zeroes it as if it were leaves the RHS unsolved.
+  !! solver that zeroes it as if it were leaves the RHS unsolved. With a
+  !! non-periodic z (ddd) the alternating z factor is no longer a single
+  !! mode, but it is still a grid-scale RHS the round trip must recover.
   !!
   !! Layout: setup_case builds one poisson_ctx_t for each configuration
   !! (mesh, backend, allocators, tdsops, vector_calculus, poisson_fft) and
@@ -145,6 +149,12 @@ program test_poisson
     bc_case_t('x,y-dirichlet', [129, 257, 64], &
               [character(len=9) :: 'dirichlet', 'dirichlet', 'periodic'], &
               'uniform', 0.0_dp), &
+    ! No periodic direction (#449). 64 x 64 x 128 cells: z carries the
+    ! decomposition, 64 cells per rank at 2 ranks, and on the CUDA backend
+    ! every cell count divides by 2, as its multi-rank 111 case needs.
+    bc_case_t('x,y,z-dirichlet', [65, 65, 129], &
+              [character(len=9) :: 'dirichlet', 'dirichlet', 'dirichlet'], &
+              'uniform', 0.0_dp), &
     ! Stretched in y. Only pdp is solved with the stretched operator, the
     ! other BC codes end in the abort of the solver. 64 cells in x and z.
     bc_case_t('y-dirichlet centred', [64, 65, 64], &
@@ -181,6 +191,9 @@ program test_poisson
               'uniform', 0.0_dp), &
     bc_case_t('x,y-dirichlet, odd', [82, 82, 64], &
               [character(len=9) :: 'dirichlet', 'dirichlet', 'periodic'], &
+              'uniform', 0.0_dp), &
+    bc_case_t('x,y,z-dirichlet, odd', [82, 82, 82], &
+              [character(len=9) :: 'dirichlet', 'dirichlet', 'dirichlet'], &
               'uniform', 0.0_dp)]
   !&>
 
@@ -1086,6 +1099,9 @@ contains
         end do
       end do
     end do
+    ! With odd cell counts in x and in a non-periodic z (ddd_odd) neither
+    ! factor sums to zero, and the mean is not solvable with Neumann BCs
+    call remove_weighted_mean(ctx, host_field)
 
     f_device => ctx%backend%allocator%get_block(DIR_C, CELL)
     f_reference => ctx%backend%allocator%get_block(DIR_X)
@@ -1116,8 +1132,6 @@ contains
 
     class(field_t), pointer :: u, v, w, f_div, f_device, f_reference
     class(field_t), pointer :: host_field, temp
-    integer :: dims(3), j, ierr
-    real(dp) :: f_mean, f_sums(2)
 
     u => ctx%backend%allocator%get_block(DIR_X, VERT)
     v => ctx%backend%allocator%get_block(DIR_X, VERT)
@@ -1138,24 +1152,10 @@ contains
     call ctx%backend%allocator%release_block(w)
 
     ! Remove the weighted mean on the host, then hand f to the solver in DIR_C
-    dims = ctx%mesh%get_dims(CELL)
     host_field => ctx%host_allocator%get_block(DIR_C)
     call ctx%backend%get_field_data(host_field%data, f_div)
     call ctx%backend%allocator%release_block(f_div)
-    ! The weight of the y cell j is 1/midp_ds(j, 2). This weight is the
-    ! cell width divided by d(2), and it is 1 on a uniform grid.
-    f_sums = 0._dp
-    do j = 1, dims(2)
-      f_sums(1) = f_sums(1) &
-                  + sum(host_field%data(1:dims(1), j, 1:dims(3))) &
-                  /ctx%mesh%geo%midp_ds(j, 2)
-      f_sums(2) = f_sums(2) &
-                  + real(dims(1)*dims(3), dp)/ctx%mesh%geo%midp_ds(j, 2)
-    end do
-    call MPI_Allreduce(MPI_IN_PLACE, f_sums, 2, MPI_X3D2_DP, MPI_SUM, &
-                       MPI_COMM_WORLD, ierr)
-    f_mean = f_sums(1)/f_sums(2)
-    host_field%data = host_field%data - f_mean
+    call remove_weighted_mean(ctx, host_field)
 
     f_device => ctx%backend%allocator%get_block(DIR_C, CELL)
     f_reference => ctx%backend%allocator%get_block(DIR_X)
@@ -1177,6 +1177,32 @@ contains
       'Random div(u): DivGrad rel L2: ', res%divgrad_err, '  ', &
       merge('PASS', 'FAIL', res%passed)
   end function run_random_test
+
+  subroutine remove_weighted_mean(ctx, host_field)
+    !! Subtract the cell-width weighted global mean from a host cell field,
+    !! the mode the Neumann problem cannot solve for (see the header)
+    type(poisson_ctx_t), target, intent(in) :: ctx
+    class(field_t), intent(inout) :: host_field
+
+    integer :: dims(3), j, ierr
+    real(dp) :: f_mean, f_sums(2)
+
+    dims = ctx%mesh%get_dims(CELL)
+    ! The weight of the y cell j is 1/midp_ds(j, 2). This weight is the
+    ! cell width divided by d(2), and it is 1 on a uniform grid.
+    f_sums = 0._dp
+    do j = 1, dims(2)
+      f_sums(1) = f_sums(1) &
+                  + sum(host_field%data(1:dims(1), j, 1:dims(3))) &
+                  /ctx%mesh%geo%midp_ds(j, 2)
+      f_sums(2) = f_sums(2) &
+                  + real(dims(1)*dims(3), dp)/ctx%mesh%geo%midp_ds(j, 2)
+    end do
+    call MPI_Allreduce(MPI_IN_PLACE, f_sums, 2, MPI_X3D2_DP, MPI_SUM, &
+                       MPI_COMM_WORLD, ierr)
+    f_mean = f_sums(1)/f_sums(2)
+    host_field%data = host_field%data - f_mean
+  end subroutine remove_weighted_mean
 
   subroutine upload_random(ctx, f)
     !! Fill a vertex field with uniform random values in [-1, 1)

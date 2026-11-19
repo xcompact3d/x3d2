@@ -5,8 +5,9 @@ program test_poisson_bc_code
   !! poisson_bc_code matches the one x3d2-memcheck gets from
   !! classify_boundaries.
 
-  use m_mesh, only: classify_boundaries, FFT_BC_000, FFT_BC_010, &
-                    FFT_BC_100, FFT_BC_110, FFT_BC_UNSUPPORTED
+  use m_mesh, only: classify_boundaries, fft_bc_is_11x, FFT_BC_000, &
+                    FFT_BC_010, FFT_BC_100, FFT_BC_110, FFT_BC_111, &
+                    FFT_BC_UNSUPPORTED
   use m_poisson_fft, only: poisson_bc_code, spectral_dirs, fft_bc_class
 
   implicit none
@@ -22,12 +23,20 @@ program test_poisson_bc_code
   call test_bc_code([.true., .true., .false.], '001', FFT_BC_UNSUPPORTED)
   call test_bc_code([.true., .false., .false.], '011', FFT_BC_UNSUPPORTED)
   call test_bc_code([.false., .true., .false.], '101', FFT_BC_UNSUPPORTED)
-  call test_bc_code([.false., .false., .false.], '111', FFT_BC_UNSUPPORTED)
+  call test_bc_code([.false., .false., .false.], '111', FFT_BC_111)
 
   call test_spectral_dirs('000', [1, 2, 3])
   call test_spectral_dirs('010', [1, 2, 3])
   call test_spectral_dirs('100', [2, 1, 3])
   call test_spectral_dirs('110', [3, 1, 2])
+  call test_spectral_dirs('111', [3, 1, 2])
+
+  ! 110 and 111 share the 11x solver, no other class does
+  if (.not. (fft_bc_is_11x(FFT_BC_110) .and. fft_bc_is_11x(FFT_BC_111))) &
+    test_pass = .false.
+  if (fft_bc_is_11x(FFT_BC_000) .or. fft_bc_is_11x(FFT_BC_010) &
+      .or. fft_bc_is_11x(FFT_BC_100) &
+      .or. fft_bc_is_11x(FFT_BC_UNSUPPORTED)) test_pass = .false.
 
   if (.not. test_pass) then
     error stop "FAIL"

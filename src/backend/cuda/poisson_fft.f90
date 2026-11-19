@@ -50,7 +50,7 @@ module m_cuda_poisson_fft
   type, abstract, extends(poisson_fft_t) :: cuda_poisson_fft_t
     !! FFT based Poisson solver, the state and the plain transform that
     !! every boundary condition case shares. Each case extends this type
-    !! with its own buffers, see cuda_poisson_000_t to cuda_poisson_110_t.
+    !! with its own buffers, see cuda_poisson_000_t to cuda_poisson_11x_t.
 
     !> Local domain sized array storing the spectral equivalence constants
     complex(dp), device, allocatable, dimension(:, :, :) :: waves_dev
@@ -153,10 +153,20 @@ module m_cuda_poisson_fft
     procedure :: undo_periodicity => undo_periodicity_x_cuda
   end type cuda_poisson_100_t
 
-  type, extends(cuda_poisson_fft_t) :: cuda_poisson_110_t
-    !! Non-periodic in x and y, periodic in z
+  type, extends(cuda_poisson_fft_t) :: cuda_poisson_11x_t
+    !! Non-periodic in x and y, and in z either periodic (110) or not (111).
+    !! Like Incompact3d's poisson_11x, both cases share the (nz/2+1, nx, ny)
+    !! spectral layout and postprocess. 111 folds z as well, inside the
+    !! kernels that move the field into and out of the transform buffer
+    !! (the transpose on one rank, the Y-slab unpack and pack on several),
+    !! where z is whole, so the r2c transform stands in for a cosine
+    !! transform; waves_set and the half-angle az, bz of a non-periodic z do
+    !! the rest.
     !> Transposed real workspace (nz, nx, ny), single rank only
     real(dp), device, allocatable, dimension(:, :, :) :: r_dev_110
+    !> Fold z on the way into the transform buffer, and unfold on the way
+    !> out (111)
+    logical :: fold_z = .false.
   contains
     procedure :: init_case => init_case_110
     procedure :: create_plans => create_plans_110
@@ -167,7 +177,7 @@ module m_cuda_poisson_fft
     procedure :: undo_periodicity => undo_periodicity_xy_cuda
     procedure :: redistribute_110_to_yslab
     procedure :: redistribute_110_to_zslab
-  end type cuda_poisson_110_t
+  end type cuda_poisson_11x_t
 
   ! Explicit C interfaces for cuFFT functions that nvfortran has trouble with
   interface
@@ -378,10 +388,10 @@ contains
     reason = ''
     nproc = product(nproc_dir)
     if ((bc_code == FFT_BC_010 .or. bc_code == FFT_BC_100 &
-         .or. bc_code == FFT_BC_110) &
+         .or. fft_bc_is_11x(bc_code)) &
         .and. nproc > 1 .and. (nproc_dir(1) /= 1 .or. nproc_dir(2) /= 1)) then
-      reason = 'The 010, 100 and 110 cases on multiple ranks need a 1D z &
-               &decomposition, nproc_dir must be [1, 1, nproc].'
+      reason = 'The 010, 100, 110 and 111 cases on multiple ranks need a 1D &
+               &z decomposition, nproc_dir must be [1, 1, nproc].'
     else if (bc_code == FFT_BC_010 .and. nproc > 1 &
              .and. mod(cdims(2), nproc_dir(3)) /= 0) then
       reason = 'The 010 case on multiple ranks needs the number of y &
@@ -390,11 +400,11 @@ contains
              .and. mod(cdims(1), nproc_dir(3)) /= 0) then
       reason = 'The 100 case on multiple ranks needs the number of x &
                &cells to divide by the number of ranks.'
-    else if (bc_code == FFT_BC_110 .and. nproc > 1 &
+    else if (fft_bc_is_11x(bc_code) .and. nproc > 1 &
              .and. (mod(cdims(1), nproc_dir(3)) /= 0 &
                     .or. mod(cdims(2), nproc_dir(3)) /= 0)) then
-      reason = 'The 110 case on multiple ranks needs the number of x &
-               &and y cells to divide by the number of ranks.'
+      reason = 'The 110 and 111 cases on multiple ranks need the number of &
+               &x and y cells to divide by the number of ranks.'
     end if
 
   end function cuda_fft_decomp_reason
@@ -425,7 +435,7 @@ contains
       n_sp_st(2) = dims_loc(1)/nproc_dir(3)*nrank_dir(3)
       n_sp_st(3) = 0
 
-    else if (bc_code == FFT_BC_110) then
+    else if (fft_bc_is_11x(bc_code)) then
       ! R2C Z-transpose: spectral array is (nz/2+1, nx, ny) on 1 rank.
       ! dim1 = Z R2C modes, dim2 = X spectrum, dim3 = Y full spectrum.
       ! On P ranks the cuFFTMp Y-slab transform shuffles the spectral
@@ -459,8 +469,9 @@ contains
   pure subroutine cuda_fft_plan_setup(bc_code, dims_glob, dims_loc, fft_n, &
                                       fft_n_loc, fw_type, bw_type)
     !! The cuFFT plan dimensions and types of a BC class. The 100 case
-    !! transposes X<->Y and runs the FFT on (ny, nx, nz), the 110 case
-    !! transposes to (nz, nx, ny) with R2C along Z, and the 000 and 010 cases
+    !! transposes X<->Y and runs the FFT on (ny, nx, nz), the 110 and 111
+    !! cases transpose to (nz, nx, ny) with R2C along Z, and the 000 and 010
+    !! cases
     !! run it on (nx, ny, nz). fft_n holds the global plan dimensions and
     !! fft_n_loc the local extents of the first two. Shared by the solver
     !! init and the x3d2-memcheck probe.
@@ -475,8 +486,8 @@ contains
       ! 100: transpose X<->Y, FFT on (ny, nx, nz)
       fft_n = [dims_glob(2), dims_glob(1), dims_glob(3)]
       fft_n_loc = [dims_loc(2), dims_loc(1)]
-    else if (bc_code == FFT_BC_110) then
-      ! 110: transpose to (nz, nx, ny), R2C along Z
+    else if (fft_bc_is_11x(bc_code)) then
+      ! 110, 111: transpose to (nz, nx, ny), R2C along Z
       fft_n = [dims_glob(3), dims_glob(1), dims_glob(2)]
       fft_n_loc = [dims_glob(3), dims_loc(1)]
     else
@@ -513,8 +524,8 @@ contains
       allocate (cuda_poisson_010_t :: poisson_fft)
     case ('100')
       allocate (cuda_poisson_100_t :: poisson_fft)
-    case ('110')
-      allocate (cuda_poisson_110_t :: poisson_fft)
+    case ('110', '111')
+      allocate (cuda_poisson_11x_t :: poisson_fft)
     case default
       call abort_run('Requested BCs are not supported in FFT-based Poisson &
                      &solver!')
@@ -638,10 +649,9 @@ contains
     ! cuFFT is a fallback taken inside it, so unlike the decomposition checks
     ! above this one cannot move ahead of the plans. The 010, 100 and 110
     ! cases need cuFFTMp on more than one rank.
-    if ((self%bc_code == '010' .or. self%bc_code == '100' &
-         .or. self%bc_code == '110') &
+    if (self%bc_code /= '000' &
         .and. mesh%par%nproc > 1 .and. (.not. self%use_cufftmp)) then
-      call abort_run('The 010, 100 and 110 cases on multiple ranks need &
+      call abort_run('The 010, 100, 110 and 111 cases on multiple ranks need &
                      &cuFFTMp, plain cuFFT cannot decompose the transform.')
     end if
 
@@ -716,8 +726,19 @@ contains
   subroutine init_case_110(self, mesh)
     implicit none
 
-    class(cuda_poisson_110_t) :: self
+    class(cuda_poisson_11x_t) :: self
     type(mesh_t), intent(in) :: mesh
+
+    self%fold_z = .not. self%periodic_z
+
+    ! The Y-slab redistribution assumes every rank holds nz/nproc cells.
+    ! The mesh splits the vertices, so a non-periodic z (111) has that only
+    ! when its cell count divides by the number of ranks.
+    if (mesh%par%nproc > 1 &
+        .and. mod(self%nz_glob, mesh%par%nproc_dir(3)) /= 0) then
+      call abort_run('The 110 and 111 cases on multiple ranks need the &
+                     &number of z cells to divide by the number of ranks.')
+    end if
 
     call self%init_dim2_mirror(mesh)
 
@@ -794,7 +815,7 @@ contains
     !! MPI_Alltoall (see redistribute_110_to_yslab).
     implicit none
 
-    class(cuda_poisson_110_t) :: self
+    class(cuda_poisson_11x_t) :: self
     type(mesh_t), intent(in) :: mesh
     integer, intent(in) :: fft_n(3), fft_n_loc(2)
     integer, intent(in) :: fw_plan_type, bw_plan_type
@@ -855,7 +876,7 @@ contains
     !! of the descriptor allocation.
     implicit none
 
-    class(cuda_poisson_110_t), intent(in) :: self
+    class(cuda_poisson_11x_t), intent(in) :: self
     real(dp), device, pointer, dimension(:, :, :), intent(out) :: d_dev
 
     type(cudaXtDesc), pointer :: descriptor
@@ -869,10 +890,11 @@ contains
   end subroutine yslab_view_110
 
   subroutine fft_forward_110_cuda(self, f)
-    !! Forward FFT for 110 case: transpose (nx,ny,nz)->(nz,nx,ny) then R2C
+    !! Forward FFT for the 110 and 111 cases: transpose
+    !! (nx,ny,nz)->(nz,nx,ny), folding z in 111, then R2C
     implicit none
 
-    class(cuda_poisson_110_t) :: self
+    class(cuda_poisson_11x_t) :: self
     class(field_t), intent(in) :: f
 
     real(dp), device, pointer :: padded_dev(:, :, :), d_dev(:, :, :)
@@ -901,7 +923,8 @@ contains
       threads = dim3(tpb, 1, 1)
 
       call transpose_xyz_to_zxy<<<blocks, threads>>>( & !&
-        self%r_dev_110, padded_dev, self%nx_loc, self%ny_loc, self%nz_loc &
+        self%r_dev_110, padded_dev, self%nx_loc, self%ny_loc, self%nz_loc, &
+        self%fold_z &
         )
 
       ! R2C FFT on transposed data
@@ -918,10 +941,11 @@ contains
   end subroutine fft_forward_110_cuda
 
   subroutine fft_backward_110_cuda(self, f)
-    !! Backward FFT for 110 case: C2R then transpose (nz,nx,ny)->(nx,ny,nz)
+    !! Backward FFT for the 110 and 111 cases: C2R then transpose
+    !! (nz,nx,ny)->(nx,ny,nz), unfolding z in 111
     implicit none
 
-    class(cuda_poisson_110_t) :: self
+    class(cuda_poisson_11x_t) :: self
     class(field_t), intent(inout) :: f
 
     real(dp), device, pointer :: padded_dev(:, :, :), d_dev(:, :, :)
@@ -965,7 +989,8 @@ contains
       threads = dim3(tpb, 1, 1)
 
       call transpose_zxy_to_xyz<<<blocks, threads>>>( & !&
-        padded_dev, self%r_dev_110, self%nx_loc, self%ny_loc, self%nz_loc &
+        padded_dev, self%r_dev_110, self%nx_loc, self%ny_loc, self%nz_loc, &
+        self%fold_z &
         )
     end if
   end subroutine fft_backward_110_cuda
@@ -1019,7 +1044,7 @@ contains
     !! forward transform. See the comment above pack_zslab_to_alltoall.
     implicit none
 
-    class(cuda_poisson_110_t) :: self
+    class(cuda_poisson_11x_t) :: self
     real(dp), device, dimension(:, :, :), intent(in) :: zslab
     real(dp), device, dimension(:, :, :), intent(inout) :: yslab
 
@@ -1040,7 +1065,7 @@ contains
     call redistribution_alltoall(self, nz_l*nx*ny_l, 'Y')
 
     call unpack_110_yslab<<<blocks, threads>>>( & !&
-      yslab, self%r_a2a_recv_dev, nx, ny_l, nz_l, nproc &
+      yslab, self%r_a2a_recv_dev, nx, ny_l, nz_l, nproc, self%fold_z &
       )
 
   end subroutine redistribute_110_to_yslab
@@ -1049,7 +1074,7 @@ contains
     !! Inverse of redistribute_110_to_yslab, after the backward transform.
     implicit none
 
-    class(cuda_poisson_110_t) :: self
+    class(cuda_poisson_11x_t) :: self
     real(dp), device, dimension(:, :, :), intent(in) :: yslab
     real(dp), device, dimension(:, :, :), intent(inout) :: zslab
 
@@ -1064,7 +1089,7 @@ contains
     call redistribution_launch_config(ny_l, nz_l, blocks, threads)
 
     call pack_110_yslab<<<blocks, threads>>>( & !&
-      self%r_a2a_send_dev, yslab, nx, ny_l, nz_l, nproc &
+      self%r_a2a_send_dev, yslab, nx, ny_l, nz_l, nproc, self%fold_z &
       )
 
     call redistribution_alltoall(self, nz_l*nx*ny_l, 'Z')
@@ -1781,7 +1806,7 @@ contains
     !! more launches.
     implicit none
 
-    class(cuda_poisson_110_t) :: self
+    class(cuda_poisson_11x_t) :: self
 
     type(cudaXtDesc), pointer :: descriptor
     complex(dp), device, dimension(:, :, :), pointer :: c_dev
@@ -2009,7 +2034,7 @@ contains
   subroutine enforce_periodicity_xy_cuda(self, f_out, f_in)
     implicit none
 
-    class(cuda_poisson_110_t) :: self
+    class(cuda_poisson_11x_t) :: self
     class(field_t), intent(inout) :: f_out
     class(field_t), intent(in) :: f_in
 
@@ -2041,7 +2066,7 @@ contains
   subroutine undo_periodicity_xy_cuda(self, f_out, f_in)
     implicit none
 
-    class(cuda_poisson_110_t) :: self
+    class(cuda_poisson_11x_t) :: self
     class(field_t), intent(inout) :: f_out
     class(field_t), intent(in) :: f_in
 

@@ -17,6 +17,7 @@ module m_mesh
   integer, parameter :: FFT_BC_010 = 10
   integer, parameter :: FFT_BC_100 = 100
   integer, parameter :: FFT_BC_110 = 110
+  integer, parameter :: FFT_BC_111 = 111
   integer, parameter :: FFT_BC_UNSUPPORTED = -1
 
   ! The mesh class stores all the information about the global and local (due to domain decomposition) mesh
@@ -434,14 +435,28 @@ contains
 
     if (present(bcs_global)) bcs_global = codes
 
-    ! The four classes the Poisson FFT solver supports, all periodic in z.
+    ! The classes the Poisson FFT solver supports: the four periodic in z,
+    ! and 111, non-periodic everywhere.
     bc_code = FFT_BC_UNSUPPORTED
     if (periodic(3)) then
       if (periodic(1) .and. periodic(2)) bc_code = FFT_BC_000
       if (periodic(1) .and. (.not. periodic(2))) bc_code = FFT_BC_010
       if ((.not. periodic(1)) .and. periodic(2)) bc_code = FFT_BC_100
       if ((.not. periodic(1)) .and. (.not. periodic(2))) bc_code = FFT_BC_110
+    else if (.not. any(periodic)) then
+      bc_code = FFT_BC_111
     end if
   end subroutine classify_boundaries
+
+  pure logical function fft_bc_is_11x(bc_code)
+    !! Whether the FFT_BC_* class bc_code runs the 11x Poisson solver: 110
+    !! and 111 share its spectral layout, plans and buffers, as in
+    !! Incompact3d's poisson_11x.
+    implicit none
+
+    integer, intent(in) :: bc_code
+
+    fft_bc_is_11x = bc_code == FFT_BC_110 .or. bc_code == FFT_BC_111
+  end function fft_bc_is_11x
 
 end module m_mesh
