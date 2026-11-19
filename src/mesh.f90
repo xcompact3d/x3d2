@@ -1,6 +1,7 @@
 module m_mesh
-  use m_mpi, only: MPI_COMM_WORLD, MPI_Comm_rank, MPI_Comm_size
-  use m_common, only: dp, DIR_X, DIR_Y, DIR_Z, DIR_C, &
+  use m_mpi, only: MPI_COMM_WORLD, MPI_IN_PLACE, MPI_SUM, MPI_Allreduce, &
+                   MPI_Comm_rank, MPI_Comm_size
+  use m_common, only: dp, MPI_X3D2_DP, DIR_X, DIR_Y, DIR_Z, DIR_C, &
                       CELL, VERT, X_FACE, Y_FACE, Z_FACE, &
                       X_EDGE, Y_EDGE, Z_EDGE, &
                       BC_PERIODIC, BC_NEUMANN, BC_DIRICHLET, BC_HALO
@@ -34,6 +35,7 @@ module m_mesh
     generic :: get_n => get_n_dir, get_n_phi
 
     procedure :: get_coordinates
+    procedure :: y_stretched_mean
   end type mesh_t
 
   interface mesh_t
@@ -339,6 +341,34 @@ contains
       error stop "Unknown data_loc in get_coordinates" ! logger-exempt: pure
     end select
   end function
+
+  function y_stretched_mean(self, sums) result(mean)
+    !! Volume mean over the whole domain of a vertex field on a mesh with y
+    !! stretching, from this rank's y-plane sums: sums(j) is the sum over
+    !! the local x-z plane of local vertex y index j. Each plane has the
+    !! weight dy/(ppy*L(2)), with dy = d(2) and ppy = vert_ds the analytic
+    !! derivative of the y stretching function, as in Incompact3d. The weight
+    !! is not a cell width. Every rank weights its own planes, so only the
+    !! sum is reduced, and every rank gets the result.
+    class(mesh_t), intent(in) :: self
+    real(dp), intent(in) :: sums(:)
+    real(dp) :: mean
+
+    integer :: dims(3), global_dims(3), ierr
+
+    if (.not. self%geo%stretched(2)) &
+      call abort_run('y_stretched_mean needs a mesh with y stretching.')
+
+    dims = self%get_dims(VERT)
+    global_dims = self%get_global_dims(VERT)
+
+    mean = sum(sums(1:dims(2))/self%geo%vert_ds(1:dims(2), 2)) &
+           *self%geo%d(2)/self%geo%L(2) &
+           /(real(global_dims(1), dp)*real(global_dims(3), dp))
+    call MPI_Allreduce(MPI_IN_PLACE, mean, 1, MPI_X3D2_DP, MPI_SUM, &
+                       MPI_COMM_WORLD, ierr)
+
+  end function y_stretched_mean
 
   pure function global_cell_dims(vert_dims, periodic) result(cell_dims)
     !! Global number of cells per direction: a periodic direction has as many

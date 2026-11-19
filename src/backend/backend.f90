@@ -71,6 +71,9 @@ module m_base_backend
     procedure :: slice_max_sum => slice_max_sum_base
     procedure :: x_slice_weighted_sum => x_slice_weighted_sum_base
     procedure :: field_plane_sums => field_plane_sums_base
+    procedure :: vector_norm_squared_plane_sums => &
+      vector_norm_squared_plane_sums_base
+    procedure :: plane_sums_dims
     procedure :: field_scale => field_scale_base
     procedure :: field_shift => field_shift_base
     procedure :: field_volume_integral => field_volume_integral_base
@@ -718,6 +721,59 @@ contains
     call not_implemented('field_plane_sums')
 
   end subroutine field_plane_sums_base
+
+  subroutine vector_norm_squared_plane_sums_base(self, sums, a, b, c)
+    !! Sum a**2 + b**2 + c**2 of three DIR_X fields over x and z on every
+    !! local y-plane, in one pass: sums(j) is the sum over the plane of y
+    !! index j. The order of summation is fixed, so the result is
+    !! reproducible. No MPI reduction is done.
+    implicit none
+
+    class(base_backend_t) :: self
+    real(dp), intent(out) :: sums(:)
+    class(field_t), intent(in) :: a, b, c
+
+    sums = 0._dp
+    call not_implemented('vector_norm_squared_plane_sums')
+
+  end subroutine vector_norm_squared_plane_sums_base
+
+  function plane_sums_dims(self, operation, sums, a, b, c) result(dims)
+    !! Checks the arguments of a y-plane sum and returns the local dims of
+    !! the fields. The fields must be DIR_X with one valid data_loc, and
+    !! sums must hold every local y-plane. Shared by every backend's
+    !! field_plane_sums and vector_norm_squared_plane_sums.
+    implicit none
+
+    class(base_backend_t) :: self
+    character(*), intent(in) :: operation
+    real(dp), intent(in) :: sums(:)
+    class(field_t), intent(in) :: a
+    class(field_t), intent(in), optional :: b, c
+    integer :: dims(3)
+
+    call check_field(a)
+    if (present(b)) call check_field(b)
+    if (present(c)) call check_field(c)
+
+    dims = self%mesh%get_dims(a%data_loc)
+    if (size(sums) < dims(2)) &
+      call abort_run(operation//': sums is smaller than the y extent.')
+
+  contains
+
+    subroutine check_field(f)
+      class(field_t), intent(in) :: f
+
+      if (f%dir /= DIR_X) &
+        call abort_run(operation//' is only supported for DIR_X fields.')
+      if (f%data_loc == NULL_LOC) &
+        call abort_run(operation//' requires a valid data_loc.')
+      if (f%data_loc /= a%data_loc) &
+        call abort_run(operation//': the fields must share one data_loc.')
+    end subroutine check_field
+
+  end function plane_sums_dims
 
   subroutine field_scale_base(self, f, a)
     !! Scales a field by a

@@ -83,7 +83,6 @@ contains
     solver%host_allocator => runtime%host_allocator
     solver%nvars = 3 + nspecies
     solver%nspecies = nspecies
-    solver%ngrid = product(mesh%get_global_dims(VERT))
 
     solver%u => allocator%get_block(DIR_X)
     solver%v => allocator%get_block(DIR_X)

@@ -62,6 +62,8 @@ module m_omp_backend
     procedure :: field_set_face => field_set_face_omp
     procedure :: field_set_y_plane => field_set_y_plane_omp
     procedure :: field_plane_sums => field_plane_sums_omp
+    procedure :: vector_norm_squared_plane_sums => &
+      vector_norm_squared_plane_sums_omp
     procedure :: field_set_abl_wall_stress => field_set_abl_wall_stress_omp
     procedure :: field_set_face_from_field => field_set_face_from_field_omp
     procedure :: set_field_face_data => set_field_face_data_omp
@@ -1526,14 +1528,7 @@ contains
     integer :: dims(3), y_stride, y_block, i, j, k, z
     real(dp) :: plane_sum
 
-    if (f%dir /= DIR_X) &
-      call abort_run('field_plane_sums is only supported for DIR_X fields.')
-    if (f%data_loc == NULL_LOC) &
-      call abort_run('field_plane_sums requires a valid data_loc.')
-
-    dims = self%mesh%get_dims(f%data_loc)
-    if (size(sums) < dims(2)) &
-      call abort_run('field_plane_sums: sums is smaller than the y extent.')
+    dims = self%plane_sums_dims('field_plane_sums', sums, f)
     y_stride = y_group_stride(self)
 
     ! OMP DIR_X ordering: group = y_stride*(z - 1) + y_block. Each plane is
@@ -1553,6 +1548,40 @@ contains
     !$omp end parallel do
 
   end subroutine field_plane_sums_omp
+
+  subroutine vector_norm_squared_plane_sums_omp(self, sums, a, b, c)
+    !! [[m_base_backend(module):vector_norm_squared_plane_sums(subroutine)]]
+    implicit none
+
+    class(omp_backend_t) :: self
+    real(dp), intent(out) :: sums(:)
+    class(field_t), intent(in) :: a, b, c
+
+    integer :: dims(3), y_stride, y_block, i, j, k, z, g
+    real(dp) :: plane_sum
+
+    dims = self%plane_sums_dims('vector_norm_squared_plane_sums', &
+                                sums, a, b, c)
+    y_stride = y_group_stride(self)
+
+    ! Same ordering and fixed summation order as field_plane_sums_omp.
+    !$omp parallel do private(y_block, i, g, plane_sum)
+    do j = 1, dims(2)
+      y_block = (j - 1)/SZ + 1
+      i = j - (y_block - 1)*SZ
+      plane_sum = 0._dp
+      do z = 1, dims(3)
+        g = y_stride*(z - 1) + y_block
+        do k = 1, dims(1)
+          plane_sum = plane_sum + a%data(i, k, g)**2 + b%data(i, k, g)**2 &
+                      + c%data(i, k, g)**2
+        end do
+      end do
+      sums(j) = plane_sum
+    end do
+    !$omp end parallel do
+
+  end subroutine vector_norm_squared_plane_sums_omp
 
   subroutine field_set_y_plane_omp(self, f, c, plane)
     !! [[m_base_backend(module):field_set_y_plane(subroutine)]]
