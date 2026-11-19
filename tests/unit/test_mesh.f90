@@ -73,12 +73,10 @@ contains
     mesh = mesh_t(dims_global, nproc_dir, L_global, BC_x, BC_y, BC_z, &
                   use_2decomp=use_2decomp)
 
-    ! Expected decomposition by 2decomp and generic
-    if (use_2decomp) then
-      n_vert_z = [3, 4, 4, 5]
-    else
-      n_vert_z = [4, 4, 4, 4]
-    end if
+    ! Expected decomposition, the same for 2decomp and generic: the 15
+    ! cells of the non-periodic z split 3, 4, 4, 4, and the last rank holds
+    ! the extra vertex
+    n_vert_z = [3, 4, 4, 5]
 
     allocator = allocator_t(mesh%get_dims(VERT), 8)
 

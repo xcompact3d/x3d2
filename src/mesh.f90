@@ -151,9 +151,6 @@ contains
     nproc_y = par%nproc_dir(2)
     nproc_z = par%nproc_dir(3)
 
-    ! Define number of cells and vertices in each direction
-    grid%vert_dims = grid%global_vert_dims/par%nproc_dir
-
     ! A 3D array corresponding to each region in the global domain
     allocate (global_ranks(nproc_x, nproc_y, nproc_z))
 
@@ -162,11 +159,48 @@ contains
                            shape=[nproc_x, nproc_y, nproc_z])
 
     call par%compute_rank_pos_from_global(global_ranks)
+
+    ! Split each direction as 2decomp does, so that both decompositions
+    ! hand a rank the same range
+    do i = 1, 3
+      call split_points(grid%global_vert_dims(i), par%nproc_dir(i), &
+                        par%nrank_dir(i), grid%periodic_BC(i), &
+                        grid%vert_dims(i), par%n_offset(i))
+    end do
     call grid%copy_vert2cell_dims(par)
 
-    par%n_offset(:) = grid%vert_dims(:)*par%nrank_dir(:)
-
   end subroutine
+
+  pure subroutine split_points(n_vert, nproc, nrank, periodic, n_loc, offset)
+    !! The vertices of rank nrank (0-based) when n_vert vertices are split
+    !! over nproc ranks, and their offset, as 2decomp splits them. The cells
+    !! are split as evenly as possible, the last mod(n_cell, nproc) ranks
+    !! taking one more, and a non-periodic direction (one cell fewer than
+    !! vertices) puts its extra vertex on the last rank. A non-periodic
+    !! direction of P*m cells therefore gives every rank m cells.
+    implicit none
+
+    integer, intent(in) :: n_vert, nproc, nrank
+    logical, intent(in) :: periodic
+    integer, intent(out) :: n_loc, offset
+
+    integer :: n_cell, n_base, n_short
+
+    n_cell = n_vert
+    if (.not. periodic) n_cell = n_vert - 1
+
+    n_base = n_cell/nproc
+    n_short = nproc - mod(n_cell, nproc) ! ranks with n_base cells
+    if (nrank < n_short) then
+      n_loc = n_base
+      offset = nrank*n_base
+    else
+      n_loc = n_base + 1
+      offset = n_short*n_base + (nrank - n_short)*(n_base + 1)
+    end if
+    if (.not. periodic .and. nrank == nproc - 1) n_loc = n_loc + 1
+
+  end subroutine split_points
 
   pure function get_dims(self, data_loc) result(dims)
   !! Getter for local domain dimensions
