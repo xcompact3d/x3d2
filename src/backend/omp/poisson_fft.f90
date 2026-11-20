@@ -14,6 +14,9 @@ module m_omp_poisson_fft
   use m_tdsops, only: dirps_t
 
   use m_omp_spectral, only: process_spectral_000, process_spectral_010, &
+                            process_spectral_010_fw, &
+                            process_spectral_010_poisson, &
+                            process_spectral_010_bw, &
                             process_spectral_100, process_spectral_110, &
                             process_spectral_110_fw, &
                             process_spectral_110_solve, &
@@ -62,6 +65,10 @@ module m_omp_poisson_fft
 
   type, extends(omp_poisson_fft_t) :: omp_poisson_010_t
     !! Periodic in x and z, non-periodic in y
+    !> Working copies of the stretching matrices. The pentadiagonal
+    !! elimination overwrites its matrices, so each solve starts from a copy
+    !! of the pristine matrices of the base class.
+    real(dp), allocatable, dimension(:, :, :, :) :: a_work_re, a_work_im
   contains
     procedure :: init_buffers => init_buffers_010
     procedure :: fft_postprocess => fft_postprocess_010_omp
@@ -199,9 +206,12 @@ contains
     call self%base_init(mesh, xdirps, ydirps, zdirps, &
                         self%sp%zsz, self%sp%zst - 1)
 
-    if (mesh%geo%stretched(2)) then
-      call abort_run('OpenMP backends FFT based Poisson solver does not &
-                     &support stretching in y-direction yet!')
+    ! Only the top-bottom stretching on one rank is solved
+    if (mesh%geo%stretched(2) .and. &
+        (trim(mesh%geo%stretching(2)) /= 'top-bottom' &
+         .or. self%p_row*self%p_col > 1)) then
+      call abort_run('OpenMP backends FFT based Poisson solver supports only &
+                     &top-bottom y stretching on one rank!')
     end if
 
     allocate (self%c_x(self%nx_spec, self%ny_spec, self%nz_spec))
@@ -253,6 +263,12 @@ contains
     ! Pairing a mode with its mirror in dim2 (the y modes) needs that
     ! dimension whole, which the y-pencil of sp provides.
     if (self%p_col > 1) call self%init_pair_buffers(with_waves=.true.)
+
+    ! The top-bottom stretching matrices are symmetric, odd and even alike
+    if (self%stretched_y) then
+      allocate (self%a_work_re, mold=self%a_odd_re)
+      allocate (self%a_work_im, mold=self%a_odd_im)
+    end if
 
   end subroutine init_buffers_010
 
@@ -632,6 +648,47 @@ contains
         az=self%az, bz=self%bz &
         )
       call transpose_y_to_z(self%c_pair, self%c_x, self%sp)
+    else if (self%stretched_y) then
+      call process_spectral_010_fw( &
+        div_u=self%c_x, &
+        nx_spec=self%nx_spec, ny_spec=self%ny_spec, nz_spec=self%nz_spec, &
+        x_sp_st=self%sp_st(1), y_sp_st=self%sp_st(2), &
+        z_sp_st=self%sp_st(3), &
+        nx=self%nx_glob, ny=self%ny_glob, nz=self%nz_glob, &
+        ax=self%ax, bx=self%bx, ay=self%ay, by=self%by, &
+        az=self%az, bz=self%bz &
+        )
+
+      ! The odd rows, then the even rows, each with its own matrices
+      self%a_work_re = self%a_odd_re
+      self%a_work_im = self%a_odd_im
+      call process_spectral_010_poisson( &
+        div_u=self%c_x, a_re=self%a_work_re, a_im=self%a_work_im, &
+        off=0, inc=2, nx_spec=self%nx_spec, n=self%ny_spec/2, &
+        nz_spec=self%nz_spec, x_sp_st=self%sp_st(1), &
+        z_sp_st=self%sp_st(3), &
+        nx=self%nx_glob, ny=self%ny_glob, nz=self%nz_glob &
+        )
+
+      self%a_work_re = self%a_even_re
+      self%a_work_im = self%a_even_im
+      call process_spectral_010_poisson( &
+        div_u=self%c_x, a_re=self%a_work_re, a_im=self%a_work_im, &
+        off=1, inc=2, nx_spec=self%nx_spec, n=self%ny_spec/2, &
+        nz_spec=self%nz_spec, x_sp_st=self%sp_st(1), &
+        z_sp_st=self%sp_st(3), &
+        nx=self%nx_glob, ny=self%ny_glob, nz=self%nz_glob &
+        )
+
+      call process_spectral_010_bw( &
+        div_u=self%c_x, &
+        nx_spec=self%nx_spec, ny_spec=self%ny_spec, nz_spec=self%nz_spec, &
+        x_sp_st=self%sp_st(1), y_sp_st=self%sp_st(2), &
+        z_sp_st=self%sp_st(3), &
+        nx=self%nx_glob, ny=self%ny_glob, nz=self%nz_glob, &
+        ax=self%ax, bx=self%bx, ay=self%ay, by=self%by, &
+        az=self%az, bz=self%bz &
+        )
     else
       call process_spectral_010( &
         div_u=self%c_x, waves=self%waves, &
