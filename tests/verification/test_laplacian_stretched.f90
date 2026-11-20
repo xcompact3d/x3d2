@@ -110,8 +110,9 @@ contains
     integer, intent(in) :: decomp(3)
     real(dp) :: err
 
-    ! The objects are heap allocated and never freed. The device runtime
-    ! crashes when these locals are finalised at the end of the function.
+    ! The objects are heap allocated. NVHPC never frees them, because its
+    ! runtime crashes when they are finalised at the end of the function.
+    ! Other compilers free them.
     type(backend_runtime_t), pointer :: runtime
     type(mesh_t), pointer :: mesh
     class(base_backend_t), pointer :: backend
@@ -190,6 +191,12 @@ contains
 
     call backend%allocator%release_block(u)
     call backend%allocator%release_block(lapl_u)
+
+#ifndef __NVCOMPILER
+    ! Free the field blocks that the allocator caches in its list.
+    call runtime%allocator%destroy()
+    deallocate (xdirps, ydirps, zdirps, vector_calculus, runtime, mesh)
+#endif
 
   end function laplacian_error
 
