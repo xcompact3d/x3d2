@@ -169,15 +169,15 @@ contains
   subroutine destroy(self)
     !! Go through the block list from head to tail, deallocating each
     !! memory block in turn.  Deallocation of a
-    !! [[m_allocator(module):field_t(type)]] object automatically
-    !! deallocates its internal allocatable
-    !! [[field_t(type):data(variable)]] array.
+    !! [[m_allocator(module):field_t(type)]] object does not free its
+    !! storage, so [[field_t(type):free_data(bound)]] releases it first.
     class(allocator_t), intent(inout) :: self
     class(field_t), pointer :: current
     do
       if (.not. associated(self%first)) exit
       current => self%first
       self%first => self%first%next
+      call current%free_data()
       deallocate (current)
       self%next_id = self%next_id - 1
     end do
