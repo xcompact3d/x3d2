@@ -10,7 +10,8 @@ program test_laplacian_stretched
   !! With u = sin(kx x)*cos(ky y)*sin(kz z) the Laplacian is
   !! -(kx^2 + ky^2 + kz^2)*u. The mesh is the channel one (top-bottom
   !! stretching in y, beta of examples/channel/input.x3d), periodic in x and
-  !! z and non-periodic in y. The domain splits over the ranks in x. The test
+  !! z and non-periodic in y. The domain splits over the ranks in x, and for
+  !! several ranks again in y, the stretched direction. The test
   !! also evaluates the same field on a uniform mesh, where the correction
   !! must not change the result. Each case runs at two y resolutions and the
   !! error must fall on the finer one in double precision.
@@ -62,29 +63,51 @@ program test_laplacian_stretched
   ! The distributed compact solve needs enough points per rank.
   integer, parameter :: n_x_min = 96, min_points_per_rank = 24
 
+  ! The y decomposed cases need ny to divide over the ranks and to give each
+  ! rank at least min_points_per_rank points. The fine mesh doubles the
+  ! coarse one, so the error falls as on the x decomposed cases.
+
   real(dp) :: err_stretched(2), err_uniform(2)
   integer, parameter :: ny_list(2) = [ny_coarse, ny_fine]
+  integer :: ny_y(2)
   integer :: i
 
   call initialise_mpi(nrank, nproc)
   if (nrank == 0) print *, 'Parallel run with', nproc, 'ranks'
 
   do i = 1, 2
-    err_stretched(i) = laplacian_error(ny_list(i), .true.)
-    err_uniform(i) = laplacian_error(ny_list(i), .false.)
+    err_stretched(i) = laplacian_error(ny_list(i), .true., [nproc, 1, 1])
+    err_uniform(i) = laplacian_error(ny_list(i), .false., [nproc, 1, 1])
   end do
 
-  call check('stretched', err_stretched, tol_stretched, .true.)
-  call check('uniform', err_uniform, tol_uniform, .false.)
+  call check('stretched', ny_list, err_stretched, tol_stretched, .true.)
+  call check('uniform', ny_list, err_uniform, tol_uniform, .false.)
+
+  if (nproc > 1) then
+    ny_y(1) = ((max(ny_coarse, min_points_per_rank*nproc) + nproc - 1)/nproc) &
+              *nproc
+    ny_y(2) = 2*ny_y(1)
+    do i = 1, 2
+      err_stretched(i) = laplacian_error(ny_y(i), .true., [1, nproc, 1])
+      err_uniform(i) = laplacian_error(ny_y(i), .false., [1, nproc, 1])
+    end do
+
+    call check('stretched, y decomposed', ny_y, err_stretched, &
+               tol_stretched, .true.)
+    call check('uniform, y decomposed', ny_y, err_uniform, tol_uniform, &
+               .false.)
+  end if
 
   call finalise_test(allpass, nrank)
 
 contains
 
-  function laplacian_error(ny, stretched) result(err)
-    !! Relative L2 error of the Laplacian of u on a mesh with ny points in y.
+  function laplacian_error(ny, stretched, decomp) result(err)
+    !! Relative L2 error of the Laplacian of u on a mesh with ny points in y,
+    !! decomposed over the ranks as decomp.
     integer, intent(in) :: ny
     logical, intent(in) :: stretched
+    integer, intent(in) :: decomp(3)
     real(dp) :: err
 
     ! The objects are heap allocated and never freed. The device runtime
@@ -100,18 +123,18 @@ contains
     real(dp) :: x, y, z
     integer :: nx, dims(3), dims_padded(3), ix, iy, iz
 
-    nx = max(n_x_min, min_points_per_rank*nproc)
+    nx = max(n_x_min, min_points_per_rank*decomp(1))
 
     allocate (runtime, mesh, xdirps, ydirps, zdirps, vector_calculus)
 
     if (stretched) then
-      mesh = mesh_t([nx, ny, nz], [nproc, 1, 1], [2*pi, 2*pi, 2*pi], &
+      mesh = mesh_t([nx, ny, nz], decomp, [2*pi, 2*pi, 2*pi], &
                     ['periodic', 'periodic'], ['dirichlet', 'dirichlet'], &
                     ['periodic', 'periodic'], &
                     stretching=['uniform   ', 'top-bottom', 'uniform   '], &
                     beta=[1._dp, stretch_beta, 1._dp])
     else
-      mesh = mesh_t([nx, ny, nz], [nproc, 1, 1], [2*pi, 2*pi, 2*pi], &
+      mesh = mesh_t([nx, ny, nz], decomp, [2*pi, 2*pi, 2*pi], &
                     ['periodic', 'periodic'], ['dirichlet', 'dirichlet'], &
                     ['periodic', 'periodic'])
     end if
@@ -170,20 +193,21 @@ contains
 
   end function laplacian_error
 
-  subroutine check(label, err, tol, use_ratio)
-    !! Checks the errors at the two resolutions. In single precision both
+  subroutine check(label, ny, err, tol, use_ratio)
+    !! Checks the errors at the two resolutions ny. In single precision both
     !! must be below tol. In double precision the fine one must be below tol
     !! and fall on the finer mesh, by min_ratio if use_ratio is set. A
     !! non-finite error fails.
     character(*), intent(in) :: label
+    integer, intent(in) :: ny(2)
     real(dp), intent(in) :: err(2), tol
     logical, intent(in) :: use_ratio
 
     logical :: ok
 
     if (nrank == 0) then
-      print *, 'error norm ', label, ' ny =', ny_coarse, err(1)
-      print *, 'error norm ', label, ' ny =', ny_fine, err(2)
+      print *, 'error norm ', label, ' ny =', ny(1), err(1)
+      print *, 'error norm ', label, ' ny =', ny(2), err(2)
       ok = ieee_is_finite(err(1)) .and. ieee_is_finite(err(2))
       if (ok) then
         if (must_converge) then
