@@ -203,8 +203,17 @@ contains
     ! decomp_2d_fft_get_size hands back. Read sp directly, subtracting one
     ! to convert the start position into an offset.
     self%sp => decomp_2d_fft_get_sp()
-    call self%base_init(mesh, xdirps, ydirps, zdirps, &
-                        self%sp%zsz, self%sp%zst - 1)
+    if (mesh%geo%stretched(2) .and. self%bc_code == '010' &
+        .and. self%p_col > 1) then
+      ! The stretched solve runs on the y-pencil, where y is whole, so the
+      ! stretching matrices must cover that block.
+      call self%base_init(mesh, xdirps, ydirps, zdirps, &
+                          self%sp%zsz, self%sp%zst - 1, &
+                          n_blk=self%sp%ysz, blk_st=self%sp%yst - 1)
+    else
+      call self%base_init(mesh, xdirps, ydirps, zdirps, &
+                          self%sp%zsz, self%sp%zst - 1)
+    end if
 
     ! Only the top-bottom stretching on one rank is solved
     if (mesh%geo%stretched(2) .and. &
