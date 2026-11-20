@@ -11,7 +11,7 @@ module m_field
      !! field.  User code is currently responsible for incrementing
      !! the reference count.
     class(field_t), pointer :: next
-    real(dp), pointer, private :: p_data(:)
+    real(dp), pointer, private :: p_data(:) => null()
     real(dp), pointer, contiguous :: data(:, :, :)
     integer :: dir
     integer :: data_loc
@@ -23,6 +23,7 @@ module m_field
     procedure :: set_shape
     procedure :: set_data_loc
     procedure :: get_dev_ptr
+    procedure :: free_data
   end type field_t
 
   interface field_t
@@ -79,6 +80,21 @@ contains
     ptr = c_null_ptr
 
   end function get_dev_ptr
+
+  subroutine free_data(self)
+    !! Free the host storage of the block and nullify the `data` view of it.
+    !! A block that never allocated host storage, as on a device backend, is
+    !! left as it is.  There is no `final` procedure for this, because the
+    !! constructor result is copied by intrinsic assignment and a finaliser
+    !! on the temporary would free the storage the copy still uses.
+    implicit none
+
+    class(field_t) :: self
+
+    if (associated(self%p_data)) deallocate (self%p_data)
+    nullify (self%data)
+
+  end subroutine free_data
 
   function get_shape(self) result(dims)
     implicit none

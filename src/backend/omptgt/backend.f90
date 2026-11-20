@@ -96,6 +96,7 @@ module m_omptgt_backend
     procedure :: transeq_species => transeq_species_omptgt
     procedure :: tds_solve => tds_solve_omptgt
     procedure :: thom_solve => thom_solve_omptgt
+    procedure :: stretch_correct_add => stretch_correct_add_omptgt
     procedure :: reorder => reorder_omptgt
     procedure :: sum_yintox => sum_yintox_omptgt
     procedure :: sum_zintox => sum_zintox_omptgt
@@ -536,6 +537,45 @@ contains
     end select
 
   end subroutine thom_solve_omptgt
+
+  subroutine stretch_correct_add_omptgt(self, d2u, du, tdsops)
+    !! [[m_base_backend(module):stretch_correct_add(subroutine)]]
+    implicit none
+
+    class(omptgt_backend_t) :: self
+    class(field_t), intent(inout) :: d2u
+    class(field_t), intent(in) :: du
+    class(tdsops_t), intent(in) :: tdsops
+
+    real(dp), pointer, contiguous, dimension(:, :, :) :: d2u_dev, du_dev
+    real(dp), pointer, contiguous, dimension(:) :: sc_dev
+    integer :: i, j, k, n_tds, n_i, n_k
+
+    call resolve_field_t(d2u_dev, d2u)
+    call resolve_field_t(du_dev, du)
+
+    select type (tdsops)
+    type is (omptgt_tdsops_t)
+      sc_dev => tdsops%stretch_correct_dev
+      n_tds = tdsops%n_tds
+      n_i = size(d2u_dev, dim=1)
+      n_k = size(d2u_dev, dim=3)
+
+      !$omp target teams distribute parallel do collapse(3) &
+      !$omp OMP_DEVICE_ADDR(d2u_dev, du_dev, sc_dev)
+      do k = 1, n_k
+        do j = 1, n_tds
+          do i = 1, n_i
+            d2u_dev(i, j, k) = d2u_dev(i, j, k) + sc_dev(j)*du_dev(i, j, k)
+          end do
+        end do
+      end do
+      !$omp end target teams distribute parallel do
+    class default
+      call abort_run('Expected omptgt_tdsops_t in stretch_correct_add_omptgt.')
+    end select
+
+  end subroutine stretch_correct_add_omptgt
 
   subroutine tds_solve_dist(self, du, u, tdsops)
     implicit none
