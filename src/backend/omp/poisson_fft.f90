@@ -215,12 +215,12 @@ contains
                           self%sp%zsz, self%sp%zst - 1)
     end if
 
-    ! Only the top-bottom stretching on one rank is solved
+    ! Only the top-bottom stretching is solved. A y decomposition stops in
+    ! init_buffers_010.
     if (mesh%geo%stretched(2) .and. &
-        (trim(mesh%geo%stretching(2)) /= 'top-bottom' &
-         .or. self%p_row*self%p_col > 1)) then
+        trim(mesh%geo%stretching(2)) /= 'top-bottom') then
       call abort_run('OpenMP backends FFT based Poisson solver supports only &
-                     &top-bottom y stretching on one rank!')
+                     &top-bottom y stretching!')
     end if
 
     allocate (self%c_x(self%nx_spec, self%ny_spec, self%nz_spec))
@@ -646,58 +646,23 @@ contains
       ! The FFT leaves y split across p_col in the z-pencil. Hop to the
       ! y-pencil, where y is whole, pair there, and hop back.
       call transpose_z_to_y(self%c_x, self%c_pair, self%sp)
-      call process_spectral_010( &
-        div_u=self%c_pair, waves=self%waves_pair, &
-        nx_spec=self%sp%ysz(1), ny_spec=self%sp%ysz(2), &
-        nz_spec=self%sp%ysz(3), &
-        x_sp_st=self%sp%yst(1) - 1, y_sp_st=self%sp%yst(2) - 1, &
-        z_sp_st=self%sp%yst(3) - 1, &
-        nx=self%nx_glob, ny=self%ny_glob, nz=self%nz_glob, &
-        ax=self%ax, bx=self%bx, ay=self%ay, by=self%by, &
-        az=self%az, bz=self%bz &
-        )
+      if (self%stretched_y) then
+        call solve_stretched_010(self, self%c_pair, self%sp%yst - 1)
+      else
+        call process_spectral_010( &
+          div_u=self%c_pair, waves=self%waves_pair, &
+          nx_spec=self%sp%ysz(1), ny_spec=self%sp%ysz(2), &
+          nz_spec=self%sp%ysz(3), &
+          x_sp_st=self%sp%yst(1) - 1, y_sp_st=self%sp%yst(2) - 1, &
+          z_sp_st=self%sp%yst(3) - 1, &
+          nx=self%nx_glob, ny=self%ny_glob, nz=self%nz_glob, &
+          ax=self%ax, bx=self%bx, ay=self%ay, by=self%by, &
+          az=self%az, bz=self%bz &
+          )
+      end if
       call transpose_y_to_z(self%c_pair, self%c_x, self%sp)
     else if (self%stretched_y) then
-      call process_spectral_010_fw( &
-        div_u=self%c_x, &
-        nx_spec=self%nx_spec, ny_spec=self%ny_spec, nz_spec=self%nz_spec, &
-        x_sp_st=self%sp_st(1), y_sp_st=self%sp_st(2), &
-        z_sp_st=self%sp_st(3), &
-        nx=self%nx_glob, ny=self%ny_glob, nz=self%nz_glob, &
-        ax=self%ax, bx=self%bx, ay=self%ay, by=self%by, &
-        az=self%az, bz=self%bz &
-        )
-
-      ! The odd rows, then the even rows, each with its own matrices
-      self%a_work_re = self%a_odd_re
-      self%a_work_im = self%a_odd_im
-      call process_spectral_010_poisson( &
-        div_u=self%c_x, a_re=self%a_work_re, a_im=self%a_work_im, &
-        off=0, inc=2, nx_spec=self%nx_spec, n=self%ny_spec/2, &
-        nz_spec=self%nz_spec, x_sp_st=self%sp_st(1), &
-        z_sp_st=self%sp_st(3), &
-        nx=self%nx_glob, ny=self%ny_glob, nz=self%nz_glob &
-        )
-
-      self%a_work_re = self%a_even_re
-      self%a_work_im = self%a_even_im
-      call process_spectral_010_poisson( &
-        div_u=self%c_x, a_re=self%a_work_re, a_im=self%a_work_im, &
-        off=1, inc=2, nx_spec=self%nx_spec, n=self%ny_spec/2, &
-        nz_spec=self%nz_spec, x_sp_st=self%sp_st(1), &
-        z_sp_st=self%sp_st(3), &
-        nx=self%nx_glob, ny=self%ny_glob, nz=self%nz_glob &
-        )
-
-      call process_spectral_010_bw( &
-        div_u=self%c_x, &
-        nx_spec=self%nx_spec, ny_spec=self%ny_spec, nz_spec=self%nz_spec, &
-        x_sp_st=self%sp_st(1), y_sp_st=self%sp_st(2), &
-        z_sp_st=self%sp_st(3), &
-        nx=self%nx_glob, ny=self%ny_glob, nz=self%nz_glob, &
-        ax=self%ax, bx=self%bx, ay=self%ay, by=self%by, &
-        az=self%az, bz=self%bz &
-        )
+      call solve_stretched_010(self, self%c_x, self%sp_st)
     else
       call process_spectral_010( &
         div_u=self%c_x, waves=self%waves, &
@@ -711,6 +676,61 @@ contains
     end if
 
   end subroutine fft_postprocess_010_omp
+
+  subroutine solve_stretched_010(self, c, st)
+    !! Top-bottom stretched 010 solve of a spectral block c, whose y lines
+    !! are whole. st holds the offset of the block in the global spectral
+    !! grid, and the stretching matrices cover the same block.
+    implicit none
+
+    class(omp_poisson_010_t) :: self
+    complex(dp), intent(inout), dimension(:, :, :) :: c
+    integer, intent(in) :: st(3)
+
+    integer :: nx_b, ny_b, nz_b
+
+    nx_b = size(c, dim=1)
+    ny_b = size(c, dim=2)
+    nz_b = size(c, dim=3)
+
+    call process_spectral_010_fw( &
+      div_u=c, &
+      nx_spec=nx_b, ny_spec=ny_b, nz_spec=nz_b, &
+      x_sp_st=st(1), y_sp_st=st(2), z_sp_st=st(3), &
+      nx=self%nx_glob, ny=self%ny_glob, nz=self%nz_glob, &
+      ax=self%ax, bx=self%bx, ay=self%ay, by=self%by, &
+      az=self%az, bz=self%bz &
+      )
+
+    ! The odd rows, then the even rows, each with its own matrices
+    self%a_work_re = self%a_odd_re
+    self%a_work_im = self%a_odd_im
+    call process_spectral_010_poisson( &
+      div_u=c, a_re=self%a_work_re, a_im=self%a_work_im, &
+      off=0, inc=2, nx_spec=nx_b, n=ny_b/2, nz_spec=nz_b, &
+      x_sp_st=st(1), z_sp_st=st(3), &
+      nx=self%nx_glob, ny=self%ny_glob, nz=self%nz_glob &
+      )
+
+    self%a_work_re = self%a_even_re
+    self%a_work_im = self%a_even_im
+    call process_spectral_010_poisson( &
+      div_u=c, a_re=self%a_work_re, a_im=self%a_work_im, &
+      off=1, inc=2, nx_spec=nx_b, n=ny_b/2, nz_spec=nz_b, &
+      x_sp_st=st(1), z_sp_st=st(3), &
+      nx=self%nx_glob, ny=self%ny_glob, nz=self%nz_glob &
+      )
+
+    call process_spectral_010_bw( &
+      div_u=c, &
+      nx_spec=nx_b, ny_spec=ny_b, nz_spec=nz_b, &
+      x_sp_st=st(1), y_sp_st=st(2), z_sp_st=st(3), &
+      nx=self%nx_glob, ny=self%ny_glob, nz=self%nz_glob, &
+      ax=self%ax, bx=self%bx, ay=self%ay, by=self%by, &
+      az=self%az, bz=self%bz &
+      )
+
+  end subroutine solve_stretched_010
 
   subroutine fft_postprocess_100_omp(self)
     !! Post-process div U* in spectral space for the non-periodic x case.
