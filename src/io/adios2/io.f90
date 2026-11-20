@@ -51,11 +51,13 @@ module m_io_backend
                     adios2_open, adios2_close, &
                     adios2_begin_step, adios2_end_step, &
                     adios2_define_variable, adios2_inquire_variable, &
-                    adios2_variable_type, adios2_define_attribute, &
+                    adios2_variable_type, adios2_variable_shape, &
+                    adios2_define_attribute, &
                     adios2_set_selection, adios2_put, &
                     adios2_get, adios2_remove_all_variables, &
                     adios2_found, adios2_constant_dims, &
-                    adios2_type_dp, adios2_type_integer4, adios2_type_real
+                    adios2_type_dp, adios2_type_integer4, &
+                    adios2_type_integer8, adios2_type_real
 #ifdef X3D2_ADIOS2_CUDA
   use adios2, only: adios2_set_memory_space, adios2_memory_space_gpu
   use cudafor, only: c_devloc, c_devptr
@@ -122,6 +124,7 @@ module m_io_backend
     procedure :: read_data_integer => read_data_integer_adios2
     procedure :: read_data_real => read_data_real_adios2
     procedure :: read_data_array_3d => read_data_array_3d_adios2
+    procedure :: read_shape_3d => read_shape_3d_adios2
     procedure :: finalise => finalise_reader_adios2
     procedure, private :: handle_error => handle_error_reader
   end type io_adios2_reader_t
@@ -801,6 +804,39 @@ contains
     end select
   end subroutine read_data_array_3d_adios2
 
+  subroutine read_shape_3d_adios2(self, variable_name, shape_dims, file_handle)
+    class(io_adios2_reader_t), intent(inout) :: self
+    character(len=*), intent(in) :: variable_name
+    integer(i8), intent(out) :: shape_dims(3)
+    class(io_file_t), intent(inout) :: file_handle
+
+    type(adios2_variable) :: var
+    integer :: ierr, ndims
+    integer(i8), allocatable :: var_shape(:)
+
+    shape_dims = 0_i8
+    select type (file_handle)
+    type is (io_adios2_file_t)
+      call adios2_inquire_variable(var, self%io_handle, variable_name, ierr)
+
+      if (ierr == adios2_found) then
+        call adios2_variable_shape(var_shape, ndims, var, ierr)
+        call self%handle_error(ierr, "Failed to read the shape of variable " &
+                               //trim(variable_name))
+        if (ndims /= 3) then
+          call self%handle_error(1, "Variable "//trim(variable_name) &
+                                 //" is not a 3D array")
+        end if
+        shape_dims = var_shape(1:3)
+      else
+        call self%handle_error(1, "Variable " &
+                               //trim(variable_name)//" not found in file")
+      end if
+    class default
+      call self%handle_error(1, "Invalid file handle type for ADIOS2")
+    end select
+  end subroutine read_shape_3d_adios2
+
   subroutine finalise_reader_adios2(self)
     class(io_adios2_reader_t), intent(inout) :: self
     integer :: ierr
@@ -995,9 +1031,8 @@ contains
       call adios2_inquire_variable(var, self%io_handle, variable_name, ierr)
 
       if (ierr /= adios2_found) then
-        ! Use integer4 type for i8 compatibility - ADIOS2 will handle the conversion
         call adios2_define_variable( &
-          var, self%io_handle, variable_name, adios2_type_integer4, ierr)
+          var, self%io_handle, variable_name, adios2_type_integer8, ierr)
         call self%handle_error(ierr, &
                                "Error defining ADIOS2 scalar i8 variable")
       end if
