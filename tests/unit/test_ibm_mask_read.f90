@@ -4,9 +4,12 @@ program test_ibm_mask_read
   !! The test writes the mask itself, each rank writing its own slab, with
   !! every point set to a value made from its global (i, j, k) index. A wrong
   !! offset, a swapped axis or a bad copy of the padded block then gives a
-  !! wrong value. The file is named after the test executable, so tests that
-  !! run at the same time do not share it. The grid has a different size in each direction and none
+  !! wrong value. The grid has a different size in each direction and none
   !! of them is a multiple of SZ.
+  !!
+  !! The file is named after the test executable, so tests that run at the
+  !! same time do not share it. A ctest cleanup fixture deletes it, also
+  !! after the mismatch run stops.
   !!
   !!   - no argument: the mask matches the grid and every rank checks its part
   !!     of ep1 against the index pattern;
@@ -119,9 +122,6 @@ program test_ibm_mask_read
   end if
 
   call global_all(allpass)
-  call MPI_Barrier(MPI_COMM_WORLD, ierr)
-  if (irank == 0) call execute_command_line('rm -rf '//trim(mask_file))
-
   call finalise_test(allpass, irank)
 
 contains

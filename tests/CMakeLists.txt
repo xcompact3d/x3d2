@@ -566,6 +566,21 @@ function(define_backend_tests backend)
       FAIL_REGULAR_EXPRESSION "must never be reached"
       TIMEOUT 60)
     unset(X3D2_TEST_NAME_SUFFIX)
+    # Each test writes <test name>.bp. The mismatch run stops before it can
+    # delete it, so a cleanup fixture does, after either run, without a shell.
+    foreach(ibm_test test_ibm_mask_read_${backend}_${np}
+                     test_ibm_mask_read_${backend}_${np}_mismatch)
+      if(TEST ${ibm_test})
+        add_test(NAME ${ibm_test}_cleanup
+          COMMAND ${CMAKE_COMMAND} -E remove_directory
+                  ${CMAKE_CURRENT_BINARY_DIR}/${ibm_test}.bp)
+        set_tests_properties(${ibm_test}_cleanup PROPERTIES
+          FIXTURES_CLEANUP ${ibm_test}_mask
+          LABELS "unit;${backend}")
+        set_tests_properties(${ibm_test} PROPERTIES
+          FIXTURES_REQUIRED ${ibm_test}_mask)
+      endif()
+    endforeach()
   endif()
   if(WITH_ADIOS2 AND (is_omp OR ${backend} STREQUAL cuda))
     # Writes on one rank layout and reads back on another: needs exactly 4.
