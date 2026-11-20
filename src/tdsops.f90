@@ -33,6 +33,7 @@ module m_tdsops
     real(dp) :: beta = 0._dp !! LHS 2nd off-diagonal (pentadiag LHS only)
     real(dp) :: beta_lhs_s = 0._dp !! j=1 backward-sub beta (0/2β Neumann, β otherwise)
     logical :: periodic
+    logical :: has_stretch_correct = .false. !! .true. if any stretch_correct /= 0
     logical :: pentadiag = .false. !! .true. for pentadiagonal LHS schemes
     !! Solve with the serial Thomas algorithm instead of the distributed one.
     !! The distributed solver truncates a neighbour's influence at the
@@ -174,6 +175,7 @@ contains
     else
       tdsops%stretch_correct(:) = 0._dp
     end if
+    tdsops%has_stretch_correct = any(tdsops%stretch_correct /= 0._dp)
 
     tdsops%periodic = bc_start == BC_PERIODIC .and. bc_end == BC_PERIODIC
 
