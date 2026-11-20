@@ -45,14 +45,22 @@ program test_laplacian_stretched
   ! both resolutions must be below the bound. Measured (OpenMP, gfortran):
   !   stretched: 65 points 3.07e-3, 129 points 8.25e-3
   !   uniform: 65 points 7.95e-5, 129 points 1.81e-4
+  ! The y decomposed checks on four ranks use larger bounds, because the
+  ! roundoff grows with ny squared and their finest mesh has 192 points:
+  !   stretched: 96 points 7.8e-3, 192 points 3.15e-2
+  !   uniform: 96 points 1.68e-4, 192 points 6.8e-4
   ! Without the stretched grid correction the stretched error is of order one.
 #ifdef SINGLE_PREC
   real(dp), parameter :: tol_stretched = 2e-2_dp
   real(dp), parameter :: tol_uniform = 5e-4_dp
+  real(dp), parameter :: tol_stretched_y = 6e-2_dp
+  real(dp), parameter :: tol_uniform_y = 1.5e-3_dp
   logical, parameter :: must_converge = .false.
 #else
   real(dp), parameter :: tol_stretched = 1e-3_dp
   real(dp), parameter :: tol_uniform = 1e-6_dp
+  real(dp), parameter :: tol_stretched_y = tol_stretched
+  real(dp), parameter :: tol_uniform_y = tol_uniform
   logical, parameter :: must_converge = .true.
 #endif
   real(dp), parameter :: min_ratio = 32._dp
@@ -93,8 +101,8 @@ program test_laplacian_stretched
     end do
 
     call check('stretched, y decomposed', ny_y, err_stretched, &
-               tol_stretched, .true.)
-    call check('uniform, y decomposed', ny_y, err_uniform, tol_uniform, &
+               tol_stretched_y, .true.)
+    call check('uniform, y decomposed', ny_y, err_uniform, tol_uniform_y, &
                .false.)
   end if
 
