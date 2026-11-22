@@ -6,18 +6,17 @@ flow_case_name = 'wind_turbine'
 ! line model. Dimensional units: metres, m/s.
 L_global = 8.8d0, 1.8d0, 3.4d0
 
-! Same spacing as Incompact3d (nx = 641, ny = 129, nz = 321), with y and z
-! periodic.
-dims_global = 641, 128, 320
+! Same grid as Incompact3d (nx = 641, ny = 129, nz = 321).
+dims_global = 641, 129, 321
 
+! The y walls need a single rank in y; z can be split.
 nproc_dir = 1, 1, 1
 
-! x: inflow (dirichlet) / convective outflow (dirichlet); y,z periodic.
-! Incompact3d uses free-slip walls in y and z, but the FFT Poisson solver
-! requires z periodic and a single MPI rank in non-periodic directions.
+! x: inflow (dirichlet) / convective outflow (dirichlet); free-slip walls
+! (neumann) in y and z.
 BC_x = 'dirichlet', 'dirichlet'
-BC_y = 'periodic', 'periodic'
-BC_z = 'periodic', 'periodic'
+BC_y = 'neumann', 'neumann'
+BC_z = 'neumann', 'neumann'
 /End
 
 &solver_params
