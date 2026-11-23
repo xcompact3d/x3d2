@@ -16,12 +16,13 @@ module m_cuda_allocator
   end interface cuda_allocator_t
 
   type, extends(field_t) :: cuda_field_t
-    real(dp), device, pointer, private :: p_data_d(:)
+    real(dp), device, pointer, private :: p_data_d(:) => null()
     real(dp), device, pointer, contiguous :: data_d(:, :, :)
   contains
     procedure :: fill => fill_cuda
     procedure :: get_shape => get_shape_cuda
     procedure :: set_shape => set_shape_cuda
+    procedure :: free_data => free_data_cuda
   end type cuda_field_t
 
   interface cuda_field_t
@@ -50,6 +51,19 @@ contains
     self%p_data_d = c
 
   end subroutine fill_cuda
+
+  subroutine free_data_cuda(self)
+    !! Free the device storage of the block, then the base class releases the
+    !! host storage, which is unallocated for a device block.
+    implicit none
+
+    class(cuda_field_t) :: self
+
+    if (associated(self%p_data_d)) deallocate (self%p_data_d)
+    nullify (self%data_d)
+    call self%field_t%free_data()
+
+  end subroutine free_data_cuda
 
   function get_shape_cuda(self) result(dims)
     implicit none
