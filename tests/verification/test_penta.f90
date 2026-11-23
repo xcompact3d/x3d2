@@ -38,7 +38,7 @@ program test_penta
 
   ! The backend is only needed to build backend-specific tdsops; every rank
   ! solves the whole line on its own.
-  mesh = mesh_t([SZ, SZ, SZ], [1, 1, 1], [1._dp, 1._dp, 1._dp], &
+  mesh = mesh_t([SZ, SZ, SZ], [nproc, 1, 1], [1._dp, 1._dp, 1._dp], &
                 ['periodic', 'periodic'], ['periodic', 'periodic'], &
                 ['periodic', 'periodic'])
   call runtime%init(mesh)
