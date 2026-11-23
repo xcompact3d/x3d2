@@ -755,6 +755,7 @@ contains
     integer :: i, j, k
     integer, allocatable :: src_i(:)
 
+    allocate (src_i(self%nx_glob))
     src_i = fold_index([(i, i=1, self%nx_glob)], self%nx_glob)
 
     !$omp parallel do collapse(2)
@@ -782,6 +783,7 @@ contains
 
     ! Scatter through the gather map rather than gather through its
     ! inverse: the reads stay contiguous, which measured faster.
+    allocate (dst_i(self%nx_glob))
     dst_i = fold_index([(i, i=1, self%nx_glob)], self%nx_glob)
 
     ! The gathered ordering only covers 1..nx_glob, but the block is padded
@@ -816,6 +818,7 @@ contains
 
     ! Scatter through the inverse map rather than gather through the
     ! fold: the reads stay contiguous, which measured faster.
+    allocate (dst_j(self%ny_glob))
     dst_j = fold_destinations(self%ny_glob)
 
     !$omp parallel do collapse(2)
@@ -841,6 +844,7 @@ contains
     integer, allocatable :: dst_j(:)
 
     ! Scatter through the gather map, as in undo_periodicity_x_omp.
+    allocate (dst_j(self%ny_glob))
     dst_j = fold_index([(j, j=1, self%ny_glob)], self%ny_glob)
 
     !$omp parallel do collapse(2)
@@ -878,6 +882,7 @@ contains
     ! field, and ny_loc == ny_glob when p_row == 1 since y is not split.
     if (self%p_row == 1) then
       ! Scatter through the inverse maps, as in enforce_periodicity_y_omp
+      allocate (dst_i(self%nx_glob))
       dst_i = fold_destinations(self%nx_glob)
       dst_j = fold_destinations(self%ny_glob)
 
@@ -893,6 +898,7 @@ contains
     else
       ! A fold in x alone is faster as a gather, as in
       ! enforce_periodicity_x_omp
+      allocate (src_i(self%nx_glob))
       src_i = fold_index([(i, i=1, self%nx_glob)], self%nx_glob)
 
       !$omp parallel do collapse(2)
@@ -927,6 +933,7 @@ contains
 
     ! Scatter through the gather maps, as in undo_periodicity_x_omp. They
     ! stay in global terms, as in enforce_periodicity_xy_omp.
+    allocate (dst_i(self%nx_glob))
     dst_i = fold_index([(i, i=1, self%nx_glob)], self%nx_glob)
 
     ! The gathered ordering only covers the unpadded extent, but the

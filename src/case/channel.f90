@@ -1,15 +1,17 @@
 module m_case_channel
 
+  use iso_fortran_env, only: int64
   use m_allocator, only: allocator_t
   use m_base_backend, only: base_backend_t
   use m_base_case, only: base_case_t
   use m_common, only: dp, get_argument, DIR_C, DIR_X, &
-                      VERT, CELL, Y_FACE, BC_DIRICHLET
+                      VERT, CELL, Y_FACE, BC_DIRICHLET, MPI_X3D2_DP
   use m_config, only: channel_config_t
   use m_field, only: field_t
   use m_mesh, only: mesh_t
   use m_solver, only: init
   use m_logger, only: log_info, str
+  use m_mpi, only: MPI_COMM_WORLD, MPI_IN_PLACE, MPI_SUM, MPI_Allreduce
 
   implicit none
 
@@ -48,6 +50,47 @@ contains
   end function case_channel_init
 
   ! ==========================================================================
+  ! Mean streamwise velocity over the whole domain. Uses the y stretching
+  ! metric on a stretched mesh and the plain volume mean otherwise.
+  ! ==========================================================================
+  function channel_bulk_velocity(backend, mesh, u) result(ub)
+    implicit none
+
+    class(base_backend_t), intent(inout) :: backend
+    type(mesh_t), intent(in) :: mesh
+    class(field_t), intent(in) :: u
+    real(dp) :: ub
+
+    real(dp), allocatable :: sums(:)
+    integer :: j, dims(3), global_dims(3), ierr
+
+    if (mesh%geo%stretched(2)) then
+      ! Each y plane mean has the weight dy/(ppy*L(2)), with dy = d(2). The
+      ! weight is not a cell width. ppy = vert_ds is the analytic derivative
+      ! of the y stretching function, as in Incompact3d. The local planes
+      ! carry their own vert_ds, so the code reduces only the sum.
+      dims = mesh%get_dims(VERT)
+      global_dims = mesh%get_global_dims(VERT)
+      allocate (sums(dims(2)))
+      call backend%field_plane_sums(sums, u)
+      ub = 0._dp
+      do j = 1, dims(2)
+        ub = ub + sums(j)/mesh%geo%vert_ds(j, 2)
+      end do
+      ub = ub*mesh%geo%d(2)/mesh%geo%L(2) &
+           /real(global_dims(1)*global_dims(3), dp)
+      call MPI_Allreduce(MPI_IN_PLACE, ub, 1, MPI_X3D2_DP, &
+                         MPI_SUM, MPI_COMM_WORLD, ierr)
+    else
+      ! field_volume_integral is already reduced over all ranks.
+      ub = backend%field_volume_integral(u)
+
+      ub = ub/(product(mesh%get_global_dims(CELL)))
+    end if
+
+  end function channel_bulk_velocity
+
+  ! ==========================================================================
   ! Boundary Conditions hook (called per substep before transeq).
   ! Two responsibilities:
   !   1. Bulk-flow correction: shift u so the mean streamwise velocity stays
@@ -66,10 +109,8 @@ contains
     real(dp) :: noise(3)
     integer :: i, k, dims(3)
 
-    ! field_volume_integral is already reduced over all ranks.
-    ub = self%solver%backend%field_volume_integral(self%solver%u)
-
-    ub = ub/(product(self%solver%mesh%get_global_dims(CELL)))
+    ub = channel_bulk_velocity(self%solver%backend, self%solver%mesh, &
+                               self%solver%u)
 
     can = 2._dp/3._dp - ub
 
@@ -135,16 +176,36 @@ contains
     integer :: i, j, k, dims(3)
     real(dp) :: xloc(3), y, noise(3), um
 
+    integer, parameter :: base_seed = 20240517
+    integer, allocatable :: seed(:)
+    integer :: seed_size
+    integer(int64) :: state
+
     dims = self%solver%mesh%get_dims(VERT)
     u_init => self%solver%host_allocator%get_block(DIR_C)
     v_init => self%solver%host_allocator%get_block(DIR_C)
     w_init => self%solver%host_allocator%get_block(DIR_C)
 
+    ! Seed the noise per rank, otherwise every rank draws the same numbers and
+    ! a z decomposed IC is periodic over the rank length. A MINSTD generator
+    ! spreads the base seed and rank over the processor's seed, as in the ABL.
+    call log_info('Channel noise seed: '//str(base_seed))
+    call random_seed(size=seed_size)
+    allocate (seed(seed_size))
+    state = 1 + modulo(int(base_seed, int64) &
+                       + 63946_int64*(self%solver%mesh%par%nrank + 1), &
+                       2147483646_int64)
+    do i = 1, seed_size
+      state = modulo(48271_int64*state, 2147483647_int64)
+      seed(i) = int(state)
+    end do
+    call random_seed(put=seed)
+
     call random_number(u_init%data(1:dims(1), 1:dims(2), 1:dims(3)))
     call random_number(v_init%data(1:dims(1), 1:dims(2), 1:dims(3)))
     call random_number(w_init%data(1:dims(1), 1:dims(2), 1:dims(3)))
 
-    noise = self%channel_cfg%inlet_noise(3)
+    noise = self%channel_cfg%init_noise
     do k = 1, dims(3)
       do j = 1, dims(2)
         do i = 1, dims(1)

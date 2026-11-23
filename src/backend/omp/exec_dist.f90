@@ -2,7 +2,10 @@ module m_omp_exec_dist
 
   use m_common, only: dp
   use m_omp_common, only: SZ
+  use m_dist_reduced, only: solve_reduced_exact
+  use m_mesh_content, only: par_t
   use m_omp_kernels_dist, only: der_univ_dist, der_univ_subs, &
+                                der_univ_subs_exact, &
                                 der_univ_fused_subs, der_penta_full, &
                                 der_penta_periodic
   use m_tdsops, only: tdsops_t
@@ -14,7 +17,10 @@ contains
 
   subroutine exec_dist_tds_compact( &
     du, u, u_recv_s, u_recv_e, du_send_s, du_send_e, du_recv_s, du_recv_e, &
-    tdsops, nproc, pprev, pnext, n_groups)
+    tdsops, par, dir, n_groups)
+    !! Distributed compact solve along dir. The reduced system that couples
+    !! the ranks is solved with the neighbour-only 2x2 approximation, or
+    !! exactly where tdsops%dist_exact asks for it (see m_dist_reduced).
     implicit none
 
     ! du = d(u)
@@ -28,12 +34,15 @@ contains
       du_send_s, du_send_e, du_recv_s, du_recv_e
 
     type(tdsops_t), intent(in) :: tdsops
-    integer, intent(in) :: nproc, pprev, pnext
+    type(par_t), intent(in) :: par
+    integer, intent(in) :: dir
     integer, intent(in) :: n_groups
 
-    integer :: n_data
+    real(dp), allocatable :: x_s(:), x_e(:)
+    integer :: n, n_data
     integer :: k
 
+    n = tdsops%n_tds
     n_data = SZ*n_groups
 
     !$omp parallel do
@@ -48,18 +57,39 @@ contains
     end do
     !$omp end parallel do
 
-    ! halo exchange for 2x2 systems
-    call sendrecv_fields(du_recv_s, du_recv_e, du_send_s, du_send_e, &
-                         n_data, nproc, pprev, pnext)
+    if (tdsops%dist_exact .and. par%nproc_dir(dir) > 1) then
+      allocate (x_s(n_data), x_e(n_data))
+      call solve_reduced_exact( &
+        x_s, x_e, reshape(du_send_s(:, 1, 1:n_groups), [n_data]), &
+        reshape(du_send_e(:, 1, 1:n_groups), [n_data]), &
+        tdsops%dist_sa(1), tdsops%dist_sc(1), tdsops%dist_sa(n), &
+        tdsops%dist_sc(n), par, dir)
+      du_recv_s(:, 1, 1:n_groups) = reshape(x_s, [SZ, n_groups])
+      du_recv_e(:, 1, 1:n_groups) = reshape(x_e, [SZ, n_groups])
 
-    !$omp parallel do
-    do k = 1, n_groups
-      call der_univ_subs( &
-        du(:, :, k), du_recv_s(:, :, k), du_recv_e(:, :, k), &
-        tdsops%n_tds, tdsops%dist_sa, tdsops%dist_sc, tdsops%stretch &
-        )
-    end do
-    !$omp end parallel do
+      !$omp parallel do
+      do k = 1, n_groups
+        call der_univ_subs_exact( &
+          du(:, :, k), du_recv_s(:, :, k), du_recv_e(:, :, k), &
+          n, tdsops%dist_sa, tdsops%dist_sc, tdsops%stretch &
+          )
+      end do
+      !$omp end parallel do
+    else
+      ! halo exchange for 2x2 systems
+      call sendrecv_fields(du_recv_s, du_recv_e, du_send_s, du_send_e, &
+                           n_data, par%nproc_dir(dir), par%pprev(dir), &
+                           par%pnext(dir))
+
+      !$omp parallel do
+      do k = 1, n_groups
+        call der_univ_subs( &
+          du(:, :, k), du_recv_s(:, :, k), du_recv_e(:, :, k), &
+          n, tdsops%dist_sa, tdsops%dist_sc, tdsops%stretch &
+          )
+      end do
+      !$omp end parallel do
+    end if
 
   end subroutine exec_dist_tds_compact
 

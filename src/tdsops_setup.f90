@@ -1,7 +1,6 @@
 module m_tdsops_setup
   use m_common, only: dp, VERT, CELL, BC_NEUMANN, BC_DIRICHLET
   use m_base_backend, only: base_backend_t
-  use m_logger, only: log_warn, str
   use m_mesh, only: mesh_t
   use m_tdsops, only: dirps_t
 
@@ -105,18 +104,17 @@ contains
         )
       ! The filter's system is only marginally diagonally dominant as
       ! filter_alpha approaches 0.5, so the distributed solver's truncation
-      ! is no longer negligible: at Incompact3d's 0.49 it leaves a 1e-3 error
-      ! at zero wavenumber on 64 points. Solve it exactly with Thomas where
-      ! the direction is not decomposed; Thomas is serial along the line.
+      ! is no longer negligible: at Incompact3d's 0.49 and 16 points per rank
+      ! it gets the gain at zero wavenumber wrong by 1.6e-2, every step,
+      ! which grows the mean flow exponentially. Solve it exactly: with
+      ! Thomas where the direction is not decomposed, and with the exact
+      ! reduced system of the distributed solver where it is.
       if (mesh%par%nproc_dir(dir) == 1) then
         dirps%lowpass%prefer_thomas = .true.
         dirps%lowpass_sym%prefer_thomas = .true.
       else
-        call log_warn('the low-pass filter is decomposed in direction ' &
-                      //str(dir)//'; it does not exactly preserve the mean &
-                      &and its result depends on the decomposition. The &
-                      &entry the distributed solver disregards is ' &
-                      //str(dirps%lowpass%dist_sa(n_vert))//'.')
+        dirps%lowpass%dist_exact = .true.
+        dirps%lowpass_sym%dist_exact = .true.
       end if
     end if
 

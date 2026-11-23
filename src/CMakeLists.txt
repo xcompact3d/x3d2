@@ -47,6 +47,7 @@ set(POISSONSRC
   mesh_content.f90
   mesh.f90
   ordering.f90
+  dist_reduced.f90
   tdsops.f90
   tdsops_setup.f90
   poisson_fft.f90
