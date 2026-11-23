@@ -60,6 +60,7 @@ contains
     logical :: is_first_domain, is_last_domain
     integer :: dir
     integer :: ierr
+    character(len=128) :: msg
 
     allocate (mesh)
     allocate (mesh%geo)
@@ -78,9 +79,13 @@ contains
 
     ! Parallel domain decomposition
     mesh%par%nproc_dir(:) = nproc_dir
-    mesh%par%nproc = product(nproc_dir(:))
     call MPI_Comm_rank(MPI_COMM_WORLD, mesh%par%nrank, ierr)
     call MPI_Comm_size(MPI_COMM_WORLD, mesh%par%nproc, ierr)
+    if (product(nproc_dir(:)) /= mesh%par%nproc) then
+      write (msg, '(a,3(i0,1x),a,i0,a)') 'nproc_dir = ', nproc_dir, &
+        'does not match the communicator size ', mesh%par%nproc, '.'
+      call abort_run(trim(msg), collective=.true.)
+    end if
 
     ! Either use 2decomp or the generic decomposition
     if (present(use_2decomp)) then
