@@ -350,40 +350,50 @@ contains
     integer :: i, j, k, iz, ix, ix_pair
     real(dp) :: tmp_r, tmp_c, div_r, div_c, l_r, l_c, r_r, r_c
 
-    ! normalise + Z periodic post-process (forward). No sign flip: dim1
-    ! never exceeds nz/2+1.
-    !$omp parallel do private(iz, div_r, div_c, tmp_r, tmp_c) collapse(3)
+    ! normalise + Z periodic post-process (forward) for the X mode 1, which
+    ! has no mirror. No sign flip: dim1 never exceeds nz/2+1.
+    !$omp parallel do private(iz, div_r, div_c, tmp_r, tmp_c) collapse(2)
     do k = 1, n3
-      do j = 1, n2
-        do i = 1, n1
-          iz = i + st1
+      do i = 1, n1
+        iz = i + st1
 
-          div_r = real(div_u(i, j, k), kind=dp)/nx/ny/nz
-          div_c = aimag(div_u(i, j, k))/nx/ny/nz
+        div_r = real(div_u(i, 1, k), kind=dp)/nx/ny/nz
+        div_c = aimag(div_u(i, 1, k))/nx/ny/nz
 
-          tmp_r = div_r
-          tmp_c = div_c
-          div_r = tmp_r*bz(iz) + tmp_c*az(iz)
-          div_c = tmp_c*bz(iz) - tmp_r*az(iz)
+        tmp_r = div_r
+        tmp_c = div_c
+        div_r = tmp_r*bz(iz) + tmp_c*az(iz)
+        div_c = tmp_c*bz(iz) - tmp_r*az(iz)
 
-          div_u(i, j, k) = cmplx(div_r, div_c, kind=dp)
-        end do
+        div_u(i, 1, k) = cmplx(div_r, div_c, kind=dp)
       end do
     end do
     !$omp end parallel do
 
-    ! X paired even/odd split (forward)
-    !$omp parallel do private(ix, ix_pair, l_r, l_c, r_r, r_c) collapse(3)
+    ! Fused normalise, Z post-process and X paired even/odd split (forward).
+    ! Both members of a pair are read and post-processed in registers before
+    ! either is written.
+    !$omp parallel do private(iz, ix, ix_pair, tmp_r, tmp_c, l_r, l_c, r_r, r_c) collapse(3)
     do k = 1, n3
       do j = 2, n2/2 + 1
         do i = 1, n1
+          iz = i + st1
           ix = j + st2
           ix_pair = n2 - j + 2
 
-          l_r = real(div_u(i, j, k), kind=dp)
-          l_c = aimag(div_u(i, j, k))
-          r_r = real(div_u(i, ix_pair, k), kind=dp)
-          r_c = aimag(div_u(i, ix_pair, k))
+          l_r = real(div_u(i, j, k), kind=dp)/nx/ny/nz
+          l_c = aimag(div_u(i, j, k))/nx/ny/nz
+          r_r = real(div_u(i, ix_pair, k), kind=dp)/nx/ny/nz
+          r_c = aimag(div_u(i, ix_pair, k))/nx/ny/nz
+
+          tmp_r = l_r
+          tmp_c = l_c
+          l_r = tmp_r*bz(iz) + tmp_c*az(iz)
+          l_c = tmp_c*bz(iz) - tmp_r*az(iz)
+          tmp_r = r_r
+          tmp_c = r_c
+          r_r = tmp_r*bz(iz) + tmp_c*az(iz)
+          r_c = tmp_c*bz(iz) - tmp_r*az(iz)
 
           div_u(i, j, k) = 0.5_dp*cmplx( & !&
             l_r*bx(ix) + l_c*ax(ix) + r_r*bx(ix) - r_c*ax(ix), &
@@ -430,9 +440,39 @@ contains
 
     integer :: i, j, k, iy, iy_pair
     real(dp) :: div_r, div_c, tmp_r, tmp_c, l_r, l_c, r_r, r_c
+    real(dp) :: w_r, w_c
 
-    ! Y paired even/odd split (forward)
-    !$omp parallel do private(iy, iy_pair, l_r, l_c, r_r, r_c) collapse(3)
+    ! Poisson divide for the Y mode 1, which has no mirror.
+    !$omp parallel do private(div_r, div_c, tmp_r, tmp_c) collapse(2)
+    do j = 1, n2
+      do i = 1, n1
+        div_r = real(div_u(i, j, 1), kind=dp)
+        div_c = aimag(div_u(i, j, 1))
+
+        tmp_r = real(waves(i, j, 1), kind=dp)
+        tmp_c = aimag(waves(i, j, 1))
+        if (abs(tmp_r) < eps_wave) then
+          div_r = 0._dp
+        else
+          div_r = -div_r/tmp_r
+        end if
+        if (abs(tmp_c) < eps_wave) then
+          div_c = 0._dp
+        else
+          div_c = -div_c/tmp_c
+        end if
+
+        div_u(i, j, 1) = cmplx(div_r, div_c, kind=dp)
+      end do
+    end do
+    !$omp end parallel do
+
+    ! Fused Y paired even/odd split (forward), Poisson divide and Y paired
+    ! even/odd recombine (backward). Both members of a pair are read before
+    ! either is written, and the split, divide and recombine stay in
+    ! registers. A self-paired mode (iy_pair == k) gives equal split values
+    ! for both members, as in the unfused passes.
+    !$omp parallel do private(iy, iy_pair, l_r, l_c, r_r, r_c, div_r, div_c, tmp_r, tmp_c, w_r, w_c) collapse(3)
     do k = 2, n3/2 + 1
       do j = 1, n2
         do i = 1, n1
@@ -444,30 +484,17 @@ contains
           r_r = real(div_u(i, j, iy_pair), kind=dp)
           r_c = aimag(div_u(i, j, iy_pair))
 
-          div_u(i, j, k) = 0.5_dp*cmplx( & !&
-            l_r*by(iy) + l_c*ay(iy) + r_r*by(iy) - r_c*ay(iy), &
-            -l_r*ay(iy) + l_c*by(iy) + r_r*ay(iy) + r_c*by(iy), kind=dp &
-            )
-          div_u(i, j, iy_pair) = 0.5_dp*cmplx( & !&
-            r_r*by(iy_pair + st3) + r_c*ay(iy_pair + st3) &
-              + l_r*by(iy_pair + st3) - l_c*ay(iy_pair + st3), &
-            -r_r*ay(iy_pair + st3) + r_c*by(iy_pair + st3) &
-              + l_r*ay(iy_pair + st3) + l_c*by(iy_pair + st3), &
-            kind=dp &
-            )
-        end do
-      end do
-    end do
-    !$omp end parallel do
+          ! split
+          div_r = 0.5_dp*(l_r*by(iy) + l_c*ay(iy) + r_r*by(iy) - r_c*ay(iy))
+          div_c = 0.5_dp*(-l_r*ay(iy) + l_c*by(iy) + r_r*ay(iy) + r_c*by(iy))
+          w_r = 0.5_dp*( &
+                r_r*by(iy_pair + st3) + r_c*ay(iy_pair + st3) &
+                + l_r*by(iy_pair + st3) - l_c*ay(iy_pair + st3))
+          w_c = 0.5_dp*( &
+                -r_r*ay(iy_pair + st3) + r_c*by(iy_pair + st3) &
+                + l_r*ay(iy_pair + st3) + l_c*by(iy_pair + st3))
 
-    ! Solve Poisson
-    !$omp parallel do private(div_r, div_c, tmp_r, tmp_c) collapse(3)
-    do k = 1, n3
-      do j = 1, n2
-        do i = 1, n1
-          div_r = real(div_u(i, j, k), kind=dp)
-          div_c = aimag(div_u(i, j, k))
-
+          ! Poisson divide, first member
           tmp_r = real(waves(i, j, k), kind=dp)
           tmp_c = aimag(waves(i, j, k))
           if (abs(tmp_r) < eps_wave) then
@@ -481,26 +508,25 @@ contains
             div_c = -div_c/tmp_c
           end if
 
-          ! update the entry
-          div_u(i, j, k) = cmplx(div_r, div_c, kind=dp)
-        end do
-      end do
-    end do
-    !$omp end parallel do
+          ! Poisson divide, second member
+          tmp_r = real(waves(i, j, iy_pair), kind=dp)
+          tmp_c = aimag(waves(i, j, iy_pair))
+          if (abs(tmp_r) < eps_wave) then
+            w_r = 0._dp
+          else
+            w_r = -w_r/tmp_r
+          end if
+          if (abs(tmp_c) < eps_wave) then
+            w_c = 0._dp
+          else
+            w_c = -w_c/tmp_c
+          end if
 
-    ! Y paired even/odd recombine (backward)
-    !$omp parallel do private(iy, iy_pair, l_r, l_c, r_r, r_c) collapse(3)
-    do k = 2, n3/2 + 1
-      do j = 1, n2
-        do i = 1, n1
-          iy = k + st3
-          iy_pair = n3 - k + 2
-
-          l_r = real(div_u(i, j, k), kind=dp)
-          l_c = aimag(div_u(i, j, k))
-          r_r = real(div_u(i, j, iy_pair), kind=dp)
-          r_c = aimag(div_u(i, j, iy_pair))
-
+          ! recombine
+          l_r = div_r
+          l_c = div_c
+          r_r = w_r
+          r_c = w_c
           div_u(i, j, k) = cmplx( & !&
             l_r*by(iy) - l_c*ay(iy) + r_r*ay(iy) + r_c*by(iy), &
             l_r*ay(iy) + l_c*by(iy) - r_r*by(iy) + r_c*ay(iy), kind=dp &
@@ -545,11 +571,33 @@ contains
     integer :: i, j, k, iz, ix, ix_pair
     real(dp) :: tmp_r, tmp_c, div_r, div_c, l_r, l_c, r_r, r_c
 
-    ! X paired even/odd recombine (backward)
-    !$omp parallel do private(ix, ix_pair, l_r, l_c, r_r, r_c) collapse(3)
+    ! Z periodic post-process (backward) for the X mode 1, which has no
+    ! mirror. No sign flip: dim1 never exceeds nz/2+1.
+    !$omp parallel do private(iz, div_r, div_c, tmp_r, tmp_c) collapse(2)
+    do k = 1, n3
+      do i = 1, n1
+        iz = i + st1
+
+        div_r = real(div_u(i, 1, k), kind=dp)
+        div_c = aimag(div_u(i, 1, k))
+
+        tmp_r = div_r
+        tmp_c = div_c
+        div_r = tmp_r*bz(iz) - tmp_c*az(iz)
+        div_c = tmp_c*bz(iz) + tmp_r*az(iz)
+
+        div_u(i, 1, k) = cmplx(div_r, div_c, kind=dp)
+      end do
+    end do
+    !$omp end parallel do
+
+    ! Fused X paired even/odd recombine (backward) and Z post-process
+    ! (backward). Both members of a pair are read before either is written.
+    !$omp parallel do private(iz, ix, ix_pair, tmp_r, tmp_c, div_r, div_c, l_r, l_c, r_r, r_c) collapse(3)
     do k = 1, n3
       do j = 2, n2/2 + 1
         do i = 1, n1
+          iz = i + st1
           ix = j + st2
           ix_pair = n2 - j + 2
 
@@ -558,39 +606,23 @@ contains
           r_r = real(div_u(i, ix_pair, k), kind=dp)
           r_c = aimag(div_u(i, ix_pair, k))
 
-          div_u(i, j, k) = cmplx( & !&
-            l_r*bx(ix) - l_c*ax(ix) + r_r*ax(ix) + r_c*bx(ix), &
-            l_r*ax(ix) + l_c*bx(ix) - r_r*bx(ix) + r_c*ax(ix), kind=dp &
-            )
-          div_u(i, ix_pair, k) = cmplx( & !&
-            r_r*bx(ix_pair + st2) - r_c*ax(ix_pair + st2) &
-              + l_r*ax(ix_pair + st2) + l_c*bx(ix_pair + st2), &
-            r_r*ax(ix_pair + st2) + r_c*bx(ix_pair + st2) &
-              - l_r*bx(ix_pair + st2) + l_c*ax(ix_pair + st2), &
-            kind=dp &
-            )
-        end do
-      end do
-    end do
-    !$omp end parallel do
-
-    ! Z periodic post-process (backward). No sign flip: dim1 never
-    ! exceeds nz/2+1.
-    !$omp parallel do private(iz, div_r, div_c, tmp_r, tmp_c) collapse(3)
-    do k = 1, n3
-      do j = 1, n2
-        do i = 1, n1
-          iz = i + st1
-
-          div_r = real(div_u(i, j, k), kind=dp)
-          div_c = aimag(div_u(i, j, k))
-
+          div_r = l_r*bx(ix) - l_c*ax(ix) + r_r*ax(ix) + r_c*bx(ix)
+          div_c = l_r*ax(ix) + l_c*bx(ix) - r_r*bx(ix) + r_c*ax(ix)
           tmp_r = div_r
           tmp_c = div_c
-          div_r = tmp_r*bz(iz) - tmp_c*az(iz)
-          div_c = tmp_c*bz(iz) + tmp_r*az(iz)
+          div_u(i, j, k) = cmplx( &
+                           tmp_r*bz(iz) - tmp_c*az(iz), &
+                           tmp_c*bz(iz) + tmp_r*az(iz), kind=dp)
 
-          div_u(i, j, k) = cmplx(div_r, div_c, kind=dp)
+          div_r = r_r*bx(ix_pair + st2) - r_c*ax(ix_pair + st2) &
+                  + l_r*ax(ix_pair + st2) + l_c*bx(ix_pair + st2)
+          div_c = r_r*ax(ix_pair + st2) + r_c*bx(ix_pair + st2) &
+                  - l_r*bx(ix_pair + st2) + l_c*ax(ix_pair + st2)
+          tmp_r = div_r
+          tmp_c = div_c
+          div_u(i, ix_pair, k) = cmplx( &
+                                 tmp_r*bz(iz) - tmp_c*az(iz), &
+                                 tmp_c*bz(iz) + tmp_r*az(iz), kind=dp)
         end do
       end do
     end do
