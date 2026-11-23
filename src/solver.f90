@@ -230,7 +230,7 @@ contains
     ! Initialize the IBM module
     solver%ibm_on = solver_cfg%ibm_on
     if (solver%ibm_on) &
-      solver%ibm = ibm_t(backend, mesh, host_allocator)
+      solver%ibm = ibm_t(backend, mesh, host_allocator, solver_cfg%ibm_file)
 
     if (solver_cfg%lowmem_transeq) then
       solver%transeq => transeq_lowmem
