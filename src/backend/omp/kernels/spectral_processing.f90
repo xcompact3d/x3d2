@@ -264,6 +264,85 @@ contains
 
   end subroutine process_spectral_010_fw
 
+  subroutine factor_spectral_010_poisson(a_re, a_im, nx_spec, n, nz_spec)
+    !! Factor the pentadiagonal matrices of the stretched 010 case, once at
+    !! init. The elimination overwrites a_re and a_im. Slot 3 and slots 4, 5
+    !! hold the factored diagonals. Slot 2 of row j+1 holds the multiplier
+    !! that removes diag-1 at step j, and slot 1 of row j+2 the multiplier
+    !! that removes diag-2. Slot 2 of row n holds the multiplier of the last
+    !! row.
+    !!
+    !! Ref. JCP 228 (2009), 5989–6015, Sec 4
+    implicit none
+
+    !> Pentadiagonal matrices, overwritten by the elimination
+    real(dp), intent(inout), dimension(:, :, :, :) :: a_re, a_im
+    !> Grid size in spectral space. n is the number of rows of the matrix
+    integer, intent(in) :: nx_spec, n, nz_spec
+
+    integer :: i, j, k
+    real(dp) :: tmp_r, tmp_c
+
+    !$omp parallel do private(j, tmp_r, tmp_c) collapse(2)
+    do k = 1, nz_spec
+      do i = 1, nx_spec
+        do j = 1, n - 2
+          ! eliminate diag-1
+          tmp_r = 0._dp
+          if (abs(a_re(i, j, k, 3)) > eps_wave) then
+            tmp_r = a_re(i, j + 1, k, 2)/a_re(i, j, k, 3)
+          end if
+          tmp_c = 0._dp
+          if (abs(a_im(i, j, k, 3)) > eps_wave) then
+            tmp_c = a_im(i, j + 1, k, 2)/a_im(i, j, k, 3)
+          end if
+          a_re(i, j + 1, k, 3) = a_re(i, j + 1, k, 3) - tmp_r*a_re(i, j, k, 4)
+          a_im(i, j + 1, k, 3) = a_im(i, j + 1, k, 3) - tmp_c*a_im(i, j, k, 4)
+          a_re(i, j + 1, k, 4) = a_re(i, j + 1, k, 4) - tmp_r*a_re(i, j, k, 5)
+          a_im(i, j + 1, k, 4) = a_im(i, j + 1, k, 4) - tmp_c*a_im(i, j, k, 5)
+          ! keep the multiplier, the row j+1 slot 2 is final here
+          a_re(i, j + 1, k, 2) = tmp_r
+          a_im(i, j + 1, k, 2) = tmp_c
+
+          ! eliminate diag-2
+          tmp_r = 0._dp
+          if (abs(a_re(i, j, k, 3)) > eps_wave) then
+            tmp_r = a_re(i, j + 2, k, 1)/a_re(i, j, k, 3)
+          end if
+          tmp_c = 0._dp
+          if (abs(a_im(i, j, k, 3)) > eps_wave) then
+            tmp_c = a_im(i, j + 2, k, 1)/a_im(i, j, k, 3)
+          end if
+          a_re(i, j + 2, k, 2) = a_re(i, j + 2, k, 2) - tmp_r*a_re(i, j, k, 4)
+          a_im(i, j + 2, k, 2) = a_im(i, j + 2, k, 2) - tmp_c*a_im(i, j, k, 4)
+          a_re(i, j + 2, k, 3) = a_re(i, j + 2, k, 3) - tmp_r*a_re(i, j, k, 5)
+          a_im(i, j + 2, k, 3) = a_im(i, j + 2, k, 3) - tmp_c*a_im(i, j, k, 5)
+          ! keep the multiplier, the row j+2 slot 1 is never modified
+          a_re(i, j + 2, k, 1) = tmp_r
+          a_im(i, j + 2, k, 1) = tmp_c
+        end do
+
+        ! handle the last row
+        if (abs(a_re(i, n - 1, k, 3)) > eps_wave) then
+          tmp_r = a_re(i, n, k, 2)/a_re(i, n - 1, k, 3)
+        else
+          tmp_r = 0._dp
+        end if
+        if (abs(a_im(i, n - 1, k, 3)) > eps_wave) then
+          tmp_c = a_im(i, n, k, 2)/a_im(i, n - 1, k, 3)
+        else
+          tmp_c = 0._dp
+        end if
+        a_re(i, n, k, 3) = a_re(i, n, k, 3) - tmp_r*a_re(i, n - 1, k, 4)
+        a_im(i, n, k, 3) = a_im(i, n, k, 3) - tmp_c*a_im(i, n - 1, k, 4)
+        a_re(i, n, k, 2) = tmp_r
+        a_im(i, n, k, 2) = tmp_c
+      end do
+    end do
+    !$omp end parallel do
+
+  end subroutine factor_spectral_010_poisson
+
   subroutine process_spectral_010_poisson( &
     div_u, a_re, a_im, off, inc, nx_spec, n, nz_spec, x_sp_st, z_sp_st, &
     nx, ny, nz &
@@ -271,16 +350,16 @@ contains
     !! Solve the Poisson equation with the pentadiagonal matrices of the
     !! stretched 010 case, along y.
     !!
-    !! The elimination overwrites a_re and a_im, so the caller passes
-    !! working copies of the matrices.
+    !! The matrices are factored once at init by factor_spectral_010_poisson,
+    !! so this routine only substitutes into div_u.
     !!
     !! Ref. JCP 228 (2009), 5989–6015, Sec 4
     implicit none
 
     !> Divergence of velocity in spectral space
     complex(dp), intent(inout), dimension(:, :, :) :: div_u
-    !> Pentadiagonal matrices, overwritten by the elimination
-    real(dp), intent(inout), dimension(:, :, :, :) :: a_re, a_im
+    !> Factored pentadiagonal matrices
+    real(dp), intent(in), dimension(:, :, :, :) :: a_re, a_im
     !> Offset and increment. The increment is 2 for only the odd or even rows
     integer, intent(in) :: off, inc
     !> Grid size in spectral space. n is the number of rows of the matrix
@@ -304,56 +383,26 @@ contains
           ! inc=1, off=0 ---> j => j
           jm = inc*j + off - inc/2
           ! eliminate diag-1
-          tmp_r = 0._dp
-          if (abs(a_re(i, j, k, 3)) > eps_wave) then
-            tmp_r = a_re(i, j + 1, k, 2)/a_re(i, j, k, 3)
-          end if
-          tmp_c = 0._dp
-          if (abs(a_im(i, j, k, 3)) > eps_wave) then
-            tmp_c = a_im(i, j + 1, k, 2)/a_im(i, j, k, 3)
-          end if
+          tmp_r = a_re(i, j + 1, k, 2)
+          tmp_c = a_im(i, j + 1, k, 2)
           div_r = real(div_u(i, jm + inc, k) - tmp_r*div_u(i, jm, k), kind=dp)
           div_c = aimag(div_u(i, jm + inc, k) - tmp_c*div_u(i, jm, k))
           div_u(i, jm + inc, k) = cmplx(div_r, div_c, kind=dp)
-          ! modify pentadiagonal coefficients in-place
-          a_re(i, j + 1, k, 3) = a_re(i, j + 1, k, 3) - tmp_r*a_re(i, j, k, 4)
-          a_im(i, j + 1, k, 3) = a_im(i, j + 1, k, 3) - tmp_c*a_im(i, j, k, 4)
-          a_re(i, j + 1, k, 4) = a_re(i, j + 1, k, 4) - tmp_r*a_re(i, j, k, 5)
-          a_im(i, j + 1, k, 4) = a_im(i, j + 1, k, 4) - tmp_c*a_im(i, j, k, 5)
 
           ! eliminate diag-2
-          tmp_r = 0._dp
-          if (abs(a_re(i, j, k, 3)) > eps_wave) then
-            tmp_r = a_re(i, j + 2, k, 1)/a_re(i, j, k, 3)
-          end if
-          tmp_c = 0._dp
-          if (abs(a_im(i, j, k, 3)) > eps_wave) then
-            tmp_c = a_im(i, j + 2, k, 1)/a_im(i, j, k, 3)
-          end if
+          tmp_r = a_re(i, j + 2, k, 1)
+          tmp_c = a_im(i, j + 2, k, 1)
           div_r = real(div_u(i, jm + 2*inc, k) - tmp_r*div_u(i, jm, k), &
                        kind=dp)
           div_c = aimag(div_u(i, jm + 2*inc, k) - tmp_c*div_u(i, jm, k))
           div_u(i, jm + 2*inc, k) = cmplx(div_r, div_c, kind=dp)
-          ! modify pentadiagonal coefficients in-place
-          a_re(i, j + 2, k, 2) = a_re(i, j + 2, k, 2) - tmp_r*a_re(i, j, k, 4)
-          a_im(i, j + 2, k, 2) = a_im(i, j + 2, k, 2) - tmp_c*a_im(i, j, k, 4)
-          a_re(i, j + 2, k, 3) = a_re(i, j + 2, k, 3) - tmp_r*a_re(i, j, k, 5)
-          a_im(i, j + 2, k, 3) = a_im(i, j + 2, k, 3) - tmp_c*a_im(i, j, k, 5)
         end do
 
-        ! handle the last row
-        if (abs(a_re(i, n - 1, k, 3)) > eps_wave) then
-          tmp_r = a_re(i, n, k, 2)/a_re(i, n - 1, k, 3)
-        else
-          tmp_r = 0._dp
-        end if
-        if (abs(a_im(i, n - 1, k, 3)) > eps_wave) then
-          tmp_c = a_im(i, n, k, 2)/a_im(i, n - 1, k, 3)
-        else
-          tmp_c = 0._dp
-        end if
-        div_r = a_re(i, n, k, 3) - tmp_r*a_re(i, n - 1, k, 4)
-        div_c = a_im(i, n, k, 3) - tmp_c*a_im(i, n - 1, k, 4)
+        ! handle the last row, its multiplier and pivot are factored
+        tmp_r = a_re(i, n, k, 2)
+        tmp_c = a_im(i, n, k, 2)
+        div_r = a_re(i, n, k, 3)
+        div_c = a_im(i, n, k, 3)
 
         ! j mapping based on odd/even for last point j=n
         nm = inc*n + off - inc/2

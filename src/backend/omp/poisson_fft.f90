@@ -15,6 +15,7 @@ module m_omp_poisson_fft
 
   use m_omp_spectral, only: process_spectral_000, process_spectral_010, &
                             process_spectral_010_fw, &
+                            factor_spectral_010_poisson, &
                             process_spectral_010_poisson, &
                             process_spectral_010_bw, &
                             process_spectral_100, process_spectral_110, &
@@ -65,10 +66,6 @@ module m_omp_poisson_fft
 
   type, extends(omp_poisson_fft_t) :: omp_poisson_010_t
     !! Periodic in x and z, non-periodic in y
-    !> Working copies of the stretching matrices. The pentadiagonal
-    !! elimination overwrites its matrices, so each solve starts from a copy
-    !! of the pristine matrices of the base class.
-    real(dp), allocatable, dimension(:, :, :, :) :: a_work_re, a_work_im
   contains
     procedure :: init_buffers => init_buffers_010
     procedure :: fft_postprocess => fft_postprocess_010_omp
@@ -273,10 +270,20 @@ contains
     ! dimension whole, which the y-pencil of sp provides.
     if (self%p_col > 1) call self%init_pair_buffers(with_waves=.true.)
 
-    ! The top-bottom stretching matrices are symmetric, odd and even alike
+    ! The top-bottom stretching matrices are symmetric, odd and even alike.
+    ! Factor them once, in place. The solves only substitute, and no other
+    ! code reads the raw matrices on this path.
     if (self%stretched_y) then
-      allocate (self%a_work_re, mold=self%a_odd_re)
-      allocate (self%a_work_im, mold=self%a_odd_im)
+      call factor_spectral_010_poisson( &
+        a_re=self%a_odd_re, a_im=self%a_odd_im, &
+        nx_spec=size(self%a_odd_re, dim=1), n=size(self%a_odd_re, dim=2), &
+        nz_spec=size(self%a_odd_re, dim=3) &
+        )
+      call factor_spectral_010_poisson( &
+        a_re=self%a_even_re, a_im=self%a_even_im, &
+        nx_spec=size(self%a_even_re, dim=1), n=size(self%a_even_re, dim=2), &
+        nz_spec=size(self%a_even_re, dim=3) &
+        )
     end if
 
   end subroutine init_buffers_010
@@ -683,7 +690,7 @@ contains
     !! grid, and the stretching matrices cover the same block.
     implicit none
 
-    class(omp_poisson_010_t), intent(inout) :: self
+    class(omp_poisson_010_t), intent(in) :: self
     complex(dp), intent(inout), dimension(:, :, :) :: c
     integer, intent(in) :: st(3)
 
@@ -702,20 +709,16 @@ contains
       az=self%az, bz=self%bz &
       )
 
-    ! The odd rows, then the even rows, each with its own matrices
-    self%a_work_re = self%a_odd_re
-    self%a_work_im = self%a_odd_im
+    ! The odd rows, then the even rows, each with its own factored matrices
     call process_spectral_010_poisson( &
-      div_u=c, a_re=self%a_work_re, a_im=self%a_work_im, &
+      div_u=c, a_re=self%a_odd_re, a_im=self%a_odd_im, &
       off=0, inc=2, nx_spec=nx_b, n=ny_b/2, nz_spec=nz_b, &
       x_sp_st=st(1), z_sp_st=st(3), &
       nx=self%nx_glob, ny=self%ny_glob, nz=self%nz_glob &
       )
 
-    self%a_work_re = self%a_even_re
-    self%a_work_im = self%a_even_im
     call process_spectral_010_poisson( &
-      div_u=c, a_re=self%a_work_re, a_im=self%a_work_im, &
+      div_u=c, a_re=self%a_even_re, a_im=self%a_even_im, &
       off=1, inc=2, nx_spec=nx_b, n=ny_b/2, nz_spec=nz_b, &
       x_sp_st=st(1), z_sp_st=st(3), &
       nx=self%nx_glob, ny=self%ny_glob, nz=self%nz_glob &
