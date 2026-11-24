@@ -18,7 +18,7 @@ contains
   subroutine decomposition_2decomp(grid, par)
     !! Performs 2D mesh decomposition using 2decomp&fft
     use m_mesh_content, only: par_t, grid_t
-    use decomp_2d, only: decomp_2d_init, DECOMP_2D_COMM_CART_X, xsize, xstart
+    use decomp_2d, only: decomp_2d_init, xsize, xstart
     use decomp_2d_mpi, only: nrank, nproc
 
     class(grid_t), intent(inout) :: grid
@@ -29,7 +29,7 @@ contains
     logical, dimension(3) :: periodic_bc
     integer :: nx, ny, nz
     integer :: ierr
-    integer :: cart_rank
+    integer :: cart_rank, comm_x
     integer, dimension(2) :: coords
 
     call log_info("Domain decomposition by 2decomp&fft")
@@ -54,8 +54,9 @@ contains
     allocate (global_ranks_lin(p_row*p_col))
     global_ranks_lin(:) = 0
 
-    call MPI_Comm_rank(DECOMP_2D_COMM_CART_X, cart_rank, ierr)
-    call MPI_Cart_coords(DECOMP_2D_COMM_CART_X, cart_rank, 2, coords, ierr)
+    comm_x = get_cart_x_comm()
+    call MPI_Comm_rank(comm_x, cart_rank, ierr)
+    call MPI_Cart_coords(comm_x, cart_rank, 2, coords, ierr)
 
     global_ranks_lin(coords(1) + 1 + p_row*(coords(2))) = par%nrank
 
@@ -72,5 +73,21 @@ contains
     call grid%copy_vert2cell_dims(par)
 
   end subroutine decomposition_2decomp
+
+  function get_cart_x_comm() result(comm_x)
+    !! Return 2decomp&fft's X-pencil Cartesian communicator.
+    !!
+    !! DECOMP_2D_COMM_CART_X is public in decomp_2d up to v2.1.0 and moved
+    !! to decomp_2d_mpi in v2.2.0, where decomp_2d no longer re-exports
+    !! it. Both modules are used without ONLY, so the symbol resolves from
+    !! whichever one defines it. This is kept in its own scope so the full
+    !! imports cannot clash with other local names.
+    use decomp_2d
+    use decomp_2d_mpi
+
+    integer :: comm_x
+
+    comm_x = DECOMP_2D_COMM_CART_X
+  end function get_cart_x_comm
 
 end module
