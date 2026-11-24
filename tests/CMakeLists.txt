@@ -962,6 +962,9 @@ if(${ENABLE_BACKEND} STREQUAL "CUDA")
     channel_smoke_golden_cuda.csv 1 cuda ${_channel_cmp_args})
   define_regression_case_test(channel_bottom_smoke channel_bottom_smoke.x3d
     channel_bottom_smoke_golden_cuda.csv 1 cuda ${_channel_cmp_args})
+  define_regression_case_test(cylinder_110_smoke cylinder_110_smoke.x3d
+    cylinder_110_smoke_golden_cuda.csv 1 cuda ${_cylinder_cmp_args}
+    COPY_FILES ibm_110.bp)
 endif()
 
 # The driver has its backend fixed at compile time, so register it as OMP only
