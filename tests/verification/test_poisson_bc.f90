@@ -694,6 +694,12 @@ contains
     dims = mesh%get_dims(CELL)
     n_pi = real(test%n, dp)*pi
 
+    ! The host block is not initialised and set_field_data uploads all of
+    ! it, padding included. The gradient reads the padding plane past the
+    ! last cell, so garbage there (NaN or Inf, more likely in single
+    ! precision) would spread through the whole field
+    host_field%data = 0.0_dp
+
     do k = 1, dims(3)
       do j = 1, dims(2)
         do i = 1, dims(1)
@@ -906,6 +912,9 @@ contains
     kw = pi
     where (ctx%periodic) kw = 2.0_dp*pi
 
+    ! Zero the padding too, see fill_cosine_field
+    host_field%data = 0.0_dp
+
     do k = 1, dims(3)
       do j = 1, dims(2)
         do i = 1, dims(1)
@@ -1090,6 +1099,8 @@ contains
     ! x is not decomposed, as the FFT solver requires
     offset = ctx%mesh%par%n_offset
     host_field => ctx%host_allocator%get_block(DIR_C)
+    ! Zero the padding too, see fill_cosine_field
+    host_field%data = 0.0_dp
     do k = 1, dims(3)
       do j = 1, dims(2)
         do i = 1, dims(1)
