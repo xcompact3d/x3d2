@@ -683,7 +683,7 @@ contains
     !! grid, and the stretching matrices cover the same block.
     implicit none
 
-    class(omp_poisson_010_t) :: self
+    class(omp_poisson_010_t), intent(inout) :: self
     complex(dp), intent(inout), dimension(:, :, :) :: c
     integer, intent(in) :: st(3)
 
