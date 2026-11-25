@@ -247,31 +247,39 @@ the run is a successor driven by precursor inflow planes (see below).
 ``concurrent_precursor``
   Incompact3d's ``iconcprec``. The periodic-x domain holds a precursor region
   :math:`x < L_p`, with :math:`L_p` = ``precursor_length``, and a successor
-  region behind it, where turbines can be placed. Only the precursor region
-  is driven: the ``pressure_gradient`` force, the ``mass_conserve`` mean and
-  shift, and the ``damping`` layer act on :math:`x < L_p` only, and the
-  ``mass_conserve`` bulk velocity is the mean over that region. The
-  ``coriolis`` terms act everywhere. At the start of every substep the end
-  of the domain is blended towards the flow at the end of the precursor
-  region, so the flow re-entering the precursor through the periodic
-  boundary carries no wakes. The blending weight is the ``shifted_periodic`` ramp with
-  :math:`L_x` replaced by :math:`3L_p/2`, so it rises from
-  :math:`x_s = 5L_p/6` over :math:`d = L_p/6`; the band :math:`[x_s, L_p)`
-  is blended into the last :math:`L_p/6` of the domain. With
-  ``shifted_periodic`` as well, the precursor region gets its own shifted
-  periodic fringe over its last third (:math:`L_x` replaced by :math:`L_p`),
-  and the end of the domain is blended towards the spanwise-shifted band
-  :math:`[5L_p/9, 2L_p/3)`. Requires periodic x and an undecomposed x
-  direction, and the blended band must lie in the successor region, which
-  holds for :math:`L_p` up to about :math:`6L_x/7` (:math:`9L_x/10` with
-  ``shifted_periodic``).
+  region behind it, where turbines can be placed. At the start of every
+  substep the end of the domain is blended towards the flow at the end of
+  the precursor region, so the flow re-entering the precursor through the
+  periodic boundary carries no wakes. The blending weight is the
+  ``shifted_periodic`` ramp with :math:`L_x` replaced by :math:`3L_p/2`, so
+  it rises from :math:`x_s = 5L_p/6` over :math:`d = L_p/6`; the band
+  :math:`[x_s, L_p)` is blended into the last :math:`L_p/6` of the domain.
+  With ``shifted_periodic`` as well, the precursor region gets its own
+  shifted periodic fringe over its last third (:math:`L_x` replaced by
+  :math:`L_p`), and the end of the domain is blended towards the
+  spanwise-shifted band :math:`[5L_p/9, 2L_p/3)`.
+
+  Requires ``mass_conserve``. The floor and the lid are impermeable, so the
+  flow rate through every x plane is the same: under a fixed driving force,
+  drag in the successor region would slow the precursor too. Holding the
+  flow rate keeps the precursor region equivalent to a standalone periodic
+  boundary layer with the same bulk velocity. The driving terms stay uniform
+  in x. A force that varies only in x differs from its mean over x by the
+  gradient of a periodic potential, which the pressure absorbs, so confining
+  it to the precursor region would only weaken it everywhere. The
+  ``damping`` layer, which acts on the flow itself, is applied in the
+  precursor region only, so the successor flow is not relaxed towards the
+  reference profile.
+
+  Requires periodic x and an undecomposed x direction, and the blended band
+  must lie in the successor region, which holds for :math:`L_p` up to about
+  :math:`6L_x/7` (:math:`9L_x/10` with ``shifted_periodic``).
 
   **Default:** ``.false.``
 
 ``precursor_length``
   Length :math:`L_p` of the precursor region for ``concurrent_precursor``
   (Incompact3d ``pdl``), in m. Must be positive and less than :math:`L_x`.
-  The precursor region is the x vertices with :math:`(i-1)\Delta x < L_p`.
 
   **Default:** ``0.0``
 

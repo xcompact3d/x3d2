@@ -122,8 +122,8 @@ module m_config
     !> Blend the outlet towards a spanwise-shifted copy of the flow
     !> (Incompact3d ishiftedper); periodic x only
     logical :: shifted_periodic = .false.
-    !> Drive only a precursor region x < precursor_length and blend the
-    !> outlet back into it (Incompact3d iconcprec); periodic x only
+    !> Precursor region x < precursor_length with the outlet blended back
+    !> into it (Incompact3d iconcprec); periodic x and mass_conserve only
     logical :: concurrent_precursor = .false.
     real(dp) :: precursor_length = 0._dp !! Incompact3d pdl
   contains
@@ -627,6 +627,13 @@ contains
     if (config%concurrent_precursor .and. config%precursor_length <= 0._dp) &
       call abort_run('ABL config error: concurrent_precursor needs a &
                      &positive precursor_length.', collective=.true.)
+    ! The flow rate through every x plane is the same, so under a fixed
+    ! force drag in the successor region would slow the precursor too
+    if (config%concurrent_precursor .and. .not. config%mass_conserve) &
+      call abort_run('ABL config error: concurrent_precursor requires &
+                     &mass_conserve, which keeps the precursor flow rate &
+                     &independent of the successor region.', &
+                     collective=.true.)
 
     if (config%profile_start_iter < -1) &
       call abort_run('ABL config error: profile_start_iter must be -1 or &

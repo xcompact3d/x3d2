@@ -7,9 +7,9 @@ program test_abl_fringe
   !! is decomposed over every rank, so on several ranks part of the shift
   !! crosses rank boundaries.
   !!
-  !! With a concurrent precursor, the pressure gradient, the damping and the
-  !! mass_conserve mean and shift must act on x < precursor_length only
-  !! (Incompact3d momentum_forcing_abl, damping_zone and forceabl).
+  !! With a concurrent precursor the damping must act on x < precursor_length
+  !! only (Incompact3d damping_zone), while the pressure gradient stays
+  !! uniform in x.
   use m_mpi, only: MPI_COMM_WORLD, MPI_Comm_size, MPI_Init, MPI_Finalize
 
   use m_abl, only: abl_t
@@ -61,7 +61,7 @@ program test_abl_fringe
   call check_fringe(.true., .false.)
   call check_fringe(.false., .true.)
   call check_fringe(.true., .true.)
-  call check_precursor_masks()
+  call check_precursor_forcing()
 
   if (.not. all_pass) error stop 'FAIL'
   print *, 'PASS'
@@ -112,7 +112,8 @@ contains
 
     write (nml, '(a,l1,a,l1,a,f0.4,a)') &
       '&abl_nml u_star = 0.11, z0 = 1e-3, delta = 0.3, pressure_gradient = &
-      &.true., damping = .true., shifted_periodic = ', shifted, &
+      &.true., mass_conserve = .true., damping = .true., &
+      &shifted_periodic = ', shifted, &
       ', concurrent_precursor = ', concurrent, ', precursor_length = ', &
       pdl, ' /'
     call cfg%read(nml_string=nml)
@@ -161,8 +162,6 @@ contains
     call allocator%release_block(u)
     call allocator%release_block(v)
     call allocator%release_block(w)
-    if (associated(abl%precursor_mask)) &
-      call allocator%release_block(abl%precursor_mask)
   end subroutine check_fringe
 
   function legacy_fringe(comp, ishiftedper, iconcprec) result(local)
@@ -250,27 +249,20 @@ contains
     local = ux(:, :, mesh%par%n_offset(3) + 1:mesh%par%n_offset(3) + dims(3))
   end function legacy_fringe
 
-  subroutine check_precursor_masks()
-    !! Forcing, damping, bulk mean and bulk shift with a concurrent
-    !! precursor, against Incompact3d's x tests (i - 1)*dx >= pdl
+  subroutine check_precursor_forcing()
+    !! Pressure gradient and damping with a concurrent precursor: the
+    !! pressure gradient is uniform, the damping is zero where
+    !! (i - 1)*dx >= pdl, as in Incompact3d damping_zone
     class(field_t), pointer :: u, v, w, du, dv, dw
     type(abl_config_t) :: cfg
     type(abl_t) :: abl
-    real(dp), allocatable :: means(:), ref_means(:)
-    real(dp) :: dx, y, u_ref, coeff, dheight, damp, err_f, err_d, err_s
-    real(dp) :: err_m, shift
-    integer :: i, j, k, n_prec
-    logical :: in_prec
+    real(dp) :: dx, y, u_ref, coeff, dheight, damp, err_f, err_d
+    integer :: i, j, k
 
     cfg = config(.false., .true.)
     abl = abl_t(backend, mesh, host_allocator, cfg)
     call abl%configure_fringe()
-
     dx = lengths(1)/real(dims_global(1), dp)
-    n_prec = 0
-    do i = 1, dims_global(1)
-      if (real(i - 1, dp)*dx < pdl) n_prec = n_prec + 1
-    end do
 
     u => allocator%get_block(DIR_X, VERT)
     v => allocator%get_block(DIR_X, VERT)
@@ -290,20 +282,12 @@ contains
     call set_const(dw, 0._dp)
     call abl%apply_forcing(du, dv, dw, u, v, w)
 
+    call backend%get_field_data(host, du)
+    err_f = maxval(abs(host(1:dims(1), 1:dims(2), 1:dims(3)) &
+                       - cfg%u_star**2/cfg%delta))
+
     dheight = 0.1_dp*cfg%delta
     coeff = 15._dp*cfg%u_star/cfg%delta
-    err_f = 0._dp
-    call backend%get_field_data(host, du)
-    do k = 1, dims(3)
-      do j = 1, dims(2)
-        do i = 1, dims(1)
-          in_prec = real(i - 1, dp)*dx < pdl
-          err_f = max(err_f, abs(host(i, j, k) &
-                                 - merge(cfg%u_star**2/cfg%delta, 0._dp, &
-                                         in_prec)))
-        end do
-      end do
-    end do
     err_d = 0._dp
     call backend%get_field_data(host, dv)
     do k = 1, dims(3)
@@ -323,43 +307,12 @@ contains
         end do
       end do
     end do
-    print *, 'precursor forcing max error', err_f, 'damping', err_d
+    print *, 'precursor pressure gradient max error', err_f, &
+      'damping', err_d
     if (err_f > 1e-14_dp .or. err_d > 1e-14_dp) all_pass = .false.
     ! The test must reach the damping layer
     if (maxval(abs(host(1:dims(1), 1:dims(2), 1:dims(3)))) < 0.5_dp*coeff) &
       all_pass = .false.
-
-    ! Bulk mean over the precursor region, then the shift there only
-    call set_field(u, 1)
-    allocate (means(dims(2)), ref_means(dims(2)))
-    call abl%bulk_plane_means(means, u)
-    do j = 1, dims(2)
-      ref_means(j) = 0._dp
-      do k = 1, dims_global(3)
-        do i = 1, n_prec
-          ref_means(j) = ref_means(j) + initial(1, i, j, k)
-        end do
-      end do
-    end do
-    ref_means = ref_means/real(n_prec*dims_global(3), dp)
-    err_m = maxval(abs(means - ref_means))
-
-    shift = 0.37_dp
-    call abl%shift_bulk_velocity(u, shift)
-    call backend%get_field_data(host, u)
-    err_s = 0._dp
-    do k = 1, dims(3)
-      do j = 1, dims(2)
-        do i = 1, dims(1)
-          in_prec = real(i - 1, dp)*dx < pdl
-          err_s = max(err_s, abs(host(i, j, k) &
-                                 - initial(1, i, j, mesh%par%n_offset(3) + k) &
-                                 - merge(shift, 0._dp, in_prec)))
-        end do
-      end do
-    end do
-    print *, 'precursor bulk mean max error', err_m, 'shift', err_s
-    if (err_m > 1e-12_dp .or. err_s > 1e-14_dp) all_pass = .false.
 
     call allocator%release_block(u)
     call allocator%release_block(v)
@@ -367,8 +320,7 @@ contains
     call allocator%release_block(du)
     call allocator%release_block(dv)
     call allocator%release_block(dw)
-    call allocator%release_block(abl%precursor_mask)
     call allocator%release_block(abl%damp_coeff)
-  end subroutine check_precursor_masks
+  end subroutine check_precursor_forcing
 
 end program test_abl_fringe

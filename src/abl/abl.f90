@@ -11,7 +11,7 @@ module m_abl
 !! without overwriting other momentum terms.
   use m_allocator, only: allocator_t
   use m_base_backend, only: base_backend_t
-  use m_common, only: dp, pi, DIR_C, DIR_X, VERT, MPI_X3D2_DP
+  use m_common, only: dp, pi, DIR_C, DIR_X, VERT
   use m_config, only: abl_config_t
   use m_field, only: field_t
   use m_logger, only: log_info, abort_run, str
@@ -43,9 +43,6 @@ module m_abl
     real(dp), allocatable :: fringe_lambda(:)
     !> Rank holding each global z plane
     integer, allocatable :: z_plane_rank(:)
-    !> Concurrent precursor: 1 in the precursor region x < precursor_length,
-    !> 0 in the successor region
-    class(field_t), pointer :: precursor_mask => null()
     !> Number of global x vertices in the precursor region
     integer :: n_precursor = 0
   contains
@@ -53,8 +50,6 @@ module m_abl
     procedure :: apply_forcing
     procedure :: configure_fringe
     procedure :: apply_fringe
-    procedure :: bulk_plane_means
-    procedure :: shift_bulk_velocity
     procedure :: configure_wall_boundary_correction
     procedure :: apply_damping
     procedure :: build_damping
@@ -197,16 +192,13 @@ contains
     f = self%cfg%coriolis_freq
 
     ! Driving force: pressure gradient, or the geostrophic-balance term when
-    ! the pressure gradient is off. With a concurrent precursor the pressure
-    ! gradient drives the precursor region only; as in Incompact3d, the
-    ! Coriolis terms are not masked.
+    ! the pressure gradient is off. With a concurrent precursor these stay
+    ! uniform in x, unlike Incompact3d, which zeroes the pressure gradient
+    ! for x >= pdl: a force that varies in x only differs from its x mean
+    ! by the gradient of a periodic potential, which the pressure absorbs,
+    ! so the mask would only weaken the drive by pdl/Lx everywhere.
     if (self%cfg%pressure_gradient) then
-      if (self%cfg%concurrent_precursor) then
-        call self%backend%vecadd(self%cfg%u_star**2/self%cfg%delta, &
-                                 self%precursor_mask, 1._dp, du)
-      else
-        call self%backend%field_shift(du, self%cfg%u_star**2/self%cfg%delta)
-      end if
+      call self%backend%field_shift(du, self%cfg%u_star**2/self%cfg%delta)
     else if (self%cfg%coriolis) then
       call self%backend%field_shift(du, -f*self%cfg%u_geo(3))
       call self%backend%field_shift(dw, f*self%cfg%u_geo(1))
@@ -272,7 +264,9 @@ contains
 
   subroutine build_damping(self)
     !! Precomputes the damping coefficient coeff*lambda(y), constant in x/z,
-    !! or zero in the successor region of a concurrent precursor.
+    !! or zero in the successor region of a concurrent precursor, as in
+    !! Incompact3d. The damping depends on y and on the flow, so unlike an
+    !! x-only body force its mask does act locally.
     implicit none
 
     class(abl_t) :: self
@@ -373,14 +367,19 @@ contains
     !! periodic boundary) never sees the successor's flow. With shifted
     !! periodic as well, the precursor region has its own shifted periodic
     !! fringe, and the successor band takes the shifted flow too.
+    !!
+    !! The flow rate through every x plane is the same, so drag in the
+    !! successor region (turbines) would slow the precursor under a fixed
+    !! force. mass_conserve holds the flow rate instead, which keeps the
+    !! precursor region equivalent to a standalone periodic ABL; the config
+    !! requires it with a concurrent precursor.
     implicit none
 
     class(abl_t), intent(inout) :: self
 
-    class(field_t), pointer :: h
     real(dp), allocatable :: lambda(:)
     real(dp) :: lx, dx, x, pdl, fre, frs, frd
-    integer :: global_dims(3), dims(3), nx, nz, nfe, npe, i, j, k, i_first
+    integer :: global_dims(3), dims(3), nx, nz, nfe, npe, i, i_first
     integer :: z_offset, ierr
     logical :: shifted, concurrent
 
@@ -486,29 +485,11 @@ contains
                     //str(i_first + self%shift_offset)//'-' &
                     //str(nfe + self%shift_offset))
 
-    if (concurrent) then
-      self%precursor_mask => self%backend%allocator%get_block(DIR_X, VERT)
-      call self%precursor_mask%set_data_loc(VERT)
-      h => self%host_allocator%get_block(DIR_C)
-      do k = 1, dims(3)
-        do j = 1, dims(2)
-          do i = 1, dims(1)
-            if (i <= self%n_precursor) then
-              h%data(i, j, k) = 1._dp
-            else
-              h%data(i, j, k) = 0._dp
-            end if
-          end do
-        end do
-      end do
-      call self%backend%set_field_data(self%precursor_mask, h%data)
-      call self%host_allocator%release_block(h)
-
+    if (concurrent) &
       call log_info('ABL concurrent precursor: x vertices 1-' &
-                    //str(self%n_precursor)//' forced, x vertices ' &
+                    //str(self%n_precursor)//' damped, x vertices ' &
                     //str(i_first)//'-'//str(nfe)//' blended into ' &
                     //str(i_first + self%concurrent_offset)//'-'//str(nx))
-    end if
   end subroutine configure_fringe
 
   subroutine apply_fringe(self, u, v, w)
@@ -544,54 +525,5 @@ contains
     end subroutine blend
 
   end subroutine apply_fringe
-
-  subroutine bulk_plane_means(self, means, u)
-    !! Mean of u over x and z on each y plane, for the mass_conserve bulk
-    !! velocity. With a concurrent precursor the mean is over the precursor
-    !! region only (Incompact3d forceabl). Incompact3d divides the sum by
-    !! the whole domain and scales by Lx/pdl; dividing by the precursor's
-    !! vertex count is the same when pdl is a multiple of dx, and the exact
-    !! mean otherwise.
-    implicit none
-
-    class(abl_t) :: self
-    real(dp), intent(out) :: means(:)
-    class(field_t), intent(in) :: u
-
-    class(field_t), pointer :: tmp
-    integer :: global_dims(3), n_columns, ierr
-
-    global_dims = self%mesh%get_global_dims(VERT)
-    if (self%cfg%concurrent_precursor) then
-      tmp => self%backend%allocator%get_block(DIR_X, VERT)
-      call self%backend%veccopy(tmp, u)
-      call self%backend%vecmult(tmp, self%precursor_mask)
-      call self%backend%field_plane_sums(means, tmp)
-      call self%backend%allocator%release_block(tmp)
-      n_columns = self%n_precursor*global_dims(3)
-    else
-      call self%backend%field_plane_sums(means, u)
-      n_columns = global_dims(1)*global_dims(3)
-    end if
-    call MPI_Allreduce(MPI_IN_PLACE, means, size(means), MPI_X3D2_DP, &
-                       MPI_SUM, MPI_COMM_WORLD, ierr)
-    means = means/real(n_columns, dp)
-  end subroutine bulk_plane_means
-
-  subroutine shift_bulk_velocity(self, u, shift)
-    !! Add the mass_conserve correction to u: everywhere, or in the
-    !! precursor region only with a concurrent precursor.
-    implicit none
-
-    class(abl_t) :: self
-    class(field_t), intent(inout) :: u
-    real(dp), intent(in) :: shift
-
-    if (self%cfg%concurrent_precursor) then
-      call self%backend%vecadd(shift, self%precursor_mask, 1._dp, u)
-    else
-      call self%backend%field_shift(u, shift)
-    end if
-  end subroutine shift_bulk_velocity
 
 end module m_abl

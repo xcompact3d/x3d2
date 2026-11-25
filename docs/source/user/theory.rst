@@ -979,9 +979,7 @@ that its bulk value matches the target :math:`U_b`:
 
    u \leftarrow u + U_b - \frac{1}{L_y}\int_0^{L_y}\langle u\rangle_{xz}\,\mathrm{d}y,
 
-where the integral uses the trapezoidal rule on the vertices. With
-``concurrent_precursor``, :math:`\langle u\rangle_{xz}` is the mean over the
-precursor region :math:`x < L_p` and only that region is shifted. Before every
+where the integral uses the trapezoidal rule on the vertices. Before every
 step, the velocity is passed through the tridiagonal low-pass filter
 (``spatial_filter``) in each direction,
 
