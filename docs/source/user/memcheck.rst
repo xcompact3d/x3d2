@@ -86,8 +86,8 @@ The tool skips the real build, and prints no ``CHECK`` line, in these cases:
 * The estimate for ``num_gpus=1`` is ``DOES_NOT_FIT``.
 * The input names a ``flow_case`` that the tool does not know. The tool logs
   that the flow case has no dispatch.
-* The input sets ``ibm_on=T`` and the ``ibm_<BC-suffix>.bp`` mask file is
-  not in the working directory.
+* The input sets ``ibm_on=T`` and the mask file named by ``ibm_file`` is not
+  found.
 
 The estimate then stands.
 

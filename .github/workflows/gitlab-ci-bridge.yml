@@ -137,12 +137,39 @@ jobs:
           set -euo pipefail
           api="${GITLAB_BASE}/api/v4/projects/${GITLAB_PROJECT_ID}/pipelines/${PIPELINE_ID}"
           previous=""
+          # Consecutive polls that got no usable status. The GitLab server can
+          # be unreachable or return 5xx error pages for a few minutes (a
+          # restart, a deploy) while the pipeline itself carries on, so a bad
+          # poll is only logged. The job fails only if GitLab stays unusable
+          # for max_bad polls in a row (30 min at 20 s); the job's
+          # timeout-minutes still bounds the whole wait.
+          bad=0
+          max_bad=90
           while true; do
-            # The loop polls for as long as the pipeline runs, so one dropped
-            # connection must not fail the job: retry every error, including
-            # the TLS read failures --retry alone does not cover.
-            status=$(curl -sS --fail-with-body --retry 5 --retry-all-errors --retry-delay 10 \
-              -H "PRIVATE-TOKEN: ${GITLAB_TOKEN}" "$api" | jq -r '.status')
+            status=""
+            # curl retries inside one poll as well, including the TLS read
+            # failures --retry alone does not cover.
+            if response=$(curl -sS --fail-with-body --retry 3 --retry-all-errors --retry-delay 10 \
+                 -H "PRIVATE-TOKEN: ${GITLAB_TOKEN}" "$api"); then
+              # A body that is not JSON (an HTML error page) yields no status.
+              status=$(jq -r '.status // empty' <<<"$response" 2>/dev/null || true)
+            fi
+            if [ -z "$status" ]; then
+              bad=$((bad + 1))
+              if [ "$bad" -eq 1 ]; then
+                echo "::warning::GitLab API gave no pipeline status; polling again"
+              fi
+              if [ "$bad" -ge "$max_bad" ]; then
+                echo "::error::GitLab API gave no pipeline status for ${bad} polls in a row; the pipeline may still be running: ${PIPELINE_URL}"
+                exit 1
+              fi
+              sleep 20
+              continue
+            fi
+            if [ "$bad" -gt 0 ]; then
+              echo "GitLab API answering again after ${bad} failed polls"
+              bad=0
+            fi
             if [ "$status" != "$previous" ]; then
               echo "pipeline ${PIPELINE_ID}: ${status}"
               previous="$status"

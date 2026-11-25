@@ -20,6 +20,13 @@ Ceilings
     ceiling states the real assertion and holds across compilers and
     precisions.
 
+    ``--ceiling-skip-initial`` leaves the first row (row 0, the initial state)
+    out of the ceiling comparison only. A non-finite value still fails on
+    every row. Use it when the initial field is not yet
+    projected, for example when noise is added before the first projection and
+    the divergence is large at t=0. Every row still goes through the golden
+    comparison of the non-ceiling columns.
+
 Blessing
     Passing ``--bless`` copies the produced file to the golden path and exits
     0. This is the *only* way to write a golden: a ``--golden`` path that does
@@ -73,7 +80,8 @@ def column(name: str, columns: list[str], rows: list[list[float]]) -> list[float
 
 
 def compare_golden(produced: Path, golden: Path, rtol: float, atol: float,
-                   ceilings: dict[str, float]) -> int:
+                   ceilings: dict[str, float],
+                   ceiling_skip_initial: bool = False) -> int:
     prod_cols, prod_rows = read_monitoring(produced)
     gold_cols, gold_rows = read_monitoring(golden)
 
@@ -126,9 +134,10 @@ def compare_golden(produced: Path, golden: Path, rtol: float, atol: float,
 
     # Ceiling columns assert "this stayed at round-off" rather than "this
     # reproduces a stored value", so they are never diffed against the golden.
+    first_ceiling_row = 1 if ceiling_skip_initial else 0
     for name, limit in ceilings.items():
         for i, p in enumerate(column(name, prod_cols, prod_rows)):
-            if math.isfinite(p) and abs(p) <= limit:
+            if math.isfinite(p) and (i < first_ceiling_row or abs(p) <= limit):
                 continue
             failures += 1
             if not math.isfinite(p):
@@ -217,6 +226,10 @@ def main(argv: list[str] | None = None) -> int:
         "--ceiling", action="append", default=[], metavar="COLUMN=VALUE",
         help="bound COLUMN absolutely instead of diffing it against the golden"
     )
+    g.add_argument(
+        "--ceiling-skip-initial", action="store_true",
+        help="leave the first row out of the --ceiling checks only"
+    )
     g.add_argument("--bless", action="store_true", help="write produced as golden")
 
     args = parser.parse_args(argv)
@@ -259,7 +272,8 @@ def main(argv: list[str] | None = None) -> int:
             return 1
 
     return compare_golden(
-        args.produced, args.golden, args.rtol, args.atol, ceilings
+        args.produced, args.golden, args.rtol, args.atol, ceilings,
+        args.ceiling_skip_initial
     )
 
 
