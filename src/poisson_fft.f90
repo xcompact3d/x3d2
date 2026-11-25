@@ -62,6 +62,7 @@ module m_poisson_fft
     procedure :: base_init
     procedure :: solve_poisson
     procedure :: stretching_matrix
+    procedure :: fill_stretching_sym
     procedure :: waves_set
     procedure :: get_km
     procedure :: get_km_re
@@ -296,8 +297,10 @@ contains
     integer, dimension(3), optional, intent(in) :: n_blk, blk_st
 
     real(dp) :: temp, a0, a1
-    integer :: i, j, k, ix, iz
+    integer :: i, j, k
     integer :: n(3), st(3)
+    real(dp), allocatable, dimension(:, :, :, :) :: odd_re, odd_im, &
+                                                    even_re, even_im
 
     n = [self%nx_spec, self%ny_spec, self%nz_spec]
     st = self%sp_st
@@ -358,48 +361,77 @@ contains
       self%a_re(1, 1, 1, 5) = 0; self%a_im(1, 1, 1, 5) = 0
     else
       self%stretched_y_sym = .true.
-      allocate (self%a_odd_re(n(1), n(2)/2, n(3), 5))
-      allocate (self%a_odd_im(n(1), n(2)/2, n(3), 5))
-      allocate (self%a_even_re(n(1), n(2)/2, n(3), 5))
-      allocate (self%a_even_im(n(1), n(2)/2, n(3), 5))
+      ! Fill local arrays, as the routine reads self and must not alias it
+      allocate (odd_re(n(1), n(2)/2, n(3), 5))
+      allocate (odd_im(n(1), n(2)/2, n(3), 5))
+      allocate (even_re(n(1), n(2)/2, n(3), 5))
+      allocate (even_im(n(1), n(2)/2, n(3), 5))
 
-      self%a_odd_re = 0._dp
-      self%a_odd_im = 0._dp
-      self%a_even_re = 0._dp
-      self%a_even_im = 0._dp
+      call self%fill_stretching_sym(geo, odd_re, odd_im, even_re, even_im, &
+                                    n, st)
 
-      a0 = (geo%alpha(2)/pi + 1._dp/(2*pi*geo%beta(2)))*geo%L(2)
-      select case (trim(geo%stretching(2)))
-      case ('centred')
-        a1 = 1._dp/(4*pi*geo%beta(2))*geo%L(2)
-      case ('top-bottom')
-        a1 = -1._dp/(4*pi*geo%beta(2))*geo%L(2)
-      case default
-        a1 = 0._dp
-      end select
-
-      call fill_stretched_diagonals(self, self%a_odd_re, self%a_odd_im, &
-                                    STRETCH_MAT_ODD, a0, a1, n, st)
-      call fill_stretched_diagonals(self, self%a_even_re, self%a_even_im, &
-                                    STRETCH_MAT_EVEN, a0, a1, n, st)
-
-      do k = 1, n(3)
-        do i = 1, n(1)
-          ix = i + st(1); iz = k + st(3)
-          if (get_real(self%k2x(ix)) < 1e-15 &
-              .and. get_real(self%k2z(iz)) < 1e-15) then
-            self%a_odd_re(i, 1, k, 3) = 1._dp
-            self%a_odd_im(i, 1, k, 3) = 1._dp
-            self%a_odd_re(i, 1, k, 4) = 0
-            self%a_odd_im(i, 1, k, 4) = 0
-            self%a_odd_re(i, 1, k, 5) = 0
-            self%a_odd_im(i, 1, k, 5) = 0
-          end if
-        end do
-      end do
+      call move_alloc(odd_re, self%a_odd_re)
+      call move_alloc(odd_im, self%a_odd_im)
+      call move_alloc(even_re, self%a_even_re)
+      call move_alloc(even_im, self%a_even_im)
     end if
 
   end subroutine stretching_matrix
+
+  subroutine fill_stretching_sym(self, geo, a_odd_re, a_odd_im, a_even_re, &
+                                 a_even_im, n, st)
+    !! Fill the odd and even matrices of the symmetric (centred and
+    !! top-bottom) stretching on the spectral block of size n at offset st.
+    !! The arrays have the shape (n(1), n(2)/2, n(3), 5). The routine zeroes
+    !! them first. The trans_* arrays must already hold the modes of the
+    !! block. The arrays must not belong to self.
+    implicit none
+
+    class(poisson_fft_t), intent(in) :: self
+    type(geo_t), intent(in) :: geo
+    real(dp), intent(out), dimension(:, :, :, :) :: a_odd_re, a_odd_im, &
+                                                    a_even_re, a_even_im
+    integer, intent(in) :: n(3), st(3)
+
+    real(dp) :: a0, a1
+    integer :: i, k, ix, iz
+
+    a_odd_re = 0._dp
+    a_odd_im = 0._dp
+    a_even_re = 0._dp
+    a_even_im = 0._dp
+
+    a0 = (geo%alpha(2)/pi + 1._dp/(2*pi*geo%beta(2)))*geo%L(2)
+    select case (trim(geo%stretching(2)))
+    case ('centred')
+      a1 = 1._dp/(4*pi*geo%beta(2))*geo%L(2)
+    case ('top-bottom')
+      a1 = -1._dp/(4*pi*geo%beta(2))*geo%L(2)
+    case default
+      a1 = 0._dp
+    end select
+
+    call fill_stretched_diagonals(self, a_odd_re, a_odd_im, &
+                                  STRETCH_MAT_ODD, a0, a1, n, st)
+    call fill_stretched_diagonals(self, a_even_re, a_even_im, &
+                                  STRETCH_MAT_EVEN, a0, a1, n, st)
+
+    do k = 1, n(3)
+      do i = 1, n(1)
+        ix = i + st(1); iz = k + st(3)
+        if (get_real(self%k2x(ix)) < 1e-15 &
+            .and. get_real(self%k2z(iz)) < 1e-15) then
+          a_odd_re(i, 1, k, 3) = 1._dp
+          a_odd_im(i, 1, k, 3) = 1._dp
+          a_odd_re(i, 1, k, 4) = 0
+          a_odd_im(i, 1, k, 4) = 0
+          a_odd_re(i, 1, k, 5) = 0
+          a_odd_im(i, 1, k, 5) = 0
+        end if
+      end do
+    end do
+
+  end subroutine fill_stretching_sym
 
   subroutine fill_stretched_diagonals(self, a_re, a_im, matrix_kind, a0, a1, &
                                       n, st)

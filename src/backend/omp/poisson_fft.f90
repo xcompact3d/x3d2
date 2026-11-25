@@ -271,8 +271,9 @@ contains
     if (self%p_col > 1) call self%init_pair_buffers(with_waves=.true.)
 
     ! The top-bottom stretching matrices are symmetric, odd and even alike.
-    ! Factor them once, in place. The solves only substitute, and no other
-    ! code reads the raw matrices on this path.
+    ! Factor them once, in place. The solves only substitute, so the raw
+    ! matrices exist only until this point. A caller that needs them, such as
+    ! the --dump-matrix test, rebuilds them with fill_stretching_sym.
     if (self%stretched_y) then
       call factor_spectral_010_poisson( &
         a_re=self%a_odd_re, a_im=self%a_odd_im, &

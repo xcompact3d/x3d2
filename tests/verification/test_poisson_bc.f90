@@ -471,6 +471,8 @@ contains
     type(poisson_ctx_t), intent(in) :: ctx
     type(bc_case_t), intent(in) :: cfg
 
+    real(dp), allocatable, dimension(:, :, :, :) :: a_odd_re, a_odd_im, &
+                                                    a_even_re, a_even_im
     integer :: unit
 
     associate (fft => ctx%backend%poisson_fft)
@@ -480,8 +482,19 @@ contains
                              ctx%mesh%geo%beta(2), ctx%mesh%geo%alpha(2), &
                              fft%ny_glob)
       if (fft%stretched_y_sym) then
-        call write_dump_block(unit, 'odd', fft%a_odd_re, fft%a_odd_im)
-        call write_dump_block(unit, 'even', fft%a_even_re, fft%a_even_im)
+        ! The solver holds the factored matrices, so rebuild the raw ones
+        allocate (a_odd_re, mold=fft%a_odd_re)
+        allocate (a_odd_im, mold=fft%a_odd_im)
+        allocate (a_even_re, mold=fft%a_even_re)
+        allocate (a_even_im, mold=fft%a_even_im)
+        ! The block size is the shape the solver allocated. The dump is rank 0
+        ! only, where the block start is 0.
+        call fft%fill_stretching_sym( &
+          ctx%mesh%geo, a_odd_re, a_odd_im, a_even_re, a_even_im, &
+          [size(fft%a_odd_re, 1), 2*size(fft%a_odd_re, 2), &
+           size(fft%a_odd_re, 3)], [0, 0, 0])
+        call write_dump_block(unit, 'odd', a_odd_re, a_odd_im)
+        call write_dump_block(unit, 'even', a_even_re, a_even_im)
       else
         call write_dump_block(unit, 'single', fft%a_re, fft%a_im)
       end if
