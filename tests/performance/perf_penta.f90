@@ -54,7 +54,7 @@ program perf_penta
   end if
 
   ! The backend is only needed to build backend-specific tdsops
-  mesh = mesh_t([backend_sz, backend_sz, backend_sz], [1, 1, 1], &
+  mesh = mesh_t([backend_sz, backend_sz, backend_sz], [nproc, 1, 1], &
                 [1._dp, 1._dp, 1._dp], &
                 ['periodic', 'periodic'], ['periodic', 'periodic'], &
                 ['periodic', 'periodic'])
