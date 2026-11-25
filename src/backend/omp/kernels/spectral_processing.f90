@@ -9,7 +9,21 @@ module m_omp_spectral
   ! and dividing by that noise corrupts the pressure field.
   real(dp), parameter :: eps_wave = epsilon(1._dp)
 
+  private :: guarded_neg_div
+
 contains
+
+  pure elemental function guarded_neg_div(num, den) result(res)
+    !! Return -num/den, or zero if the magnitude of den is below eps_wave.
+    real(dp), intent(in) :: num, den
+    real(dp) :: res
+
+    if (abs(den) < eps_wave) then
+      res = 0._dp
+    else
+      res = -num/den
+    end if
+  end function guarded_neg_div
 
   subroutine process_spectral_000( &
     div_u, waves, nx_spec, ny_spec, nz_spec, x_sp_st, y_sp_st, z_sp_st, &
@@ -451,16 +465,8 @@ contains
 
         tmp_r = real(waves(i, j, 1), kind=dp)
         tmp_c = aimag(waves(i, j, 1))
-        if (abs(tmp_r) < eps_wave) then
-          div_r = 0._dp
-        else
-          div_r = -div_r/tmp_r
-        end if
-        if (abs(tmp_c) < eps_wave) then
-          div_c = 0._dp
-        else
-          div_c = -div_c/tmp_c
-        end if
+        div_r = guarded_neg_div(div_r, tmp_r)
+        div_c = guarded_neg_div(div_c, tmp_c)
 
         div_u(i, j, 1) = cmplx(div_r, div_c, kind=dp)
       end do
@@ -497,30 +503,14 @@ contains
           ! Poisson divide, first member
           tmp_r = real(waves(i, j, k), kind=dp)
           tmp_c = aimag(waves(i, j, k))
-          if (abs(tmp_r) < eps_wave) then
-            div_r = 0._dp
-          else
-            div_r = -div_r/tmp_r
-          end if
-          if (abs(tmp_c) < eps_wave) then
-            div_c = 0._dp
-          else
-            div_c = -div_c/tmp_c
-          end if
+          div_r = guarded_neg_div(div_r, tmp_r)
+          div_c = guarded_neg_div(div_c, tmp_c)
 
           ! Poisson divide, second member
           tmp_r = real(waves(i, j, iy_pair), kind=dp)
           tmp_c = aimag(waves(i, j, iy_pair))
-          if (abs(tmp_r) < eps_wave) then
-            w_r = 0._dp
-          else
-            w_r = -w_r/tmp_r
-          end if
-          if (abs(tmp_c) < eps_wave) then
-            w_c = 0._dp
-          else
-            w_c = -w_c/tmp_c
-          end if
+          w_r = guarded_neg_div(w_r, tmp_r)
+          w_c = guarded_neg_div(w_c, tmp_c)
 
           ! recombine
           l_r = div_r
