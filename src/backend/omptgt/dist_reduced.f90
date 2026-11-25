@@ -3,18 +3,23 @@ module m_omptgt_dist_reduced
   !! device for the OpenMP target backend, following
   !! cuda/dist_reduced.f90 (see m_dist_reduced for the system). Each rank
   !! packs its first and last values after the first phase into one buffer,
-  !! and a single gather along the direction collects every rank's straight
-  !! from device memory, as the halo exchange of m_omptgt_sendrecv already
-  !! relies on a GPU-aware MPI. The system is then solved one line per
-  !! iteration, with the factorisation made when the operator was set up.
-  !! Nothing goes through the host.
-  use m_mpi, only: MPI_Allgather
+  !! and every rank's buffer is gathered along the direction straight from
+  !! device memory. The gather is made of point-to-point messages, the same
+  !! GPU-aware MPI path the halo exchange of m_omptgt_sendrecv takes, rather
+  !! than MPI_Allgather: Open MPI's UCC collectives read omp_target_alloc
+  !! buffers as host memory and crash, while UCX's point-to-point path
+  !! recognises them with UCX_MEMTYPE_CACHE=n. The system is then solved one
+  !! line per iteration, with the factorisation made when the operator was
+  !! set up. Nothing goes through the host.
+  use, intrinsic :: iso_c_binding, only: c_loc
+  use m_mpi, only: MPI_STATUSES_IGNORE, MPI_Irecv, MPI_Isend, MPI_Waitall
 
   use m_common, only: dp, MPI_X3D2_DP
   use m_logger, only: abort_run, check_mpi
   use m_mesh_content, only: par_t
   use m_dist_reduced, only: direction_comm
-  use m_omptgt_common, only: SZ, dev_alloc, dev_free, device_sync
+  use m_omptgt_common, only: SZ, dev_alloc, dev_free, device_sync, &
+                             memcpy_d2d
   use m_omptgt_kernels_dist, only: pack_reduced_rows, solve_reduced_lines
   use m_omptgt_tdsops, only: omptgt_tdsops_t
 
@@ -44,7 +49,9 @@ contains
     type(par_t), intent(in) :: par
     integer, intent(in) :: dir, n_groups
 
-    integer :: np, nl, comm, ierr
+    integer :: np, nl, me, comm, p, n_req, ierr
+    integer, allocatable :: req(:)
+    integer, parameter :: tag = 0
 
     np = par%nproc_dir(dir)
     nl = SZ*n_groups
@@ -64,6 +71,7 @@ contains
       call dev_alloc(all_rows, 2*nl*np)
     end if
 
+    me = tdsops%reduced%me
     comm = direction_comm(par, dir)
 
     call pack_reduced_rows(send_rows, d_s, d_e, n_groups)
@@ -71,16 +79,30 @@ contains
     ! The packing must be complete before MPI reads device memory
     call device_sync()
 
+    ! Rank p's rows go to all_rows(2*nl*p + 1 : 2*nl*(p + 1))
+    call memcpy_d2d(c_loc(all_rows(2*nl*me + 1)), c_loc(send_rows), 2*nl)
+
 #ifdef MPI
-    call MPI_Allgather(send_rows, 2*nl, MPI_X3D2_DP, all_rows, 2*nl, &
-                       MPI_X3D2_DP, comm, ierr)
-    call check_mpi(ierr, 'MPI_Allgather in solve_reduced_exact_omptgt')
+    allocate (req(2*(np - 1)))
+    n_req = 0
+    do p = 0, np - 1
+      if (p == me) cycle
+      call MPI_Irecv(all_rows(2*nl*p + 1), 2*nl, MPI_X3D2_DP, p, tag, comm, &
+                     req(n_req + 1), ierr)
+      call check_mpi(ierr, 'MPI_Irecv in solve_reduced_exact_omptgt')
+      call MPI_Isend(send_rows, 2*nl, MPI_X3D2_DP, p, tag, comm, &
+                     req(n_req + 2), ierr)
+      call check_mpi(ierr, 'MPI_Isend in solve_reduced_exact_omptgt')
+      n_req = n_req + 2
+    end do
+    call MPI_Waitall(n_req, req, MPI_STATUSES_IGNORE, ierr)
+    call check_mpi(ierr, 'MPI_Waitall in solve_reduced_exact_omptgt')
 #endif
 
     call solve_reduced_lines( &
       x_s, x_e, all_rows, tdsops%reduced_lo_dev, tdsops%reduced_den_dev, &
       tdsops%reduced_cp_dev, tdsops%reduced_z_dev, tdsops%reduced%corner_g, &
-      tdsops%reduced%zfac, np, tdsops%reduced%me, n_groups &
+      tdsops%reduced%zfac, np, me, n_groups &
       )
 
   end subroutine solve_reduced_exact_omptgt
