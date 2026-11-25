@@ -283,7 +283,8 @@ find_package(Python3 COMPONENTS Interpreter REQUIRED)
 function(define_regression_case_test case_name input_file golden_file np backend)
   # Trailing arguments are passed through to the comparator (e.g. --ceiling).
   # Files or directories listed after COPY_FILES are copied from
-  # tests/regression into the work directory (e.g. an IBM mask).
+  # tests/regression into the work directory each time the test runs, not at
+  # configure time (e.g. an IBM mask).
   cmake_parse_arguments(PARSE_ARGV 5 ARG "" "" "COPY_FILES")
   set(extra_args "${ARG_UNPARSED_ARGUMENTS}")
   string(REPLACE ";" " " extra_args_str "${extra_args}")
@@ -291,16 +292,19 @@ function(define_regression_case_test case_name input_file golden_file np backend
   set(test_name regression_${case_name}_${backend}_${np})
   set(work_dir ${CMAKE_CURRENT_BINARY_DIR}/regression/${test_name})
   file(MAKE_DIRECTORY ${work_dir})
+  # Stage the copied files in front of the run, so each run starts from a
+  # fresh copy and a removed or added file cannot go stale.
+  set(stage_cmd "")
   foreach(copy_file IN LISTS ARG_COPY_FILES)
-    file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/regression/${copy_file} DESTINATION ${work_dir})
-    # Reconfigure when a copied file changes, as file(COPY) only runs at configure time.
     set(copy_path ${CMAKE_CURRENT_SOURCE_DIR}/regression/${copy_file})
+    get_filename_component(copy_name ${copy_file} NAME)
     if(IS_DIRECTORY ${copy_path})
-      file(GLOB_RECURSE copy_deps ${copy_path}/*)
+      string(APPEND stage_cmd
+        "${CMAKE_COMMAND} -E remove_directory ${work_dir}/${copy_name} && "
+        "${CMAKE_COMMAND} -E copy_directory ${copy_path} ${work_dir}/${copy_name} && ")
     else()
-      set(copy_deps ${copy_path})
+      string(APPEND stage_cmd "${CMAKE_COMMAND} -E copy ${copy_path} ${work_dir}/ && ")
     endif()
-    set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${copy_deps})
   endforeach()
   set(comparator ${CMAKE_CURRENT_SOURCE_DIR}/regression/compare_monitoring.py)
   set(input ${CMAKE_CURRENT_SOURCE_DIR}/regression/${input_file})
@@ -320,7 +324,7 @@ function(define_regression_case_test case_name input_file golden_file np backend
   add_test(
     NAME ${test_name}
     COMMAND sh -c
-      "${launcher} $<TARGET_FILE:xcompact> ${input} && \
+      "${stage_cmd}${launcher} $<TARGET_FILE:xcompact> ${input} && \
        ${Python3_EXECUTABLE} ${comparator} golden \
        --produced monitoring.csv --golden ${golden} ${extra_args_str}"
     WORKING_DIRECTORY ${work_dir})
