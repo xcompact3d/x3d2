@@ -654,7 +654,14 @@ contains
       ! y-pencil, where y is whole, pair there, and hop back.
       call transpose_z_to_y(self%c_x, self%c_pair, self%sp)
       if (self%stretched_y) then
-        call solve_stretched_010(self, self%c_pair, self%sp%yst - 1)
+        call solve_stretched_010( &
+          c=self%c_pair, st=self%sp%yst - 1, &
+          nx=self%nx_glob, ny=self%ny_glob, nz=self%nz_glob, &
+          ax=self%ax, bx=self%bx, ay=self%ay, by=self%by, &
+          az=self%az, bz=self%bz, &
+          a_odd_re=self%a_odd_re, a_odd_im=self%a_odd_im, &
+          a_even_re=self%a_even_re, a_even_im=self%a_even_im &
+          )
       else
         call process_spectral_010( &
           div_u=self%c_pair, waves=self%waves_pair, &
@@ -669,7 +676,14 @@ contains
       end if
       call transpose_y_to_z(self%c_pair, self%c_x, self%sp)
     else if (self%stretched_y) then
-      call solve_stretched_010(self, self%c_x, self%sp_st)
+      call solve_stretched_010( &
+        c=self%c_x, st=self%sp_st, &
+        nx=self%nx_glob, ny=self%ny_glob, nz=self%nz_glob, &
+        ax=self%ax, bx=self%bx, ay=self%ay, by=self%by, &
+        az=self%az, bz=self%bz, &
+        a_odd_re=self%a_odd_re, a_odd_im=self%a_odd_im, &
+        a_even_re=self%a_even_re, a_even_im=self%a_even_im &
+        )
     else
       call process_spectral_010( &
         div_u=self%c_x, waves=self%waves, &
@@ -684,15 +698,24 @@ contains
 
   end subroutine fft_postprocess_010_omp
 
-  subroutine solve_stretched_010(self, c, st)
+  subroutine solve_stretched_010( &
+    c, st, nx, ny, nz, ax, bx, ay, by, az, bz, &
+    a_odd_re, a_odd_im, a_even_re, a_even_im &
+    )
     !! Top-bottom stretched 010 solve of a spectral block c, whose y lines
     !! are whole. st holds the offset of the block in the global spectral
     !! grid, and the stretching matrices cover the same block.
     implicit none
 
-    class(omp_poisson_010_t), intent(in) :: self
     complex(dp), intent(inout), dimension(:, :, :) :: c
     integer, intent(in) :: st(3)
+    !> Global cell size
+    integer, intent(in) :: nx, ny, nz
+    !> Spectral equivalence constants
+    real(dp), intent(in), dimension(:) :: ax, bx, ay, by, az, bz
+    !> Factored odd and even matrices
+    real(dp), intent(in), dimension(:, :, :, :) :: a_odd_re, a_odd_im, &
+                                                   a_even_re, a_even_im
 
     integer :: nx_b, ny_b, nz_b
 
@@ -704,33 +727,31 @@ contains
       div_u=c, &
       nx_spec=nx_b, ny_spec=ny_b, nz_spec=nz_b, &
       x_sp_st=st(1), y_sp_st=st(2), z_sp_st=st(3), &
-      nx=self%nx_glob, ny=self%ny_glob, nz=self%nz_glob, &
-      ax=self%ax, bx=self%bx, ay=self%ay, by=self%by, &
-      az=self%az, bz=self%bz &
+      nx=nx, ny=ny, nz=nz, &
+      ax=ax, bx=bx, ay=ay, by=by, az=az, bz=bz &
       )
 
     ! The odd rows, then the even rows, each with its own factored matrices
     call process_spectral_010_poisson( &
-      div_u=c, a_re=self%a_odd_re, a_im=self%a_odd_im, &
+      div_u=c, a_re=a_odd_re, a_im=a_odd_im, &
       off=0, inc=2, nx_spec=nx_b, n=ny_b/2, nz_spec=nz_b, &
       x_sp_st=st(1), z_sp_st=st(3), &
-      nx=self%nx_glob, ny=self%ny_glob, nz=self%nz_glob &
+      nx=nx, ny=ny, nz=nz &
       )
 
     call process_spectral_010_poisson( &
-      div_u=c, a_re=self%a_even_re, a_im=self%a_even_im, &
+      div_u=c, a_re=a_even_re, a_im=a_even_im, &
       off=1, inc=2, nx_spec=nx_b, n=ny_b/2, nz_spec=nz_b, &
       x_sp_st=st(1), z_sp_st=st(3), &
-      nx=self%nx_glob, ny=self%ny_glob, nz=self%nz_glob &
+      nx=nx, ny=ny, nz=nz &
       )
 
     call process_spectral_010_bw( &
       div_u=c, &
       nx_spec=nx_b, ny_spec=ny_b, nz_spec=nz_b, &
       x_sp_st=st(1), y_sp_st=st(2), z_sp_st=st(3), &
-      nx=self%nx_glob, ny=self%ny_glob, nz=self%nz_glob, &
-      ax=self%ax, bx=self%bx, ay=self%ay, by=self%by, &
-      az=self%az, bz=self%bz &
+      nx=nx, ny=ny, nz=nz, &
+      ax=ax, bx=bx, ay=ay, by=by, az=az, bz=bz &
       )
 
   end subroutine solve_stretched_010
