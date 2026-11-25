@@ -36,8 +36,10 @@ contains
     !! Line l must be the same physical line on every rank along dir.
     implicit none
 
-    real(dp), device, dimension(:, :, :), intent(out) :: x_s, x_e
-    real(dp), device, dimension(:, :, :), intent(in) :: d_s, d_e
+    !> Contiguous, so that they reach the explicit-shape dummies of the
+    !! kernels without a copy
+    real(dp), device, contiguous, dimension(:, :, :), intent(out) :: x_s, x_e
+    real(dp), device, contiguous, dimension(:, :, :), intent(in) :: d_s, d_e
     type(cuda_tdsops_t), intent(in) :: tdsops
     type(par_t), intent(in) :: par
     integer, intent(in) :: dir
@@ -62,7 +64,7 @@ contains
 
     comm = direction_comm(par, dir)
 
-    call pack_reduced_rows<<<blocks, threads>>>(send_rows, d_s, d_e) !&
+    call pack_reduced_rows<<<blocks, threads>>>(send_rows, d_s, d_e, nl) !&
 
     ! The packing must be complete before MPI reads device memory
     ierr = cudaStreamSynchronize(0)
@@ -79,7 +81,7 @@ contains
       tdsops%reduced_lo_dev, tdsops%reduced_den_dev, &
       tdsops%reduced_cp_dev, tdsops%reduced_z_dev, &
       tdsops%reduced%corner_g, tdsops%reduced%zfac, np, &
-      tdsops%reduced%me &
+      tdsops%reduced%me, nl &
       )
 
   end subroutine solve_reduced_exact_cuda
