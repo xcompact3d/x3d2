@@ -950,9 +950,12 @@ if(WITH_2DECOMPFFT AND _cpu_omp_backend)
   define_regression_case_test(tgv_smoke tgv_smoke.x3d tgv_smoke_golden_omp.csv 2 omp
     ${_smoke_cmp_args})
   # The 110 cylinder case reads its IBM mask from the work directory.
-  define_regression_case_test(cylinder_110_smoke cylinder_110_smoke.x3d
-    cylinder_110_smoke_golden_omp.csv 1 omp ${_cylinder_cmp_args}
-    COPY_FILES ibm_110.bp)
+  # The case reads its IBM mask through ADIOS2.
+  if(WITH_ADIOS2)
+    define_regression_case_test(cylinder_110_smoke cylinder_110_smoke.x3d
+      cylinder_110_smoke_golden_omp.csv 1 omp ${_cylinder_cmp_args}
+      COPY_FILES ibm_110.bp)
+  endif()
 endif()
 
 # CUDA regression cases. The channel cases run the 010 FFT Poisson solver with
@@ -970,9 +973,12 @@ if(${ENABLE_BACKEND} STREQUAL "CUDA")
     channel_smoke_golden_cuda.csv 1 cuda ${_channel_cmp_args})
   define_regression_case_test(channel_bottom_smoke channel_bottom_smoke.x3d
     channel_bottom_smoke_golden_cuda.csv 1 cuda ${_channel_cmp_args})
-  define_regression_case_test(cylinder_110_smoke cylinder_110_smoke.x3d
-    cylinder_110_smoke_golden_cuda.csv 1 cuda ${_cylinder_cmp_args}
-    COPY_FILES ibm_110.bp)
+  # The case reads its IBM mask through ADIOS2.
+  if(WITH_ADIOS2)
+    define_regression_case_test(cylinder_110_smoke cylinder_110_smoke.x3d
+      cylinder_110_smoke_golden_cuda.csv 1 cuda ${_cylinder_cmp_args}
+      COPY_FILES ibm_110.bp)
+  endif()
 endif()
 
 # The driver has its backend fixed at compile time, so register it as OMP only
