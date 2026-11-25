@@ -2,6 +2,8 @@ module m_tdsops
   use m_common, only: dp, pi, VERT, CELL, &
                       BC_PERIODIC, BC_NEUMANN, BC_DIRICHLET
   use m_logger, only: log_warn, abort_run, str
+  use m_dist_reduced, only: reduced_lu_t, factorise_reduced
+  use m_mesh_content, only: par_t
 
   implicit none
 
@@ -46,8 +48,11 @@ module m_tdsops
     !! Where the direction is decomposed, solve the reduced system of the
     !! distributed solver exactly instead (m_dist_reduced) rather than with
     !! the neighbour-only approximation. It costs a gather along the
-    !! direction, so it is kept for the operators that need it.
+    !! direction, so it is kept for the operators that need it. Set it with
+    !! set_dist_exact, which also factorises the reduced system.
     logical :: dist_exact = .false.
+    !> Factorisation of the reduced system, made by set_dist_exact
+    type(reduced_lu_t) :: reduced
     integer :: n_tds !! Tridiagonal system size
     integer :: n_rhs !! Right-hand-side builder size
     integer :: move = 0 !! move between vertices and cell centres
@@ -55,6 +60,7 @@ module m_tdsops
   contains
     procedure :: deriv_1st, deriv_2nd, interpl_mid, stagder_1st, lowpass
     procedure :: preprocess_dist, preprocess_penta_dist, preprocess_thom
+    procedure :: set_dist_exact
   end type tdsops_t
 
   interface tdsops_t
@@ -1313,6 +1319,25 @@ contains
     self%dist_sc(:) = 0._dp
 
   end subroutine preprocess_penta_dist
+
+  subroutine set_dist_exact(self, par, dir)
+    !! Solve the reduced system of the distributed solver exactly along the
+    !! decomposed direction dir, and factorise it for that. Collective over
+    !! the ranks along dir.
+    implicit none
+
+    class(tdsops_t), intent(inout) :: self
+    type(par_t), intent(in) :: par
+    integer, intent(in) :: dir
+
+    integer :: n
+
+    n = self%n_tds
+    call factorise_reduced(self%reduced, self%dist_sa(1), self%dist_sc(1), &
+                           self%dist_sa(n), self%dist_sc(n), par, dir)
+    self%dist_exact = .true.
+
+  end subroutine set_dist_exact
 
 end module m_tdsops
 

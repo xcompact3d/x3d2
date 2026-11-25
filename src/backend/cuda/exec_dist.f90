@@ -43,9 +43,8 @@ contains
     type(dim3), intent(in) :: blocks, threads
 
     real(dp), allocatable :: d_s(:, :, :), d_e(:, :, :), x_s(:), x_e(:)
-    integer :: n, n_groups, n_data
+    integer :: n_groups, n_data
 
-    n = tdsops%n_tds
     n_groups = blocks%x
     n_data = SZ*n_groups
 
@@ -64,8 +63,7 @@ contains
       allocate (x_s(n_data), x_e(n_data))
       call solve_reduced_exact( &
         x_s, x_e, reshape(d_s, [n_data]), reshape(d_e, [n_data]), &
-        tdsops%dist_sa(1), tdsops%dist_sc(1), tdsops%dist_sa(n), &
-        tdsops%dist_sc(n), par, dir)
+        tdsops%reduced, par, dir)
       d_s = reshape(x_s, [SZ, 1, n_groups])
       d_e = reshape(x_e, [SZ, 1, n_groups])
       du_recv_s(:, :, 1:n_groups) = d_s

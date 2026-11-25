@@ -41,9 +41,8 @@ contains
     integer, intent(in) :: dir, n_groups
 
     real(dp), allocatable, target :: d_s(:), d_e(:), x_s(:), x_e(:)
-    integer :: n, n_data
+    integer :: n_data
 
-    n = tdsops%n_tds
     n_data = SZ*n_groups
 
     call der_univ_dist( &
@@ -60,9 +59,7 @@ contains
       allocate (d_s(n_data), d_e(n_data), x_s(n_data), x_e(n_data))
       call memcpy_d2h(c_loc(d_s), c_loc(du_send_s), n_data)
       call memcpy_d2h(c_loc(d_e), c_loc(du_send_e), n_data)
-      call solve_reduced_exact( &
-        x_s, x_e, d_s, d_e, tdsops%dist_sa(1), tdsops%dist_sc(1), &
-        tdsops%dist_sa(n), tdsops%dist_sc(n), par, dir)
+      call solve_reduced_exact(x_s, x_e, d_s, d_e, tdsops%reduced, par, dir)
       call memcpy_h2d(c_loc(du_recv_s), c_loc(x_s), n_data)
       call memcpy_h2d(c_loc(du_recv_e), c_loc(x_e), n_data)
 
