@@ -14,6 +14,10 @@ module m_omp_poisson_fft
   use m_tdsops, only: dirps_t
 
   use m_omp_spectral, only: process_spectral_000, process_spectral_010, &
+                            process_spectral_010_fw, &
+                            factor_spectral_010_poisson, &
+                            process_spectral_010_poisson, &
+                            process_spectral_010_bw, &
                             process_spectral_100, process_spectral_110, &
                             process_spectral_110_fw, &
                             process_spectral_110_solve, &
@@ -196,12 +200,24 @@ contains
     ! decomp_2d_fft_get_size hands back. Read sp directly, subtracting one
     ! to convert the start position into an offset.
     self%sp => decomp_2d_fft_get_sp()
-    call self%base_init(mesh, xdirps, ydirps, zdirps, &
-                        self%sp%zsz, self%sp%zst - 1)
+    if (mesh%geo%stretched(2) .and. self%bc_code == '010' &
+        .and. self%p_col > 1) then
+      ! The stretched solve runs on the y-pencil, where y is whole, so the
+      ! stretching matrices must cover that block.
+      call self%base_init(mesh, xdirps, ydirps, zdirps, &
+                          self%sp%zsz, self%sp%zst - 1, &
+                          n_blk=self%sp%ysz, blk_st=self%sp%yst - 1)
+    else
+      call self%base_init(mesh, xdirps, ydirps, zdirps, &
+                          self%sp%zsz, self%sp%zst - 1)
+    end if
 
-    if (mesh%geo%stretched(2)) then
-      call abort_run('OpenMP backends FFT based Poisson solver does not &
-                     &support stretching in y-direction yet!')
+    ! Only the top-bottom stretching is solved. A y decomposition stops in
+    ! init_buffers_010.
+    if (mesh%geo%stretched(2) .and. &
+        trim(mesh%geo%stretching(2)) /= 'top-bottom') then
+      call abort_run('OpenMP backends FFT based Poisson solver supports only &
+                     &top-bottom y stretching!')
     end if
 
     allocate (self%c_x(self%nx_spec, self%ny_spec, self%nz_spec))
@@ -253,6 +269,23 @@ contains
     ! Pairing a mode with its mirror in dim2 (the y modes) needs that
     ! dimension whole, which the y-pencil of sp provides.
     if (self%p_col > 1) call self%init_pair_buffers(with_waves=.true.)
+
+    ! The top-bottom stretching matrices are symmetric, odd and even alike.
+    ! Factor them once, in place. The solves only substitute, so the raw
+    ! matrices exist only until this point. A caller that needs them, such as
+    ! the --dump-matrix test, rebuilds them with fill_stretching_sym.
+    if (self%stretched_y) then
+      call factor_spectral_010_poisson( &
+        a_re=self%a_odd_re, a_im=self%a_odd_im, &
+        nx_spec=size(self%a_odd_re, dim=1), n=size(self%a_odd_re, dim=2), &
+        nz_spec=size(self%a_odd_re, dim=3) &
+        )
+      call factor_spectral_010_poisson( &
+        a_re=self%a_even_re, a_im=self%a_even_im, &
+        nx_spec=size(self%a_even_re, dim=1), n=size(self%a_even_re, dim=2), &
+        nz_spec=size(self%a_even_re, dim=3) &
+        )
+    end if
 
   end subroutine init_buffers_010
 
@@ -621,17 +654,37 @@ contains
       ! The FFT leaves y split across p_col in the z-pencil. Hop to the
       ! y-pencil, where y is whole, pair there, and hop back.
       call transpose_z_to_y(self%c_x, self%c_pair, self%sp)
-      call process_spectral_010( &
-        div_u=self%c_pair, waves=self%waves_pair, &
-        nx_spec=self%sp%ysz(1), ny_spec=self%sp%ysz(2), &
-        nz_spec=self%sp%ysz(3), &
-        x_sp_st=self%sp%yst(1) - 1, y_sp_st=self%sp%yst(2) - 1, &
-        z_sp_st=self%sp%yst(3) - 1, &
+      if (self%stretched_y) then
+        call solve_stretched_010( &
+          c=self%c_pair, st=self%sp%yst - 1, &
+          nx=self%nx_glob, ny=self%ny_glob, nz=self%nz_glob, &
+          ax=self%ax, bx=self%bx, ay=self%ay, by=self%by, &
+          az=self%az, bz=self%bz, &
+          a_odd_re=self%a_odd_re, a_odd_im=self%a_odd_im, &
+          a_even_re=self%a_even_re, a_even_im=self%a_even_im &
+          )
+      else
+        call process_spectral_010( &
+          div_u=self%c_pair, waves=self%waves_pair, &
+          nx_spec=self%sp%ysz(1), ny_spec=self%sp%ysz(2), &
+          nz_spec=self%sp%ysz(3), &
+          x_sp_st=self%sp%yst(1) - 1, y_sp_st=self%sp%yst(2) - 1, &
+          z_sp_st=self%sp%yst(3) - 1, &
+          nx=self%nx_glob, ny=self%ny_glob, nz=self%nz_glob, &
+          ax=self%ax, bx=self%bx, ay=self%ay, by=self%by, &
+          az=self%az, bz=self%bz &
+          )
+      end if
+      call transpose_y_to_z(self%c_pair, self%c_x, self%sp)
+    else if (self%stretched_y) then
+      call solve_stretched_010( &
+        c=self%c_x, st=self%sp_st, &
         nx=self%nx_glob, ny=self%ny_glob, nz=self%nz_glob, &
         ax=self%ax, bx=self%bx, ay=self%ay, by=self%by, &
-        az=self%az, bz=self%bz &
+        az=self%az, bz=self%bz, &
+        a_odd_re=self%a_odd_re, a_odd_im=self%a_odd_im, &
+        a_even_re=self%a_even_re, a_even_im=self%a_even_im &
         )
-      call transpose_y_to_z(self%c_pair, self%c_x, self%sp)
     else
       call process_spectral_010( &
         div_u=self%c_x, waves=self%waves, &
@@ -645,6 +698,64 @@ contains
     end if
 
   end subroutine fft_postprocess_010_omp
+
+  subroutine solve_stretched_010( &
+    c, st, nx, ny, nz, ax, bx, ay, by, az, bz, &
+    a_odd_re, a_odd_im, a_even_re, a_even_im &
+    )
+    !! Top-bottom stretched 010 solve of a spectral block c, whose y lines
+    !! are whole. st holds the offset of the block in the global spectral
+    !! grid, and the stretching matrices cover the same block.
+    implicit none
+
+    complex(dp), intent(inout), dimension(:, :, :) :: c
+    integer, intent(in) :: st(3)
+    !> Global cell size
+    integer, intent(in) :: nx, ny, nz
+    !> Spectral equivalence constants
+    real(dp), intent(in), dimension(:) :: ax, bx, ay, by, az, bz
+    !> Factored odd and even matrices
+    real(dp), intent(in), dimension(:, :, :, :) :: a_odd_re, a_odd_im, &
+                                                   a_even_re, a_even_im
+
+    integer :: nx_b, ny_b, nz_b
+
+    nx_b = size(c, dim=1)
+    ny_b = size(c, dim=2)
+    nz_b = size(c, dim=3)
+
+    call process_spectral_010_fw( &
+      div_u=c, &
+      nx_spec=nx_b, ny_spec=ny_b, nz_spec=nz_b, &
+      x_sp_st=st(1), y_sp_st=st(2), z_sp_st=st(3), &
+      nx=nx, ny=ny, nz=nz, &
+      ax=ax, bx=bx, ay=ay, by=by, az=az, bz=bz &
+      )
+
+    ! The odd rows, then the even rows, each with its own factored matrices
+    call process_spectral_010_poisson( &
+      div_u=c, a_re=a_odd_re, a_im=a_odd_im, &
+      off=0, inc=2, nx_spec=nx_b, n=ny_b/2, nz_spec=nz_b, &
+      x_sp_st=st(1), z_sp_st=st(3), &
+      nx=nx, ny=ny, nz=nz &
+      )
+
+    call process_spectral_010_poisson( &
+      div_u=c, a_re=a_even_re, a_im=a_even_im, &
+      off=1, inc=2, nx_spec=nx_b, n=ny_b/2, nz_spec=nz_b, &
+      x_sp_st=st(1), z_sp_st=st(3), &
+      nx=nx, ny=ny, nz=nz &
+      )
+
+    call process_spectral_010_bw( &
+      div_u=c, &
+      nx_spec=nx_b, ny_spec=ny_b, nz_spec=nz_b, &
+      x_sp_st=st(1), y_sp_st=st(2), z_sp_st=st(3), &
+      nx=nx, ny=ny, nz=nz, &
+      ax=ax, bx=bx, ay=ay, by=by, az=az, bz=bz &
+      )
+
+  end subroutine solve_stretched_010
 
   subroutine fft_postprocess_100_omp(self)
     !! Post-process div U* in spectral space for the non-periodic x case.
