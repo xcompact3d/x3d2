@@ -29,7 +29,10 @@ module m_dist_reduced
   !! so solving it on every rank costs less than more rounds of messages.
   !! factorise_reduced gathers the coefficients and factorises the system
   !! once per operator, when it is set up; solve_reduced_exact gathers the
-  !! rows and solves them on the host.
+  !! rows and solves them on the host. The GPU backends solve on the device
+  !! with the same factorisation (m_cuda_dist_reduced and
+  !! m_omptgt_dist_reduced), gathering the rows in the same layout: rank p's
+  !! nl first values, then its nl last values, at 2*nl*p.
   use m_common, only: dp, MPI_X3D2_DP
   use m_logger, only: abort_run
   use m_mesh_content, only: par_t

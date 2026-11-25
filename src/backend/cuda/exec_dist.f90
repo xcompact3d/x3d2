@@ -3,7 +3,7 @@ module m_cuda_exec_dist
 
   use m_common, only: dp
   use m_cuda_common, only: SZ
-  use m_dist_reduced, only: solve_reduced_exact
+  use m_cuda_dist_reduced, only: solve_reduced_exact_cuda
   use m_mesh_content, only: par_t
   use m_cuda_kernels_dist, only: der_univ_dist, der_univ_subs, &
                                  der_univ_subs_exact, &
@@ -22,9 +22,8 @@ contains
     )
     !! Distributed compact solve along dir. The reduced system that couples
     !! the ranks is solved with the neighbour-only 2x2 approximation, or
-    !! exactly where tdsops%dist_exact asks for it (see m_dist_reduced). The
-    !! exact solve's right-hand sides, two planes per field, go through the
-    !! host.
+    !! exactly on the device where tdsops%dist_exact asks for it (see
+    !! m_dist_reduced and m_cuda_dist_reduced).
     implicit none
 
     ! du = d(u)
@@ -42,11 +41,9 @@ contains
     integer, intent(in) :: dir
     type(dim3), intent(in) :: blocks, threads
 
-    real(dp), allocatable :: d_s(:, :, :), d_e(:, :, :), x_s(:), x_e(:)
-    integer :: n_groups, n_data
+    integer :: n_data
 
-    n_groups = blocks%x
-    n_data = SZ*n_groups
+    n_data = SZ*blocks%x
 
     call der_univ_dist<<<blocks, threads>>>( & !&
       du, du_send_s, du_send_e, u, u_recv_s, u_recv_e, &
@@ -56,18 +53,9 @@ contains
       )
 
     if (tdsops%dist_exact .and. par%nproc_dir(dir) > 1) then
-      ! Device to host copies on the default stream wait for the kernel
-      allocate (d_s(SZ, 1, n_groups), d_e(SZ, 1, n_groups))
-      d_s = du_send_s(:, :, 1:n_groups)
-      d_e = du_send_e(:, :, 1:n_groups)
-      allocate (x_s(n_data), x_e(n_data))
-      call solve_reduced_exact( &
-        x_s, x_e, reshape(d_s, [n_data]), reshape(d_e, [n_data]), &
-        tdsops%reduced, par, dir)
-      d_s = reshape(x_s, [SZ, 1, n_groups])
-      d_e = reshape(x_e, [SZ, 1, n_groups])
-      du_recv_s(:, :, 1:n_groups) = d_s
-      du_recv_e(:, :, 1:n_groups) = d_e
+      call solve_reduced_exact_cuda(du_recv_s, du_recv_e, du_send_s, &
+                                    du_send_e, tdsops, par, dir, blocks, &
+                                    threads)
 
       call der_univ_subs_exact<<<blocks, threads>>>( & !&
         du, du_recv_s, du_recv_e, tdsops%n_tds, &

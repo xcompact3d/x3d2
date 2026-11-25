@@ -11,6 +11,7 @@ module m_omptgt_tdsops
   !! built once at start-up and live for the whole run, so construct them in
   !! place with `omptgt_tdsops_init` rather than by assignment.
   use m_common, only: dp
+  use m_mesh_content, only: par_t
   use m_tdsops, only: tdsops_t, tdsops_init
 
   use m_omptgt_common, only: dev_alloc, dev_clone, dev_upload
@@ -36,6 +37,14 @@ module m_omptgt_tdsops
     !! pentadiagonal solve. They depend on the operator alone, so they are
     !! built once here where the CUDA kernel rebuilds them in every block.
     real(dp), pointer, contiguous :: penta_z_dev(:, :) => null()
+    !> Factorisation of the reduced system (see reduced_lu_t), for the
+    !! device solve of m_omptgt_dist_reduced
+    real(dp), pointer, contiguous :: reduced_lo_dev(:) => null(), &
+                                     reduced_cp_dev(:) => null(), &
+                                     reduced_den_dev(:) => null(), &
+                                     reduced_z_dev(:) => null()
+  contains
+    procedure :: set_dist_exact => set_dist_exact_omptgt
   end type omptgt_tdsops_t
 
 contains
@@ -87,6 +96,24 @@ contains
     end if
 
   end subroutine omptgt_tdsops_init
+
+  subroutine set_dist_exact_omptgt(self, par, dir)
+    !! Factorise the reduced system as the base class does, and copy the
+    !! factorisation to the device.
+    implicit none
+
+    class(omptgt_tdsops_t), intent(inout) :: self
+    type(par_t), intent(in) :: par
+    integer, intent(in) :: dir
+
+    call self%tdsops_t%set_dist_exact(par, dir)
+
+    call dev_clone(self%reduced_lo_dev, self%reduced%lo)
+    call dev_clone(self%reduced_cp_dev, self%reduced%cp)
+    call dev_clone(self%reduced_den_dev, self%reduced%den)
+    call dev_clone(self%reduced_z_dev, self%reduced%z)
+
+  end subroutine set_dist_exact_omptgt
 
   function penta_periodic_columns(tdsops) result(z)
     !! Solves A_np*z_k = e_{p_k} for p = 1, 2, n-1, n with the non-periodic

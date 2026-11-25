@@ -22,6 +22,7 @@ module m_omptgt_kernels_dist
 
   private
   public :: der_univ_dist, der_univ_subs, der_univ_subs_exact, &
+            pack_reduced_rows, solve_reduced_lines, &
             transeq_3fused_dist, &
             transeq_3fused_subs, der_penta_full, der_penta_periodic
 
@@ -307,6 +308,97 @@ contains
     du(i, n_tds, b) = du_e*strch(n_tds)
 
   end subroutine der_univ_subs_exact_line
+
+  subroutine pack_reduced_rows(rows, d_s, d_e, n_groups)
+    !! Pack this rank's rows of the reduced system for the gather of
+    !! m_omptgt_dist_reduced: the first values after the first phase of the
+    !! SZ*n_groups lines, then the last values, as m_dist_reduced lays them
+    !! out.
+    integer, intent(in) :: n_groups
+    real(dp), intent(out) :: rows(SZ*n_groups, 2)
+    real(dp), intent(in) :: d_s(SZ, 1, n_groups), d_e(SZ, 1, n_groups)
+
+    integer :: i, b
+
+    !$omp target teams distribute parallel do collapse(2) &
+    !$omp OMP_DEVICE_ADDR(rows, d_s, d_e)
+    do b = 1, n_groups
+      do i = 1, SZ
+        rows((b - 1)*SZ + i, 1) = d_s(i, 1, b)
+        rows((b - 1)*SZ + i, 2) = d_e(i, 1, b)
+      end do
+    end do
+    !$omp end target teams distribute parallel do
+
+  end subroutine pack_reduced_rows
+
+  subroutine solve_reduced_lines(x_s, x_e, rows, lo, den, cp, z, corner_g, &
+                                 zfac, np, me, n_groups)
+    !! Solve the reduced system of the distributed solver exactly, one line
+    !! per iteration, with the factorisation of reduced_lu_t
+    !! (m_dist_reduced). rows holds the packed rows of every rank along the
+    !! direction, rank p's first values in rows(:, 1, p + 1) and last values
+    !! in rows(:, 2, p + 1). They are rows 2p + 1 and 2p + 2 of the system,
+    !! and the solve overwrites them. x_s and x_e get this rank's unknowns.
+    integer, intent(in) :: np, me, n_groups
+    real(dp), intent(out) :: x_s(SZ, 1, n_groups), x_e(SZ, 1, n_groups)
+    real(dp), intent(inout) :: rows(SZ*n_groups, 2, np)
+    real(dp), intent(in) :: lo(2*np), den(2*np), cp(2*np), z(2*np)
+    real(dp), intent(in) :: corner_g, zfac
+
+    integer :: i, b
+
+    !$omp target teams distribute parallel do collapse(2) &
+    !$omp OMP_DEVICE_ADDR(x_s, x_e, rows, lo, den, cp, z)
+    do b = 1, n_groups
+      do i = 1, SZ
+        call solve_reduced_line(i, b, SZ*n_groups, x_s, x_e, rows, lo, den, &
+                                cp, z, corner_g, zfac, np, me)
+      end do
+    end do
+    !$omp end target teams distribute parallel do
+
+  end subroutine solve_reduced_lines
+
+  subroutine solve_reduced_line(i, b, nl, x_s, x_e, rows, lo, den, cp, z, &
+                                corner_g, zfac, np, me)
+    !$omp declare target
+    integer, intent(in) :: i, b, nl, np, me
+    real(dp), intent(inout) :: x_s(SZ, 1, *), x_e(SZ, 1, *)
+    real(dp), intent(inout) :: rows(nl, 2, *)
+    real(dp), intent(in) :: lo(*), den(*), cp(*), z(*)
+    real(dp), intent(in) :: corner_g, zfac
+
+    integer :: l, p
+    real(dp) :: r, fact
+
+    l = (b - 1)*SZ + i
+
+    ! Forward sweep, carrying the previous row in r
+    r = 0._dp
+    do p = 0, np - 1
+      r = (rows(l, 1, p + 1) - lo(2*p + 1)*r)/den(2*p + 1)
+      rows(l, 1, p + 1) = r
+      r = (rows(l, 2, p + 1) - lo(2*p + 2)*r)/den(2*p + 2)
+      rows(l, 2, p + 1) = r
+    end do
+
+    ! Backward sweep; r enters as row 2*np, which is final
+    do p = np - 1, 0, -1
+      if (p < np - 1) then
+        r = rows(l, 2, p + 1) - cp(2*p + 2)*r
+        rows(l, 2, p + 1) = r
+      end if
+      r = rows(l, 1, p + 1) - cp(2*p + 1)*r
+      rows(l, 1, p + 1) = r
+    end do
+
+    ! Sherman-Morrison correction; r is now row 1
+    fact = (r + corner_g*rows(l, 2, np))/zfac
+    x_s(i, 1, b) = rows(l, 1, me + 1) - fact*z(2*me + 1)
+    x_e(i, 1, b) = rows(l, 2, me + 1) - fact*z(2*me + 2)
+
+  end subroutine solve_reduced_line
 
   ! --------------------------------------------------------------------------
   ! Fused transport equation kernels

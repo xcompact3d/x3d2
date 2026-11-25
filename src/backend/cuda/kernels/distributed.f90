@@ -222,6 +222,83 @@ contains
 
   end subroutine der_univ_subs_exact
 
+  attributes(global) subroutine pack_reduced_rows(rows, d_s, d_e)
+    !! Pack this rank's rows of the reduced system for the gather of
+    !! m_cuda_dist_reduced: the first values after the first phase of the nl
+    !! lines, then the last values, as m_dist_reduced lays them out.
+    implicit none
+
+    real(dp), device, intent(out), dimension(:) :: rows
+    real(dp), device, intent(in), dimension(:, :, :) :: d_s, d_e
+
+    integer :: i, b, l, nl
+
+    i = threadIdx%x
+    b = blockIdx%x
+    nl = blockDim%x*gridDim%x
+    l = (b - 1)*blockDim%x + i
+
+    rows(l) = d_s(i, 1, b)
+    rows(nl + l) = d_e(i, 1, b)
+
+  end subroutine pack_reduced_rows
+
+  attributes(global) subroutine solve_reduced_lines(x_s, x_e, rows, lo, &
+                                                    den, cp, z, corner_g, &
+                                                    zfac, np, me)
+    !! Solve the reduced system of the distributed solver exactly, one thread
+    !! per line, with the factorisation of reduced_lu_t (m_dist_reduced).
+    !! rows holds the packed rows of every rank along the direction, rank p's
+    !! at 2*nl*p: the nl first values, then the nl last values. They are rows
+    !! 2p + 1 and 2p + 2 of the system, and the solve overwrites them. x_s and
+    !! x_e get this rank's unknowns.
+    implicit none
+
+    real(dp), device, intent(out), dimension(:, :, :) :: x_s, x_e
+    real(dp), device, intent(inout), dimension(:) :: rows
+    real(dp), device, intent(in), dimension(:) :: lo, den, cp, z
+    real(dp), value, intent(in) :: corner_g, zfac
+    integer, value, intent(in) :: np, me
+
+    integer :: i, b, l, nl, p, ks, ke
+    real(dp) :: r, fact
+
+    i = threadIdx%x
+    b = blockIdx%x
+    nl = blockDim%x*gridDim%x
+    l = (b - 1)*blockDim%x + i
+
+    ! Forward sweep, carrying the previous row in r
+    r = 0._dp
+    do p = 0, np - 1
+      ks = 2*nl*p + l
+      ke = ks + nl
+      r = (rows(ks) - lo(2*p + 1)*r)/den(2*p + 1)
+      rows(ks) = r
+      r = (rows(ke) - lo(2*p + 2)*r)/den(2*p + 2)
+      rows(ke) = r
+    end do
+
+    ! Backward sweep; r enters as row 2*np, which is final
+    do p = np - 1, 0, -1
+      ks = 2*nl*p + l
+      ke = ks + nl
+      if (p < np - 1) then
+        r = rows(ke) - cp(2*p + 2)*r
+        rows(ke) = r
+      end if
+      r = rows(ks) - cp(2*p + 1)*r
+      rows(ks) = r
+    end do
+
+    ! Sherman-Morrison correction; r is now row 1
+    fact = (r + corner_g*rows(2*nl*(np - 1) + nl + l))/zfac
+    ks = 2*nl*me + l
+    x_s(i, 1, b) = rows(ks) - fact*z(2*me + 1)
+    x_e(i, 1, b) = rows(ks + nl) - fact*z(2*me + 2)
+
+  end subroutine solve_reduced_lines
+
   attributes(global) subroutine transeq_3fused_dist( &
     du, dud, d2u, &
     send_du_s, send_du_e, send_dud_s, send_dud_e, send_d2u_s, send_d2u_e, &
