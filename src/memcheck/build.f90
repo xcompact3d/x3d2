@@ -8,7 +8,6 @@ module m_memcheck_build
   use m_base_case, only: base_case_t
   use m_case_factory, only: allocate_flow_case, is_supported_flow_case
   use m_field, only: flist_t
-  use m_ibm, only: ibm_mask_filename
   use m_monitoring, only: monitoring_default_enabled
   use m_scalar_series, only: scalar_series_default_enabled
   use m_case_abl, only: case_abl_t
@@ -38,7 +37,6 @@ contains
     type(memcheck_ctx_t), intent(in) :: ctx
     logical, intent(out) :: ok
 
-    character(len=16) :: ibm_file
     logical :: ibm_file_exists, input_exists
 
     ok = .false.
@@ -57,13 +55,11 @@ contains
     end if
 
     if (ctx%solver_cfg%ibm_on) then
-      ibm_file = ibm_mask_filename([ctx%periodic_x, ctx%periodic_y, &
-                                    ctx%periodic_z])
-      inquire (file=trim(ibm_file), exist=ibm_file_exists)
+      inquire (file=trim(ctx%solver_cfg%ibm_file), exist=ibm_file_exists)
       if (.not. ibm_file_exists) then
-        call log_info('Real build skipped: ibm_on=T but the matching &
-          &ibm_<BC-suffix>.bp mask file was not found in the &
-          &working directory; the estimate above stands.')
+        call log_info('Real build skipped: ibm_on=T but the ibm_file '// &
+                      trim(ctx%solver_cfg%ibm_file)//' was not found; &
+                      &the estimate above stands.')
         return
       end if
     end if
