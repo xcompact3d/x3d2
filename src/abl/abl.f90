@@ -11,7 +11,7 @@ module m_abl
 !! without overwriting other momentum terms.
   use m_allocator, only: allocator_t
   use m_base_backend, only: base_backend_t
-  use m_common, only: dp, pi, DIR_C, DIR_X, VERT
+  use m_common, only: dp, pi, DIR_C, DIR_X, VERT, MPI_X3D2_DP
   use m_config, only: abl_config_t
   use m_field, only: field_t
   use m_logger, only: log_info, abort_run, str
@@ -32,20 +32,29 @@ module m_abl
     type(abl_config_t) :: cfg
     ! Cached Rayleigh damping coefficient field (coeff*lambda(y)), built once.
     class(field_t), pointer :: damp_coeff => null()
-    ! Shifted periodic fringe, set up by configure_shifted_periodic: the
-    ! source band starts at x vertex fringe_start, the blended band
-    ! fringe_offset vertices further on, with weights fringe_lambda.
+    ! Fringe region(s), set up by configure_fringe: the source band starts
+    ! at x vertex fringe_start, with weights fringe_lambda. The shifted
+    ! periodic band is blended shift_offset vertices further on, the
+    ! concurrent precursor band concurrent_offset vertices further on.
     integer :: fringe_start = 0
-    integer :: fringe_offset = 0
+    integer :: shift_offset = 0
+    integer :: concurrent_offset = 0
     integer :: fringe_nshift = 0
     real(dp), allocatable :: fringe_lambda(:)
     !> Rank holding each global z plane
     integer, allocatable :: z_plane_rank(:)
+    !> Concurrent precursor: 1 in the precursor region x < precursor_length,
+    !> 0 in the successor region
+    class(field_t), pointer :: precursor_mask => null()
+    !> Number of global x vertices in the precursor region
+    integer :: n_precursor = 0
   contains
     procedure :: initialise
     procedure :: apply_forcing
-    procedure :: configure_shifted_periodic
-    procedure :: apply_shifted_periodic
+    procedure :: configure_fringe
+    procedure :: apply_fringe
+    procedure :: bulk_plane_means
+    procedure :: shift_bulk_velocity
     procedure :: configure_wall_boundary_correction
     procedure :: apply_damping
     procedure :: build_damping
@@ -188,9 +197,16 @@ contains
     f = self%cfg%coriolis_freq
 
     ! Driving force: pressure gradient, or the geostrophic-balance term when
-    ! the pressure gradient is off.
+    ! the pressure gradient is off. With a concurrent precursor the pressure
+    ! gradient drives the precursor region only; as in Incompact3d, the
+    ! Coriolis terms are not masked.
     if (self%cfg%pressure_gradient) then
-      call self%backend%field_shift(du, self%cfg%u_star**2/self%cfg%delta)
+      if (self%cfg%concurrent_precursor) then
+        call self%backend%vecadd(self%cfg%u_star**2/self%cfg%delta, &
+                                 self%precursor_mask, 1._dp, du)
+      else
+        call self%backend%field_shift(du, self%cfg%u_star**2/self%cfg%delta)
+      end if
     else if (self%cfg%coriolis) then
       call self%backend%field_shift(du, -f*self%cfg%u_geo(3))
       call self%backend%field_shift(dw, f*self%cfg%u_geo(1))
@@ -255,14 +271,15 @@ contains
   end subroutine apply_damping
 
   subroutine build_damping(self)
-    !! Precomputes the damping coefficient coeff*lambda(y), constant in x/z.
+    !! Precomputes the damping coefficient coeff*lambda(y), constant in x/z,
+    !! or zero in the successor region of a concurrent precursor.
     implicit none
 
     class(abl_t) :: self
 
     class(field_t), pointer :: h
     integer :: i, j, k, dims(3)
-    real(dp) :: coords(3), y, coeff, dheight, ylo, yhi, lambda
+    real(dp) :: coords(3), x, y, coeff, dheight, ylo, yhi, lambda
     ! Nondimensional relaxation rate, as hard-coded in Incompact3d's
     ! damping_zone (wvar = fifteen). It is empirical: there it replaced a
     ! commented-out formula that is singular when the domain height equals
@@ -293,6 +310,10 @@ contains
           else
             lambda = 0._dp
           end if
+          ! Incompact3d damping_zone: no damping where x >= pdl
+          x = real(self%mesh%par%n_offset(1) + i - 1, dp)*self%mesh%geo%d(1)
+          if (self%cfg%concurrent_precursor .and. &
+              x >= self%cfg%precursor_length) lambda = 0._dp
           h%data(i, j, k) = coeff*lambda
         end do
       end do
@@ -336,37 +357,78 @@ contains
       sample_weight)
   end subroutine configure_wall_boundary_correction
 
-  subroutine configure_shifted_periodic(self)
-    !! Set up the Incompact3d shifted periodic fringe (fringe_region with
-    !! ishiftedper = 1, iconcprec = 0). Over the last third of a periodic-x
-    !! domain the flow is blended towards the flow a third of the domain
-    !! upstream, shifted spanwise by Lz/8, so streaks cannot lock onto the
-    !! periodic box. The ramp and band sizes follow the legacy code exactly.
+  subroutine configure_fringe(self)
+    !! Set up Incompact3d's fringe_region for the shifted periodic
+    !! (ishiftedper) and concurrent precursor (iconcprec) options, alone or
+    !! together. The ramp and band sizes follow the legacy code exactly.
+    !!
+    !! Shifted periodic alone: over the last third of the periodic-x domain
+    !! the flow is blended towards the flow a third of the domain upstream,
+    !! shifted spanwise by Lz/8, so streaks cannot lock onto the periodic box.
+    !!
+    !! Concurrent precursor: the domain holds a precursor region
+    !! x < precursor_length and a successor region behind it. The end of the
+    !! successor region is blended back into the end of the precursor
+    !! region, so the precursor's inlet (the domain outlet, through the
+    !! periodic boundary) never sees the successor's flow. With shifted
+    !! periodic as well, the precursor region has its own shifted periodic
+    !! fringe, and the successor band takes the shifted flow too.
     implicit none
 
     class(abl_t), intent(inout) :: self
 
+    class(field_t), pointer :: h
     real(dp), allocatable :: lambda(:)
-    real(dp) :: lx, dx, x, fre, frs, frd
-    integer :: global_dims(3), dims(3), nx, nz, nfe, i, i_first, z_offset
-    integer :: ierr
+    real(dp) :: lx, dx, x, pdl, fre, frs, frd
+    integer :: global_dims(3), dims(3), nx, nz, nfe, npe, i, j, k, i_first
+    integer :: z_offset, ierr
+    logical :: shifted, concurrent
+
+    shifted = self%cfg%shifted_periodic
+    concurrent = self%cfg%concurrent_precursor
+    if (.not. (shifted .or. concurrent)) return
 
     if (self%mesh%par%nproc_dir(1) /= 1) &
-      call abort_run('ABL shifted_periodic requires an undecomposed x &
-                     &direction.')
+      call abort_run('ABL shifted_periodic and concurrent_precursor require &
+                     &an undecomposed x direction.')
 
     global_dims = self%mesh%get_global_dims(VERT)
     nx = global_dims(1)
     nz = global_dims(3)
     lx = self%mesh%geo%L(1)
     dx = self%mesh%geo%d(1)
+    pdl = self%cfg%precursor_length
 
-    self%fringe_nshift = int(self%mesh%geo%L(3)/8._dp/self%mesh%geo%d(3))
-    if (self%fringe_nshift < 1) &
-      call abort_run('ABL shifted_periodic needs at least 8 z points.')
+    if (shifted) then
+      self%fringe_nshift = int(self%mesh%geo%L(3)/8._dp/self%mesh%geo%d(3))
+      if (self%fringe_nshift < 1) &
+        call abort_run('ABL shifted_periodic needs at least 8 z points.')
+    else
+      self%fringe_nshift = 0
+    end if
+
+    if (concurrent) then
+      if (pdl >= lx) &
+        call abort_run('ABL precursor_length must be less than the domain &
+                       &length in x.')
+      ! Vertices with x = (i - 1)*dx < precursor_length
+      self%n_precursor = 0
+      do i = 1, nx
+        if (real(i - 1, dp)*dx < pdl) self%n_precursor = i
+      end do
+    end if
 
     ! Legacy edl = 2/3 and frl = 1/6
-    fre = lx*2._dp/3._dp
+    if (shifted .and. .not. concurrent) then
+      fre = lx*2._dp/3._dp
+      npe = nx
+    else if (shifted .and. concurrent) then
+      fre = pdl*2._dp/3._dp
+      npe = int(nx*pdl/lx)
+    else
+      fre = pdl
+      npe = 0
+    end if
     frs = fre - fre/6._dp
     frd = fre - frs
     nfe = int(nx*fre/lx)
@@ -389,11 +451,24 @@ contains
       if (lambda(i) > 0._dp) i_first = i
     end do
     if (i_first == 0) &
-      call abort_run('ABL shifted_periodic fringe is narrower than one &
-                     &grid spacing.')
+      call abort_run('ABL fringe region is narrower than one grid spacing.')
     self%fringe_start = i_first
-    self%fringe_offset = nx - nfe
     self%fringe_lambda = lambda(i_first:nfe)
+
+    ! The blended bands must lie downstream of the source band, which is
+    ! read before it is blended, and the concurrent precursor band in the
+    ! successor region
+    if (shifted) then
+      self%shift_offset = npe - nfe
+      if (i_first + self%shift_offset <= nfe) &
+        call abort_run('ABL shifted periodic fringe overlaps its source.')
+    end if
+    if (concurrent) then
+      self%concurrent_offset = nx - nfe
+      if (i_first + self%concurrent_offset <= self%n_precursor) &
+        call abort_run('ABL concurrent precursor fringe reaches into the &
+                       &precursor region: shorten precursor_length.')
+    end if
 
     ! x and y are whole on every rank, so each rank holds one z block
     dims = self%mesh%get_dims(VERT)
@@ -404,29 +479,119 @@ contains
     call MPI_Allreduce(MPI_IN_PLACE, self%z_plane_rank, nz, MPI_INTEGER, &
                        MPI_SUM, MPI_COMM_WORLD, ierr)
 
-    call log_info('ABL shifted periodic: spanwise shift of ' &
-                  //str(self%fringe_nshift)//' planes, x vertices ' &
-                  //str(i_first)//'-'//str(nfe)//' blended into ' &
-                  //str(i_first + self%fringe_offset)//'-'//str(nx))
-  end subroutine configure_shifted_periodic
+    if (shifted) &
+      call log_info('ABL shifted periodic: spanwise shift of ' &
+                    //str(self%fringe_nshift)//' planes, x vertices ' &
+                    //str(i_first)//'-'//str(nfe)//' blended into ' &
+                    //str(i_first + self%shift_offset)//'-' &
+                    //str(nfe + self%shift_offset))
 
-  subroutine apply_shifted_periodic(self, u, v, w)
-    !! Apply the shifted periodic fringe to the velocity, at the start of
-    !! each stage as Incompact3d does from boundary_conditions_abl.
+    if (concurrent) then
+      self%precursor_mask => self%backend%allocator%get_block(DIR_X, VERT)
+      call self%precursor_mask%set_data_loc(VERT)
+      h => self%host_allocator%get_block(DIR_C)
+      do k = 1, dims(3)
+        do j = 1, dims(2)
+          do i = 1, dims(1)
+            if (i <= self%n_precursor) then
+              h%data(i, j, k) = 1._dp
+            else
+              h%data(i, j, k) = 0._dp
+            end if
+          end do
+        end do
+      end do
+      call self%backend%set_field_data(self%precursor_mask, h%data)
+      call self%host_allocator%release_block(h)
+
+      call log_info('ABL concurrent precursor: x vertices 1-' &
+                    //str(self%n_precursor)//' forced, x vertices ' &
+                    //str(i_first)//'-'//str(nfe)//' blended into ' &
+                    //str(i_first + self%concurrent_offset)//'-'//str(nx))
+    end if
+  end subroutine configure_fringe
+
+  subroutine apply_fringe(self, u, v, w)
+    !! Apply the fringe region(s) to the velocity, at the start of each
+    !! stage as Incompact3d does from boundary_conditions_abl.
+    !!
+    !! Incompact3d blends both bands from a copy of the field taken before
+    !! either blend. Here the bands are blended one after the other, which is
+    !! the same because configure_fringe checks that neither blended band
+    !! overlaps the source band.
     implicit none
 
     class(abl_t) :: self
     class(field_t), intent(inout) :: u, v, w
 
-    call self%backend%field_shift_blend_x_band( &
-      u, self%fringe_lambda, self%fringe_start, self%fringe_offset, &
-      self%fringe_nshift, self%z_plane_rank)
-    call self%backend%field_shift_blend_x_band( &
-      v, self%fringe_lambda, self%fringe_start, self%fringe_offset, &
-      self%fringe_nshift, self%z_plane_rank)
-    call self%backend%field_shift_blend_x_band( &
-      w, self%fringe_lambda, self%fringe_start, self%fringe_offset, &
-      self%fringe_nshift, self%z_plane_rank)
-  end subroutine apply_shifted_periodic
+    call blend(u)
+    call blend(v)
+    call blend(w)
+
+  contains
+
+    subroutine blend(f)
+      class(field_t), intent(inout) :: f
+
+      if (self%cfg%shifted_periodic) &
+        call self%backend%field_shift_blend_x_band( &
+        f, self%fringe_lambda, self%fringe_start, self%shift_offset, &
+        self%fringe_nshift, self%z_plane_rank)
+      if (self%cfg%concurrent_precursor) &
+        call self%backend%field_shift_blend_x_band( &
+        f, self%fringe_lambda, self%fringe_start, self%concurrent_offset, &
+        self%fringe_nshift, self%z_plane_rank)
+    end subroutine blend
+
+  end subroutine apply_fringe
+
+  subroutine bulk_plane_means(self, means, u)
+    !! Mean of u over x and z on each y plane, for the mass_conserve bulk
+    !! velocity. With a concurrent precursor the mean is over the precursor
+    !! region only (Incompact3d forceabl). Incompact3d divides the sum by
+    !! the whole domain and scales by Lx/pdl; dividing by the precursor's
+    !! vertex count is the same when pdl is a multiple of dx, and the exact
+    !! mean otherwise.
+    implicit none
+
+    class(abl_t) :: self
+    real(dp), intent(out) :: means(:)
+    class(field_t), intent(in) :: u
+
+    class(field_t), pointer :: tmp
+    integer :: global_dims(3), n_columns, ierr
+
+    global_dims = self%mesh%get_global_dims(VERT)
+    if (self%cfg%concurrent_precursor) then
+      tmp => self%backend%allocator%get_block(DIR_X, VERT)
+      call self%backend%veccopy(tmp, u)
+      call self%backend%vecmult(tmp, self%precursor_mask)
+      call self%backend%field_plane_sums(means, tmp)
+      call self%backend%allocator%release_block(tmp)
+      n_columns = self%n_precursor*global_dims(3)
+    else
+      call self%backend%field_plane_sums(means, u)
+      n_columns = global_dims(1)*global_dims(3)
+    end if
+    call MPI_Allreduce(MPI_IN_PLACE, means, size(means), MPI_X3D2_DP, &
+                       MPI_SUM, MPI_COMM_WORLD, ierr)
+    means = means/real(n_columns, dp)
+  end subroutine bulk_plane_means
+
+  subroutine shift_bulk_velocity(self, u, shift)
+    !! Add the mass_conserve correction to u: everywhere, or in the
+    !! precursor region only with a concurrent precursor.
+    implicit none
+
+    class(abl_t) :: self
+    class(field_t), intent(inout) :: u
+    real(dp), intent(in) :: shift
+
+    if (self%cfg%concurrent_precursor) then
+      call self%backend%vecadd(shift, self%precursor_mask, 1._dp, u)
+    else
+      call self%backend%field_shift(u, shift)
+    end if
+  end subroutine shift_bulk_velocity
 
 end module m_abl

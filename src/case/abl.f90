@@ -4,13 +4,12 @@ module m_case_abl
   use m_abl_diagnostics, only: abl_diagnostics_t
   use m_base_backend, only: base_backend_t
   use m_base_case, only: base_case_t
-  use m_common, only: dp, get_argument, MPI_X3D2_DP, DIR_X, VERT, &
+  use m_common, only: dp, get_argument, DIR_X, VERT, &
                       X_FACE, Y_FACE, BC_DIRICHLET, BC_NEUMANN, BC_PERIODIC
   use m_config, only: abl_config_t, inflow_config_t, wind_turbine_config_t
   use m_field, only: field_t
   use m_inflow_planes, only: inflow_plane_writer_t, inflow_plane_reader_t
   use m_mesh, only: mesh_t
-  use m_mpi, only: MPI_COMM_WORLD, MPI_IN_PLACE, MPI_SUM, MPI_Allreduce
   use m_logger, only: log_info, abort_run, str
   use m_turbine_model, only: turbine_model_t
   use m_turbine_setup, only: init_turbine_model, finalise_turbine_model
@@ -105,13 +104,14 @@ contains
       call abort_run('ABL config error: enable pressure_gradient, coriolis, &
                      &or mass_conserve, or read inflow planes.', &
                      collective=.true.)
-    if (flow_case%abl_cfg%shifted_periodic .and. &
+    if ((flow_case%abl_cfg%shifted_periodic .or. &
+         flow_case%abl_cfg%concurrent_precursor) .and. &
         flow_case%inflow_cfg%read_planes) &
-      call abort_run('ABL shifted_periodic needs a periodic x direction; it &
-                     &cannot be used with read_planes.', collective=.true.)
+      call abort_run('ABL shifted_periodic and concurrent_precursor need a &
+                     &periodic x direction; they cannot be used with &
+                     &read_planes.', collective=.true.)
     flow_case%abl = abl_t(backend, mesh, host_allocator, flow_case%abl_cfg)
-    if (flow_case%abl_cfg%shifted_periodic) &
-      call flow_case%abl%configure_shifted_periodic()
+    call flow_case%abl%configure_fringe()
 
     call flow_case%case_init(backend, mesh, host_allocator)
     flow_case%solver%keep_wall_correction = .true.
@@ -160,7 +160,7 @@ contains
 
     real(dp) :: ub, target_mean, can, ly
     real(dp), allocatable :: sums(:)
-    integer :: dims(3), global_dims(3), j, ierr
+    integer :: dims(3), j
 
     ! Constant-flow-rate correction (Incompact3d forceabl); mirrors the channel
     ! bulk-velocity shift, targeting the log-law flow rate. The wall stress
@@ -171,13 +171,11 @@ contains
       ! over y with the trapezoidal rule on the vertices. A plain vertex sum
       ! would give the free-slip lid full weight. y is not decomposed (see
       ! configure_wall_boundary_correction), so each rank holds every plane.
+      ! With a concurrent precursor the mean and the shift cover the
+      ! precursor region only.
       dims = self%solver%mesh%get_dims(VERT)
-      global_dims = self%solver%mesh%get_global_dims(VERT)
       allocate (sums(dims(2)))
-      call self%solver%backend%field_plane_sums(sums, self%solver%u)
-      call MPI_Allreduce(MPI_IN_PLACE, sums, dims(2), MPI_X3D2_DP, &
-                         MPI_SUM, MPI_COMM_WORLD, ierr)
-      sums = sums/real(global_dims(1)*global_dims(3), dp)
+      call self%abl%bulk_plane_means(sums, self%solver%u)
       ub = 0._dp
       do j = 1, dims(2) - 1
         ub = ub + 0.5_dp*(sums(j) + sums(j + 1)) &
@@ -193,14 +191,14 @@ contains
                         - self%abl_cfg%delta)/ly
       end if
       can = target_mean - ub
-      call self%solver%backend%field_shift(self%solver%u, can)
+      call self%abl%shift_bulk_velocity(self%solver%u, can)
     end if
 
     ! After the flow-rate correction, as in Incompact3d
     ! boundary_conditions_abl
-    if (self%abl_cfg%shifted_periodic) &
-      call self%abl%apply_shifted_periodic(self%solver%u, self%solver%v, &
-                                           self%solver%w)
+    if (self%abl_cfg%shifted_periodic .or. &
+        self%abl_cfg%concurrent_precursor) &
+      call self%abl%apply_fringe(self%solver%u, self%solver%v, self%solver%w)
 
     ! The flow-rate correction is left to apply_BC, which sees the field
     ! the stamp is applied to

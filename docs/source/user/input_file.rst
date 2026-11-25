@@ -169,6 +169,8 @@ are set in the ``abl_nml`` namelist block.
      u_bulk = 0.0
      damping = .false.
      shifted_periodic = .false.
+     concurrent_precursor = .false.
+     precursor_length = 0.0
      profile_start_iter = -1
      profile_file = 'abl_profile.csv'
    /
@@ -237,10 +239,41 @@ the run is a successor driven by precursor inflow planes (see below).
   (x - x_s)/d\right)\right)` from :math:`x_s = 5L_x/9` and is one over the
   last quarter of :math:`d = L_x/9`, measured on the upstream copy.
   Requires periodic x, an undecomposed x direction and at least 8 z points.
-  The source band is shifted on the host, so each substep copies ``u``,
-  ``v`` and ``w`` to the host and back.
+  With ``concurrent_precursor`` the fringe is sized from
+  ``precursor_length`` instead of :math:`L_x` (see below).
 
   **Default:** ``.false.``
+
+``concurrent_precursor``
+  Incompact3d's ``iconcprec``. The periodic-x domain holds a precursor region
+  :math:`x < L_p`, with :math:`L_p` = ``precursor_length``, and a successor
+  region behind it, where turbines can be placed. Only the precursor region
+  is driven: the ``pressure_gradient`` force, the ``mass_conserve`` mean and
+  shift, and the ``damping`` layer act on :math:`x < L_p` only, and the
+  ``mass_conserve`` bulk velocity is the mean over that region. The
+  ``coriolis`` terms act everywhere. At the start of every substep the end
+  of the domain is blended towards the flow at the end of the precursor
+  region, so the flow re-entering the precursor through the periodic
+  boundary carries no wakes. The blending weight is the ``shifted_periodic`` ramp with
+  :math:`L_x` replaced by :math:`3L_p/2`, so it rises from
+  :math:`x_s = 5L_p/6` over :math:`d = L_p/6`; the band :math:`[x_s, L_p)`
+  is blended into the last :math:`L_p/6` of the domain. With
+  ``shifted_periodic`` as well, the precursor region gets its own shifted
+  periodic fringe over its last third (:math:`L_x` replaced by :math:`L_p`),
+  and the end of the domain is blended towards the spanwise-shifted band
+  :math:`[5L_p/9, 2L_p/3)`. Requires periodic x and an undecomposed x
+  direction, and the blended band must lie in the successor region, which
+  holds for :math:`L_p` up to about :math:`6L_x/7` (:math:`9L_x/10` with
+  ``shifted_periodic``).
+
+  **Default:** ``.false.``
+
+``precursor_length``
+  Length :math:`L_p` of the precursor region for ``concurrent_precursor``
+  (Incompact3d ``pdl``), in m. Must be positive and less than :math:`L_x`.
+  The precursor region is the x vertices with :math:`(i-1)\Delta x < L_p`.
+
+  **Default:** ``0.0``
 
 Physical parameters
 ^^^^^^^^^^^^^^^^^^^
