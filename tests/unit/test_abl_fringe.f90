@@ -309,7 +309,7 @@ contains
     end do
     print *, 'precursor pressure gradient max error', err_f, &
       'damping', err_d
-    if (err_f > 1e-14_dp .or. err_d > 1e-14_dp) all_pass = .false.
+    if (max(err_f, err_d) > 10._dp*epsilon(1._dp)*coeff) all_pass = .false.
     ! The test must reach the damping layer
     if (maxval(abs(host(1:dims(1), 1:dims(2), 1:dims(3)))) < 0.5_dp*coeff) &
       all_pass = .false.
