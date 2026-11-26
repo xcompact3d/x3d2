@@ -216,9 +216,11 @@ contains
 
   end subroutine memcpy3D_with_transpose_back
 
-  attributes(global) subroutine transpose_xyz_to_zxy(dst, src, nx, ny, nz)
+  attributes(global) subroutine transpose_xyz_to_zxy(dst, src, nx, ny, nz, &
+                                                     fold_z)
     !! Transpose: src(nx, ny, nz) → dst(nz, nx, ny)
-    !! Used before R2C FFT for 110 case to put Z (periodic) in fast dim.
+    !! Used before R2C FFT for the 110 and 111 cases to put Z in the fast
+    !! dim. With fold_z (111), Z is folded on the way (see fold_destination).
     !!
     !! Launch: blocks=dim3(nz, (ny-1)/tpb+1, 1), threads=dim3(tpb,1,1)
     !! Each thread handles one (k,j) pair, loops over i.
@@ -227,23 +229,29 @@ contains
     real(dp), device, intent(out), dimension(:, :, :) :: dst  ! (nz, nx, ny)
     real(dp), device, intent(in), dimension(:, :, :) :: src   ! (nx, ny, nz)
     integer, value, intent(in) :: nx, ny, nz
+    logical, value, intent(in) :: fold_z
 
-    integer :: i, j, k
+    integer :: i, j, k, kd
 
     k = blockIdx%x                                          ! nz
     j = (blockIdx%y - 1)*blockDim%x + threadIdx%x           ! ny
 
+    kd = k
+    if (fold_z) kd = fold_destination(k, nz)
+
     if (j <= ny) then
       do i = 1, nx
-        dst(k, i, j) = src(i, j, k)
+        dst(kd, i, j) = src(i, j, k)
       end do
     end if
 
   end subroutine transpose_xyz_to_zxy
 
-  attributes(global) subroutine transpose_zxy_to_xyz(dst, src, nx, ny, nz)
+  attributes(global) subroutine transpose_zxy_to_xyz(dst, src, nx, ny, nz, &
+                                                     fold_z)
     !! Transpose back: src(nz, nx, ny) -> dst(nx, ny, nz)
-    !! Used after C2R FFT for 110 case.
+    !! Used after C2R FFT for the 110 and 111 cases, undoing the Z fold of
+    !! transpose_xyz_to_zxy with fold_z.
     !!
     !! Launch: blocks=dim3(nz, (ny-1)/tpb+1, 1), threads=dim3(tpb,1,1)
     implicit none
@@ -251,15 +259,19 @@ contains
     real(dp), device, intent(out), dimension(:, :, :) :: dst  ! (nx, ny, nz)
     real(dp), device, intent(in), dimension(:, :, :) :: src   ! (nz, nx, ny)
     integer, value, intent(in) :: nx, ny, nz
+    logical, value, intent(in) :: fold_z
 
-    integer :: i, j, k
+    integer :: i, j, k, ks
 
     k = blockIdx%x                                          ! nz
     j = (blockIdx%y - 1)*blockDim%x + threadIdx%x           ! ny
 
+    ks = k
+    if (fold_z) ks = fold_destination(k, nz)
+
     if (j <= ny) then
       do i = 1, nx
-        dst(i, j, k) = src(k, i, j)
+        dst(i, j, k) = src(ks, i, j)
       end do
     end if
 
@@ -1399,27 +1411,31 @@ contains
   end subroutine pack_zslab_to_alltoall
 
   attributes(global) subroutine unpack_110_yslab( &
-    dst, recvbuf, nx, ny_l, nz_l, nproc &
+    dst, recvbuf, nx, ny_l, nz_l, nproc, fold_z &
     )
     !! Unpacks the MPI_Alltoall receive buffer into the padded real view
     !! (2*(nz/2+1), nx, ny_l) of the cuFFTMp Y-slab descriptor: data
     !! received from source rank s reconstructs the global Z range
-    !! [s*nz_l+1, (s+1)*nz_l].
+    !! [s*nz_l+1, (s+1)*nz_l]. With fold_z (111), Z is folded on the way
+    !! (see fold_destination), since this is where Z is first whole.
     implicit none
 
     real(dp), device, intent(inout), dimension(:, :, :) :: dst ! (2*(nz/2+1), nx, ny_l)
     real(dp), device, intent(in), dimension(:, :, :, :) :: recvbuf ! (nz_l, nx, ny_l, nproc)
     integer, value, intent(in) :: nx, ny_l, nz_l, nproc
+    logical, value, intent(in) :: fold_z
 
-    integer :: i, j, k, s
+    integer :: i, j, k, s, kd
 
     k = blockIdx%x                                  ! nz_l
     j = (blockIdx%y - 1)*blockDim%x + threadIdx%x    ! ny_l
 
     if (j <= ny_l) then
       do s = 0, nproc - 1
+        kd = s*nz_l + k
+        if (fold_z) kd = fold_destination(kd, nproc*nz_l)
         do i = 1, nx
-          dst(s*nz_l + k, i, j) = recvbuf(k, i, j, s + 1)
+          dst(kd, i, j) = recvbuf(k, i, j, s + 1)
         end do
       end do
     end if
@@ -1427,26 +1443,30 @@ contains
   end subroutine unpack_110_yslab
 
   attributes(global) subroutine pack_110_yslab( &
-    sendbuf, src, nx, ny_l, nz_l, nproc &
+    sendbuf, src, nx, ny_l, nz_l, nproc, fold_z &
     )
     !! Inverse of unpack_110_yslab: packs the Y-slab real view into the
     !! MPI_Alltoall send buffer, selecting for each destination rank s the
-    !! Z range it originally owned in the physical Z-slab layout.
+    !! Z range it originally owned in the physical Z-slab layout, and
+    !! undoing the Z fold with fold_z.
     implicit none
 
     real(dp), device, intent(out), dimension(:, :, :, :) :: sendbuf ! (nz_l, nx, ny_l, nproc)
     real(dp), device, intent(in), dimension(:, :, :) :: src ! (2*(nz/2+1), nx, ny_l)
     integer, value, intent(in) :: nx, ny_l, nz_l, nproc
+    logical, value, intent(in) :: fold_z
 
-    integer :: i, j, k, s
+    integer :: i, j, k, s, ks
 
     k = blockIdx%x                                  ! nz_l
     j = (blockIdx%y - 1)*blockDim%x + threadIdx%x    ! ny_l
 
     if (j <= ny_l) then
       do s = 0, nproc - 1
+        ks = s*nz_l + k
+        if (fold_z) ks = fold_destination(ks, nproc*nz_l)
         do i = 1, nx
-          sendbuf(k, i, j, s + 1) = src(s*nz_l + k, i, j)
+          sendbuf(k, i, j, s + 1) = src(ks, i, j)
         end do
       end do
     end if
@@ -1684,5 +1704,23 @@ contains
     end if
 
   end function fold_index
+
+  attributes(device) integer function fold_destination(i, n) result(dst)
+    !! Where entry i of a non-periodic line of n points lands when the line
+    !! is gathered by fold_index: the inverse permutation. The odd entries
+    !! fill the first half in order, the even entries the second half in
+    !! reverse. Used where a kernel moves the whole line in one pass and
+    !! the fold rides along with it, as the Z fold of the 111 case does.
+    implicit none
+
+    integer, value, intent(in) :: i, n
+
+    if (mod(i, 2) == 1) then
+      dst = (i + 1)/2
+    else
+      dst = n - i/2 + 1
+    end if
+
+  end function fold_destination
 
 end module m_cuda_spectral

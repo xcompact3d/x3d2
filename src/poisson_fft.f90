@@ -2,13 +2,20 @@ module m_poisson_fft
   use m_common, only: dp, pi, CELL
   use m_field, only: field_t
   use m_mesh, only: mesh_t, geo_t, FFT_BC_000, FFT_BC_010, FFT_BC_100, &
-                    FFT_BC_110, FFT_BC_UNSUPPORTED
-  use m_tdsops, only: dirps_t
+                    FFT_BC_110, FFT_BC_111, FFT_BC_UNSUPPORTED
+  use m_tdsops, only: dirps_t, tdsops_t
   use m_logger, only: log_warn, abort_run
 
   implicit none
 
-  private :: fill_stretched_diagonals
+  private :: fill_stretched_diagonals, interp_transfer
+
+  !> The 1D factors of waves_set along one spectral dimension, see
+  !! spectral_line. The _im factors differ from the _re ones only along a
+  !! non-periodic r2c direction.
+  type, private :: spectral_line_t
+    real(dp), allocatable, dimension(:) :: k2_re, k2_im, t_re, t_im
+  end type spectral_line_t
 
   !> Stretching matrix kinds of fill_stretched_diagonals
   integer, parameter, private :: STRETCH_MAT_BOTTOM = 1, STRETCH_MAT_ODD = 2, &
@@ -52,8 +59,9 @@ module m_poisson_fft
     logical :: lowmem = .false.
   contains
     !! Each backend extends this type once per boundary condition case
-    !! (000, 010, 100, 110), and each case type supplies its own transforms,
-    !! spectral postprocess and periodicity reorder.
+    !! (000, 010, 100, and 11x for both 110 and 111), and each case type
+    !! supplies its own transforms, spectral postprocess and periodicity
+    !! reorder.
     procedure(fft_forward), deferred :: fft_forward
     procedure(fft_backward), deferred :: fft_backward
     procedure(fft_postprocess), deferred :: fft_postprocess
@@ -63,6 +71,7 @@ module m_poisson_fft
     procedure :: solve_poisson
     procedure :: stretching_matrix
     procedure :: waves_set
+    procedure, private :: spectral_line
     procedure :: get_km
     procedure :: get_km_re
     procedure :: get_km_im
@@ -137,6 +146,8 @@ contains
       fft_bc = FFT_BC_100
     case ('110')
       fft_bc = FFT_BC_110
+    case ('111')
+      fft_bc = FFT_BC_111
     case default
       fft_bc = FFT_BC_UNSUPPORTED
     end select
@@ -146,7 +157,9 @@ contains
     !! The physical direction held in each dimension of the spectral array.
     !! The r2c transform runs along dim1, so a case with x non-periodic
     !! permutes a periodic direction into dim1 ahead of the FFT: 100 swaps
-    !! x and y, 110 brings z to the front.
+    !! x and y, 110 brings z to the front. 111 has no periodic direction
+    !! and keeps the 110 layout, with z folded so that the r2c transform
+    !! stands in for a cosine transform (see waves_set).
     implicit none
 
     character(len=3), intent(in) :: bc_code
@@ -155,7 +168,7 @@ contains
     select case (bc_code)
     case ('100')
       dirs = [2, 1, 3]
-    case ('110')
+    case ('110', '111')
       dirs = [3, 1, 2]
     case default
       dirs = [1, 2, 3]
@@ -295,8 +308,8 @@ contains
     type(dirps_t), intent(in) :: xdirps, ydirps, zdirps
     integer, dimension(3), optional, intent(in) :: n_blk, blk_st
 
-    real(dp) :: temp, a0, a1
-    integer :: i, j, k, ix, iz
+    real(dp) :: a0, a1
+    integer :: i, k, ix, iz
     integer :: n(3), st(3)
 
     n = [self%nx_spec, self%ny_spec, self%nz_spec]
@@ -308,35 +321,18 @@ contains
     allocate (self%trans_y_re(n(2)), self%trans_y_im(n(2)))
     allocate (self%trans_z_re(n(3)), self%trans_z_im(n(3)))
 
-    do i = 1, n(1)
-      temp = real(self%exs(i + st(1)), kind=dp)*geo%d(1)
-      self%trans_x_re(i) = 2*(xdirps%interpl_v2p%a*cos(temp*0.5_dp) &
-                              + xdirps%interpl_v2p%b*cos(temp*1.5_dp) &
-                              + xdirps%interpl_v2p%c*cos(temp*2.5_dp) &
-                              + xdirps%interpl_v2p%d*cos(temp*3.5_dp)) &
-                           /(1._dp + 2*xdirps%interpl_v2p%alpha*cos(temp))
-      self%trans_x_im(i) = self%trans_x_re(i)
-    end do
-
-    do j = 1, n(2)
-      temp = real(self%eys(j + st(2)), kind=dp)*geo%d(2)
-      self%trans_y_re(j) = 2*(ydirps%interpl_v2p%a*cos(temp*0.5_dp) &
-                              + ydirps%interpl_v2p%b*cos(temp*1.5_dp) &
-                              + ydirps%interpl_v2p%c*cos(temp*2.5_dp) &
-                              + ydirps%interpl_v2p%d*cos(temp*3.5_dp)) &
-                           /(1._dp + 2*ydirps%interpl_v2p%alpha*cos(temp))
-      self%trans_y_im(j) = self%trans_y_re(j)
-    end do
-
-    do k = 1, n(3)
-      temp = real(self%ezs(k + st(3)), kind=dp)*geo%d(3)
-      self%trans_z_re(k) = 2*(zdirps%interpl_v2p%a*cos(temp*0.5_dp) &
-                              + zdirps%interpl_v2p%b*cos(temp*1.5_dp) &
-                              + zdirps%interpl_v2p%c*cos(temp*2.5_dp) &
-                              + zdirps%interpl_v2p%d*cos(temp*3.5_dp)) &
-                           /(1._dp + 2*zdirps%interpl_v2p%alpha*cos(temp))
-      self%trans_z_im(k) = self%trans_z_re(k)
-    end do
+    self%trans_x_re = interp_transfer( &
+                      xdirps%interpl_v2p, &
+                      real(self%exs(st(1) + 1:st(1) + n(1)), kind=dp)*geo%d(1))
+    self%trans_y_re = interp_transfer( &
+                      ydirps%interpl_v2p, &
+                      real(self%eys(st(2) + 1:st(2) + n(2)), kind=dp)*geo%d(2))
+    self%trans_z_re = interp_transfer( &
+                      zdirps%interpl_v2p, &
+                      real(self%ezs(st(3) + 1:st(3) + n(3)), kind=dp)*geo%d(3))
+    self%trans_x_im = self%trans_x_re
+    self%trans_y_im = self%trans_y_re
+    self%trans_z_im = self%trans_z_re
 
     if (trim(geo%stretching(2)) == 'bottom') then
       self%stretched_y_sym = .false.
@@ -553,18 +549,31 @@ contains
   end subroutine fill_stretched_diagonals
 
   subroutine waves_set(self, geo, xdirps, ydirps, zdirps)
-  !! Spectral equivalence constants
-  !!
-  !! Ref. JCP 228 (2009), 5989–6015, Sec 4
+    !! Spectral equivalence constants: the modified wavenumber of the
+    !! discrete div(grad) on each spectral entry,
+    !!   k2x*(ty*tz)**2 + k2y*(tx*tz)**2 + k2z*(tx*ty)**2,
+    !! where t is the transfer function of the staggered interpolation. The
+    !! expression is symmetric in the three directions, so it is built from
+    !! the 1D factors of each spectral dimension (spectral_line), whatever
+    !! direction spectral_dirs puts there.
+    !!
+    !! The real and imaginary parts differ only when the r2c direction (dim1)
+    !! is non-periodic, as in the 111 case. The r2c transform of the folded
+    !! line, with the half-shift twiddle of the postprocess, leaves the cosine
+    !! mode k in the real part of entry k and the mode N - k in its imaginary
+    !! part, so the imaginary part takes the factors of the mirrored mode.
+    !! Incompact3d's waves does the same for bcz == 1.
+    !!
+    !! Ref. JCP 228 (2009), 5989–6015, Sec 4
     implicit none
 
     class(poisson_fft_t) :: self
     type(geo_t), intent(in) :: geo
     type(dirps_t), intent(in) :: xdirps, ydirps, zdirps
 
-    integer :: i, j, k, ix, iy, iz
-    real(dp) :: rlexs, rleys, rlezs, xtt, ytt, ztt, xt1, yt1, zt1
-    complex(dp) :: xt2, yt2, zt2, xyzk
+    type(spectral_line_t) :: l1, l2, l3
+    integer :: i, j, k, dirs(3)
+    real(dp) :: w_re, w_im
 
     call wave_numbers( &
       self%ax, self%bx, self%kx, self%exs, self%k2x, &
@@ -584,131 +593,92 @@ contains
       zdirps%stagder_v2p%a, zdirps%stagder_v2p%b, zdirps%stagder_v2p%alpha &
       )
 
-    ! The spectral array is laid out as spectral_dirs gives, e.g. for 110
-    ! it is (nz/2 + 1, nx, ny): dim1 indexes the z r2c modes, dim2 the x
-    ! modes and dim3 the y modes. Each layout keeps its own loop nest with
-    ! the mode numbers written out. Mapping the indices through
-    ! spectral_dirs in one shared loop stops the compiler from vectorising
-    ! the inner loop and hoisting the other two directions out of it, which
-    ! changes waves by a few ulp under -ffast-math.
-    select case (self%bc_code)
-    case ('110')
-      do k = 1, self%nz_spec
-        do j = 1, self%ny_spec
-          do i = 1, self%nx_spec
-            iz = i + self%sp_st(1)
-            ix = j + self%sp_st(2)
-            iy = k + self%sp_st(3)
+    dirs = spectral_dirs(self%bc_code)
+    call self%spectral_line(dirs(1), geo, xdirps, ydirps, zdirps, &
+                            self%nx_spec, self%sp_st(1), .true., l1)
+    call self%spectral_line(dirs(2), geo, xdirps, ydirps, zdirps, &
+                            self%ny_spec, self%sp_st(2), .false., l2)
+    call self%spectral_line(dirs(3), geo, xdirps, ydirps, zdirps, &
+                            self%nz_spec, self%sp_st(3), .false., l3)
 
-            rlexs = real(self%exs(ix), kind=dp)*geo%d(1)
-            rleys = real(self%eys(iy), kind=dp)*geo%d(2)
-            rlezs = real(self%ezs(iz), kind=dp)*geo%d(3)
-
-            xtt = 2*(xdirps%interpl_v2p%a*cos(rlexs*0.5_dp) &
-                     + xdirps%interpl_v2p%b*cos(rlexs*1.5_dp) &
-                     + xdirps%interpl_v2p%c*cos(rlexs*2.5_dp) &
-                     + xdirps%interpl_v2p%d*cos(rlexs*3.5_dp))
-            ytt = 2*(ydirps%interpl_v2p%a*cos(rleys*0.5_dp) &
-                     + ydirps%interpl_v2p%b*cos(rleys*1.5_dp) &
-                     + ydirps%interpl_v2p%c*cos(rleys*2.5_dp) &
-                     + ydirps%interpl_v2p%d*cos(rleys*3.5_dp))
-            ztt = 2*(zdirps%interpl_v2p%a*cos(rlezs*0.5_dp) &
-                     + zdirps%interpl_v2p%b*cos(rlezs*1.5_dp) &
-                     + zdirps%interpl_v2p%c*cos(rlezs*2.5_dp) &
-                     + zdirps%interpl_v2p%d*cos(rlezs*3.5_dp))
-
-            xt1 = 1._dp + 2*xdirps%interpl_v2p%alpha*cos(rlexs)
-            yt1 = 1._dp + 2*ydirps%interpl_v2p%alpha*cos(rleys)
-            zt1 = 1._dp + 2*zdirps%interpl_v2p%alpha*cos(rlezs)
-
-            xt2 = self%k2x(ix)*((ytt/yt1)*(ztt/zt1))**2
-            yt2 = self%k2y(iy)*((xtt/xt1)*(ztt/zt1))**2
-            zt2 = self%k2z(iz)*((xtt/xt1)*(ytt/yt1))**2
-
-            xyzk = xt2 + yt2 + zt2
-            self%waves(i, j, k) = xyzk
-          end do
+    do k = 1, self%nz_spec
+      do j = 1, self%ny_spec
+        do i = 1, self%nx_spec
+          w_re = l1%k2_re(i)*(l2%t_re(j)*l3%t_re(k))**2 &
+                 + l2%k2_re(j)*(l1%t_re(i)*l3%t_re(k))**2 &
+                 + l3%k2_re(k)*(l1%t_re(i)*l2%t_re(j))**2
+          w_im = l1%k2_im(i)*(l2%t_im(j)*l3%t_im(k))**2 &
+                 + l2%k2_im(j)*(l1%t_im(i)*l3%t_im(k))**2 &
+                 + l3%k2_im(k)*(l1%t_im(i)*l2%t_im(j))**2
+          self%waves(i, j, k) = cmplx(w_re, w_im, kind=dp)
         end do
       end do
-    case ('100')
-      do k = 1, self%nz_spec
-        do j = 1, self%ny_spec
-          do i = 1, self%nx_spec
-            iy = i + self%sp_st(1)
-            ix = j + self%sp_st(2)
-            iz = k + self%sp_st(3)
-
-            rlexs = real(self%exs(ix), kind=dp)*geo%d(1)
-            rleys = real(self%eys(iy), kind=dp)*geo%d(2)
-            rlezs = real(self%ezs(iz), kind=dp)*geo%d(3)
-
-            xtt = 2*(xdirps%interpl_v2p%a*cos(rlexs*0.5_dp) &
-                     + xdirps%interpl_v2p%b*cos(rlexs*1.5_dp) &
-                     + xdirps%interpl_v2p%c*cos(rlexs*2.5_dp) &
-                     + xdirps%interpl_v2p%d*cos(rlexs*3.5_dp))
-            ytt = 2*(ydirps%interpl_v2p%a*cos(rleys*0.5_dp) &
-                     + ydirps%interpl_v2p%b*cos(rleys*1.5_dp) &
-                     + ydirps%interpl_v2p%c*cos(rleys*2.5_dp) &
-                     + ydirps%interpl_v2p%d*cos(rleys*3.5_dp))
-            ztt = 2*(zdirps%interpl_v2p%a*cos(rlezs*0.5_dp) &
-                     + zdirps%interpl_v2p%b*cos(rlezs*1.5_dp) &
-                     + zdirps%interpl_v2p%c*cos(rlezs*2.5_dp) &
-                     + zdirps%interpl_v2p%d*cos(rlezs*3.5_dp))
-
-            xt1 = 1._dp + 2*xdirps%interpl_v2p%alpha*cos(rlexs)
-            yt1 = 1._dp + 2*ydirps%interpl_v2p%alpha*cos(rleys)
-            zt1 = 1._dp + 2*zdirps%interpl_v2p%alpha*cos(rlezs)
-
-            xt2 = self%k2x(ix)*((ytt/yt1)*(ztt/zt1))**2
-            yt2 = self%k2y(iy)*((xtt/xt1)*(ztt/zt1))**2
-            zt2 = self%k2z(iz)*((xtt/xt1)*(ytt/yt1))**2
-
-            xyzk = xt2 + yt2 + zt2
-            self%waves(i, j, k) = xyzk
-          end do
-        end do
-      end do
-    case default
-      do k = 1, self%nz_spec
-        do j = 1, self%ny_spec
-          do i = 1, self%nx_spec
-            ix = i + self%sp_st(1)
-            iy = j + self%sp_st(2)
-            iz = k + self%sp_st(3)
-
-            rlexs = real(self%exs(ix), kind=dp)*geo%d(1)
-            rleys = real(self%eys(iy), kind=dp)*geo%d(2)
-            rlezs = real(self%ezs(iz), kind=dp)*geo%d(3)
-
-            xtt = 2*(xdirps%interpl_v2p%a*cos(rlexs*0.5_dp) &
-                     + xdirps%interpl_v2p%b*cos(rlexs*1.5_dp) &
-                     + xdirps%interpl_v2p%c*cos(rlexs*2.5_dp) &
-                     + xdirps%interpl_v2p%d*cos(rlexs*3.5_dp))
-            ytt = 2*(ydirps%interpl_v2p%a*cos(rleys*0.5_dp) &
-                     + ydirps%interpl_v2p%b*cos(rleys*1.5_dp) &
-                     + ydirps%interpl_v2p%c*cos(rleys*2.5_dp) &
-                     + ydirps%interpl_v2p%d*cos(rleys*3.5_dp))
-            ztt = 2*(zdirps%interpl_v2p%a*cos(rlezs*0.5_dp) &
-                     + zdirps%interpl_v2p%b*cos(rlezs*1.5_dp) &
-                     + zdirps%interpl_v2p%c*cos(rlezs*2.5_dp) &
-                     + zdirps%interpl_v2p%d*cos(rlezs*3.5_dp))
-
-            xt1 = 1._dp + 2*xdirps%interpl_v2p%alpha*cos(rlexs)
-            yt1 = 1._dp + 2*ydirps%interpl_v2p%alpha*cos(rleys)
-            zt1 = 1._dp + 2*zdirps%interpl_v2p%alpha*cos(rlezs)
-
-            xt2 = self%k2x(ix)*((ytt/yt1)*(ztt/zt1))**2
-            yt2 = self%k2y(iy)*((xtt/xt1)*(ztt/zt1))**2
-            zt2 = self%k2z(iz)*((xtt/xt1)*(ytt/yt1))**2
-
-            xyzk = xt2 + yt2 + zt2
-            self%waves(i, j, k) = xyzk
-          end do
-        end do
-      end do
-    end select
+    end do
 
   end subroutine waves_set
+
+  subroutine spectral_line(self, dir, geo, xdirps, ydirps, zdirps, n, st, &
+                           is_r2c, line)
+    !! The 1D factors of waves_set along the spectral dimension that holds
+    !! direction dir: the squared modified wavenumber k2 and the
+    !! interpolation transfer function t of the n local modes from offset st.
+    !! Along the r2c dimension (is_r2c) of a non-periodic direction, the
+    !! imaginary factors are those of the mirrored mode N - k (see
+    !! waves_set). The mean mode has no mirror; its imaginary part carries
+    !! no data, so it keeps its own factors.
+    implicit none
+
+    class(poisson_fft_t), intent(in) :: self
+    integer, intent(in) :: dir, n, st
+    type(geo_t), intent(in) :: geo
+    type(dirps_t), intent(in) :: xdirps, ydirps, zdirps
+    logical, intent(in) :: is_r2c
+    type(spectral_line_t), intent(out) :: line
+
+    complex(dp), allocatable, dimension(:) :: k2, e
+    real(dp), allocatable, dimension(:) :: t
+    integer :: i, m, n_glob
+    logical :: periodic
+
+    select case (dir)
+    case (1)
+      k2 = self%k2x; e = self%exs; periodic = self%periodic_x
+      t = interp_transfer(xdirps%interpl_v2p, real(e, kind=dp)*geo%d(1))
+    case (2)
+      k2 = self%k2y; e = self%eys; periodic = self%periodic_y
+      t = interp_transfer(ydirps%interpl_v2p, real(e, kind=dp)*geo%d(2))
+    case default
+      k2 = self%k2z; e = self%ezs; periodic = self%periodic_z
+      t = interp_transfer(zdirps%interpl_v2p, real(e, kind=dp)*geo%d(3))
+    end select
+    n_glob = size(k2)
+
+    allocate (line%k2_re(n), line%k2_im(n), line%t_re(n), line%t_im(n))
+    do i = 1, n
+      line%k2_re(i) = real(k2(st + i), kind=dp)
+      line%t_re(i) = t(st + i)
+      m = st + i
+      if (is_r2c .and. (.not. periodic) .and. m > 1) m = n_glob - m + 2
+      line%k2_im(i) = real(k2(m), kind=dp)
+      line%t_im(i) = t(m)
+    end do
+
+  end subroutine spectral_line
+
+  pure elemental real(dp) function interp_transfer(interp, w) result(t)
+    !! Transfer function of the staggered (v2p) interpolation at the scaled
+    !! wavenumber w = k*d, the factor waves_set and stretching_matrix apply
+    !! to the wavenumbers of the other two directions.
+    implicit none
+
+    type(tdsops_t), intent(in) :: interp
+    real(dp), intent(in) :: w
+
+    t = 2*(interp%a*cos(w*0.5_dp) + interp%b*cos(w*1.5_dp) &
+           + interp%c*cos(w*2.5_dp) + interp%d*cos(w*3.5_dp)) &
+        /(1._dp + 2*interp%alpha*cos(w))
+
+  end function interp_transfer
 
   subroutine wave_numbers(a, b, k, e, k2, n, L, d, periodic, c_a, c_b, c_alpha)
     implicit none

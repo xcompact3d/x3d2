@@ -1,16 +1,14 @@
 module m_case_wind_turbine
   !! Case for wind-turbine simulations (the `two_turbines` setup):
-  !! uniform inflow and convective outflow in x, periodic in y and z.
+  !! uniform inflow and convective outflow in x; y and z each either periodic
+  !! or bounded by free-slip walls (BC = 'neumann', 'neumann', Incompact3d
+  !! ncl = 1). Incompact3d's two_turbines example has walls in y and z.
   !!
   !! The case owns a polymorphic turbine forcing model (turbine_model_t), set up
   !! by m_turbine_setup from the `iturbine` switch. It drives the model from its
   !! forcings()/postprocess() hooks.
   !!
-  !! The inflow/outflow boundary treatment mirrors m_case_cylinder. BCs are
-  !! dirichlet/periodic/periodic for the same reason cylinder uses them: the FFT
-  !! Poisson solver requires z periodic and only supports a single rank for
-  !! non-periodic directions. The two_turbines case uses free-slip walls
-  !! in y and z (wind-tunnel walls), which the FFT solver cannot currently do.
+  !! The inflow/outflow boundary treatment mirrors m_case_cylinder.
   use m_mpi, only: MPI_COMM_WORLD, MPI_IN_PLACE, MPI_SUM, &
                    MPI_Allreduce
 
@@ -18,7 +16,8 @@ module m_case_wind_turbine
   use m_base_backend, only: base_backend_t
   use m_base_case, only: base_case_t
   use m_common, only: dp, MPI_X3D2_DP, get_argument, DIR_C, DIR_X, &
-                      VERT, X_FACE, BC_DIRICHLET
+                      VERT, X_FACE, Y_FACE, Z_FACE, BC_DIRICHLET, &
+                      BC_NEUMANN, BC_PERIODIC
   use m_config, only: wind_turbine_config_t
   use m_field, only: field_t
   use m_mesh, only: mesh_t
@@ -32,6 +31,11 @@ module m_case_wind_turbine
   type, extends(base_case_t) :: case_wind_turbine_t
     type(wind_turbine_config_t) :: wt_cfg
     class(turbine_model_t), pointer :: turbine => null()
+    !> Free-slip walls in y and in z
+    logical :: y_walls = .false., z_walls = .false.
+    !> Weights of the local y and z points in the outlet flow rate, see
+    !> wall_weights
+    real(dp), allocatable :: flow_rate_y_weights(:), flow_rate_z_weights(:)
   contains
     procedure :: define_BC => define_BC_wind_turbine
     procedure :: initial_conditions => initial_conditions_wind_turbine
@@ -67,6 +71,17 @@ contains
       call abort_run('wind_turbine requires BC_x = ''dirichlet'', &
                      &''dirichlet''.', collective=.true.)
 
+    ! Free-slip walls (Incompact3d ncl = 1) or periodic, in y and in z
+    flow_case%y_walls = walls_or_periodic(mesh, 2, 'BC_y')
+    flow_case%z_walls = walls_or_periodic(mesh, 3, 'BC_z')
+    ! field_set_face stamps the local y planes, so the y walls must be the
+    ! planes of every rank
+    if (flow_case%y_walls .and. mesh%par%nproc_dir(2) /= 1) &
+      call abort_run('wind_turbine: y walls need y not decomposed &
+                     &(nproc_dir(2) = 1).', collective=.true.)
+    flow_case%flow_rate_y_weights = wall_weights(mesh, 2, flow_case%y_walls)
+    flow_case%flow_rate_z_weights = wall_weights(mesh, 3, flow_case%z_walls)
+
     call flow_case%wt_cfg%read(nml_file=get_argument(1))
     call flow_case%case_init(backend, mesh, host_allocator)
 
@@ -81,6 +96,42 @@ contains
     call init_turbine_model(flow_case%turbine, flow_case%wt_cfg, &
                             flow_case%solver, flow_case%io_mgr)
   end function case_wind_turbine_init
+
+  logical function walls_or_periodic(mesh, dir, name) result(walls)
+    !! Whether direction dir has free-slip walls ('neumann' at both ends),
+    !! stopping the run unless it is that or periodic at both ends.
+    type(mesh_t), intent(in) :: mesh
+    integer, intent(in) :: dir
+    character(len=*), intent(in) :: name
+
+    walls = all(mesh%grid%BCs_global(dir, :) == BC_NEUMANN)
+    if (.not. (walls .or. all(mesh%grid%BCs_global(dir, :) == BC_PERIODIC))) &
+      call abort_run('wind_turbine requires '//name//' = ''periodic'', &
+                     &''periodic'' or ''neumann'', ''neumann''.', &
+                     collective=.true.)
+  end function walls_or_periodic
+
+  function wall_weights(mesh, dir, walls) result(w)
+    !! Weights of the local vertices of direction dir in the outlet flow
+    !! rate, as the discrete divergence sees it: its interpolation along a
+    !! non-periodic direction gives the global boundary planes half the
+    !! weight of the others (trapezoid). u is not stamped on a free-slip
+    !! wall, so the wall planes keep their 1/2.
+    type(mesh_t), intent(in) :: mesh
+    integer, intent(in) :: dir
+    logical, intent(in) :: walls
+    real(dp), allocatable :: w(:)
+
+    integer :: dims(3)
+
+    dims = mesh%get_dims(VERT)
+    allocate (w(dims(dir)), source=1._dp)
+    if (walls) then
+      if (mesh%par%nrank_dir(dir) == 0) w(1) = 0.5_dp
+      if (mesh%par%nrank_dir(dir) == mesh%par%nproc_dir(dir) - 1) &
+        w(dims(dir)) = 0.5_dp
+    end if
+  end function wall_weights
 
   subroutine seed_rng(nrank, nproc, iter)
     !! Deterministic seeding of the intrinsic RNG, distinct for every
@@ -203,44 +254,38 @@ contains
   end subroutine define_BC_wind_turbine
 
   subroutine apply_BC_wind_turbine(self, u, v, w)
-    !! Pre-correction (called per substep after the integrator step):
-    !! enforce the inflow Dirichlet and convective outflow BCs, then apply
-    !! an exact uniform mass correction to the outlet, following
-    !! Incompact3d's pre_correc.
-    !!
-    !! Steps:
+    !! Pre-correction (called per substep after the integrator step),
+    !! following Incompact3d's pre_correc:
     !!  1. cx = uxmax*gdt/dx from the post-integration field.
-    !!  2. Convective outflow at x=nx and Dirichlet inflow at x=1 for u,v,w
-    !!     (no correction yet):  u(nx) = u(nx) - cx*(u(nx) - u(nx-1)).
-    !!  3. Measure the inlet mean (from the prescribed Dirichlet plane) and
-    !!     the outlet mean AFTER the convective update, then shift the outlet
-    !!     plane of u uniformly so mean(u_outlet) = mean(u_inlet) exactly
-    !!     (Incompact3d: bxxn = bxxn - ut + ut1). Applied to u only.
+    !!  2. Dirichlet inflow at x=1 and convective outflow at x=nx for u,v,w:
+    !!     u(nx) = u(nx) - cx*(u(nx) - u(nx-1)), with a uniform shift of u on
+    !!     the outlet that makes the flow rate out equal the flow rate in.
+    !!     Incompact3d balances the plain means over the planes; here the
+    !!     planes are weighted as the discrete divergence sees them (see
+    !!     wall_weights), the same thing for periodic y and z, and exact with
+    !!     walls, where the plain mean leaves a uniform divergence the
+    !!     Neumann-x projection cannot remove.
+    !!  3. Free-slip walls: v = 0 on the y walls and w = 0 on the z walls.
+    !!     The tangential components take the even-symmetry closure, and the
+    !!     Neumann pressure BC gives no correction on the wall planes.
     implicit none
     class(case_wind_turbine_t) :: self
     class(field_t), intent(inout) :: u, v, w
 
-    integer :: dims(3), nx, ierr
-    real(dp) :: out_vel, ny_nz, udif, max_discard, flow_rate_diff_discard
-    real(dp) :: fl_sums(2)
-    integer :: gdims(3)
+    real(dp) :: out_vel, flow_rate_diff
 
-    dims = self%solver%mesh%get_dims(VERT)
-    nx = dims(1)
-    ! Use global y-z plane size so the mass-flux average is correct
-    ! regardless of MPI decomposition in y or z.
-    gdims = self%solver%mesh%get_global_dims(VERT)
-    ny_nz = real(gdims(2)*gdims(3), dp)
+    ! Convective speed from the already-integrated velocity field
+    call self%compute_outflow_params(out_vel)
 
-    ! Convective speed from the already-integrated velocity field. The
-    ! flow-rate imbalance is not used: the mass correction below measures the
-    ! outlet after the convective update instead.
-    call self%compute_outflow_params(out_vel, flow_rate_diff_discard)
-
-    ! Dirichlet inflow + convective outflow (no mass correction yet).
+    flow_rate_diff = self%outflow_flow_rate_correction( &
+                     u, out_vel, self%flow_rate_y_weights, &
+                     self%flow_rate_z_weights)
     call self%solver%backend%field_set_face_from_field( &
       u, self%bc_start_u_x, out_vel, X_FACE, &
-      bc_start=BC_DIRICHLET, bc_end=BC_DIRICHLET)
+      bc_start=BC_DIRICHLET, bc_end=BC_DIRICHLET, &
+      flow_rate_diff=flow_rate_diff)
+    ! The flow-rate correction balances the streamwise flux, so only u
+    ! takes it
     call self%solver%backend%field_set_face_from_field( &
       v, self%bc_start_v_x, out_vel, X_FACE, &
       bc_start=BC_DIRICHLET, bc_end=BC_DIRICHLET)
@@ -248,18 +293,12 @@ contains
       w, self%bc_start_w_x, out_vel, X_FACE, &
       bc_start=BC_DIRICHLET, bc_end=BC_DIRICHLET)
 
-    ! Exact mass conservation (Incompact3d bxxn = bxxn - ut + ut1):
-    ! ut1 = mean of the prescribed inlet plane (bc_start_u_x at x=1),
-    ! ut  = mean of the outlet plane AFTER the convective update (u at x=nx).
-    call self%solver%backend%slice_max_sum( &
-      max_discard, fl_sums(1), self%bc_start_u_x, 1)
-    call self%solver%backend%slice_max_sum( &
-      max_discard, fl_sums(2), u, nx)
-    call MPI_Allreduce(MPI_IN_PLACE, fl_sums, 2, MPI_X3D2_DP, MPI_SUM, &
-                       MPI_COMM_WORLD, ierr)
-    udif = (fl_sums(1) - fl_sums(2))/ny_nz
-
-    call self%solver%backend%field_add_const_x_face(u, udif, at_end=.true.)
+    ! Impermeable walls, stamped last so they win on the edges where they
+    ! meet the x faces, as in Incompact3d
+    if (self%y_walls) &
+      call self%solver%backend%field_set_face(v, 0._dp, 0._dp, Y_FACE)
+    if (self%z_walls) &
+      call self%solver%backend%field_set_face(w, 0._dp, 0._dp, Z_FACE)
   end subroutine apply_BC_wind_turbine
 
   ! Forcings: advance the turbine model and accumulate its momentum source.

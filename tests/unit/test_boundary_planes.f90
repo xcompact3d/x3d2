@@ -13,16 +13,19 @@ program test_boundary_planes
   !! orderings coincide when ny <= SZ, so ny here is deliberately larger than
   !! SZ on both backends (SZ is 32 on CUDA, 16 on OMP) and is not a multiple
   !! of either, which also exercises the partially-filled last y-block.
-  use m_mpi, only: MPI_Init, MPI_Finalize
+  !!
+  !! z is split over all the ranks and bounded by free-slip walls, so a
+  !! Z_FACE belongs to the first or the last rank only, and the last rank
+  !! holds one cell fewer than vertices. Every check is rank-local.
+  use m_mpi, only: MPI_COMM_WORLD, MPI_Init, MPI_Finalize, MPI_Comm_size
 
   use m_allocator, only: allocator_t
   use m_backend_runtime, only: backend_runtime_t, SZ => backend_sz
   use m_base_backend, only: base_backend_t
   use m_common, only: dp, DIR_X, DIR_C, VERT, CELL, X_FACE, Y_FACE, &
-                      BC_DIRICHLET, BC_NEUMANN
+                      Z_FACE, BC_DIRICHLET, BC_NEUMANN
   use m_field, only: field_t
   use m_mesh, only: mesh_t
-
 
   implicit none
 
@@ -34,8 +37,8 @@ program test_boundary_planes
 
   ! ny is not a multiple of either backend's SZ, so the last y-block is
   ! partially filled and the group orderings do not coincide.
-  integer, parameter :: dims_global(3) = [16, 65, 8]
-  integer, parameter :: nproc_dir(3) = [1, 1, 1]
+  integer, parameter :: dims_global(3) = [16, 65, 9]
+  integer :: nproc_dir(3), nproc
   real(dp), parameter :: lengths(3) = [1._dp, 1._dp, 1._dp]
   character(len=9), parameter :: bc_periodic(2) = ['periodic ', 'periodic ']
   character(len=9), parameter :: bc_slip(2) = ['neumann  ', 'neumann  ']
@@ -49,11 +52,13 @@ program test_boundary_planes
   logical :: all_pass
 
   call MPI_Init(ierr)
+  call MPI_Comm_size(MPI_COMM_WORLD, nproc, ierr)
+  nproc_dir = [1, 1, nproc]
   all_pass = .true.
   tolerance = 2000._dp*epsilon(1._dp)
 
   mesh = mesh_t(dims_global, nproc_dir, lengths, &
-                bc_periodic, bc_slip, bc_periodic)
+                bc_periodic, bc_slip, bc_slip)
   dims = mesh%get_dims(VERT)
 
   call runtime%init(mesh)
@@ -284,6 +289,80 @@ program test_boundary_planes
     else
       print *, 'PASS: x_slice_weighted_sum'
     end if
+  end block
+
+  ! --- x_slice_weighted_sum with z weights ----------------------------------
+  ! A weight per local z station on top of the y weights, the trapezoid the
+  ! wind turbine case passes at z walls
+  block
+    real(dp), allocatable :: weights(:), z_weights(:)
+    real(dp) :: got, want
+
+    call backend%set_field_data(f, data)
+    allocate (weights(dims(2)), z_weights(dims(3)))
+    weights = 1._dp
+    weights(1) = 0.5_dp
+    do k = 1, dims(3)
+      z_weights(k) = 1._dp + 0.1_dp*real(k, dp)
+    end do
+
+    call backend%x_slice_weighted_sum(got, f, dims(1), weights, z_weights)
+    want = 0._dp
+    do k = 1, dims(3)
+      do j = 1, dims(2)
+        want = want + weights(j)*z_weights(k)*data(dims(1), j, k)
+      end do
+    end do
+    if (abs(got - want) > tolerance*abs(want)) then
+      print *, 'FAIL: x_slice_weighted_sum with z weights, relative error=', &
+        abs(got - want)/abs(want)
+      all_pass = .false.
+    else
+      print *, 'PASS: x_slice_weighted_sum with z weights'
+    end if
+  end block
+
+  ! --- field_set_face Z_FACE: only the ranks holding a global z face --------
+  ! A non-Dirichlet bottom face is left alone, as for Y_FACE. On a cell field
+  ! the top face is the last cell, one below the padded vertex count on the
+  ! last rank.
+  block
+    integer :: cell_dims(3), loc_dims(3), iloc
+    logical :: first_z, last_z
+
+    first_z = mesh%par%nrank_dir(3) == 0
+    last_z = mesh%par%nrank_dir(3) == mesh%par%nproc_dir(3) - 1
+    cell_dims = mesh%get_dims(CELL)
+    do iloc = 1, 2
+      if (iloc == 1) then
+        loc_dims = dims
+      else
+        loc_dims = cell_dims
+        call f%set_data_loc(CELL)
+      end if
+
+      call f%fill(sentinel)
+      call backend%field_set_face(f, bottom, top, Z_FACE)
+      call backend%get_field_data(data, f)
+      expected = sentinel
+      if (first_z) expected(:, :, 1) = bottom
+      if (last_z) expected(:, :, loc_dims(3)) = top
+      write (label, '(a,i0)') 'field_set_face Z_FACE, data_loc case ', iloc
+      call check_planes(trim(label), data, expected, loc_dims, tolerance, &
+                        all_pass)
+
+      call f%fill(sentinel)
+      call backend%field_set_face(f, bottom, top, Z_FACE, &
+                                  bc_start=BC_NEUMANN, bc_end=BC_DIRICHLET)
+      call backend%get_field_data(data, f)
+      expected = sentinel
+      if (last_z) expected(:, :, loc_dims(3)) = top
+      write (label, '(a,i0)') 'field_set_face Z_FACE Neumann bottom, case ', &
+        iloc
+      call check_planes(trim(label), data, expected, loc_dims, tolerance, &
+                        all_pass)
+    end do
+    call f%set_data_loc(VERT)
   end block
 
   ! --- field_set_y_plane: one interior plane, nothing else ------------------

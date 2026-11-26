@@ -5,7 +5,7 @@ module m_mesh
                       X_EDGE, Y_EDGE, Z_EDGE, &
                       BC_PERIODIC, BC_NEUMANN, BC_DIRICHLET, BC_HALO
   use m_field, only: field_t
-  use m_logger, only: log_info, abort_run
+  use m_logger, only: log_info, abort_run, check_mpi
   use m_mesh_content
 
   implicit none
@@ -17,6 +17,7 @@ module m_mesh
   integer, parameter :: FFT_BC_010 = 10
   integer, parameter :: FFT_BC_100 = 100
   integer, parameter :: FFT_BC_110 = 110
+  integer, parameter :: FFT_BC_111 = 111
   integer, parameter :: FFT_BC_UNSUPPORTED = -1
 
   ! The mesh class stores all the information about the global and local (due to domain decomposition) mesh
@@ -60,6 +61,7 @@ contains
     logical :: is_first_domain, is_last_domain
     integer :: dir
     integer :: ierr
+    character(len=128) :: msg
 
     allocate (mesh)
     allocate (mesh%geo)
@@ -78,9 +80,15 @@ contains
 
     ! Parallel domain decomposition
     mesh%par%nproc_dir(:) = nproc_dir
-    mesh%par%nproc = product(nproc_dir(:))
     call MPI_Comm_rank(MPI_COMM_WORLD, mesh%par%nrank, ierr)
+    call check_mpi(ierr, 'MPI_Comm_rank in mesh_init')
     call MPI_Comm_size(MPI_COMM_WORLD, mesh%par%nproc, ierr)
+    call check_mpi(ierr, 'MPI_Comm_size in mesh_init')
+    if (product(nproc_dir(:)) /= mesh%par%nproc) then
+      write (msg, '(a,3(i0,1x),a,i0,a)') 'nproc_dir = ', nproc_dir, &
+        'does not match the communicator size ', mesh%par%nproc, '.'
+      call abort_run(trim(msg), collective=.true.)
+    end if
 
     ! Either use 2decomp or the generic decomposition
     if (present(use_2decomp)) then
@@ -151,9 +159,6 @@ contains
     nproc_y = par%nproc_dir(2)
     nproc_z = par%nproc_dir(3)
 
-    ! Define number of cells and vertices in each direction
-    grid%vert_dims = grid%global_vert_dims/par%nproc_dir
-
     ! A 3D array corresponding to each region in the global domain
     allocate (global_ranks(nproc_x, nproc_y, nproc_z))
 
@@ -162,11 +167,48 @@ contains
                            shape=[nproc_x, nproc_y, nproc_z])
 
     call par%compute_rank_pos_from_global(global_ranks)
+
+    ! Split each direction as 2decomp does, so that both decompositions
+    ! hand a rank the same range
+    do i = 1, 3
+      call split_points(grid%global_vert_dims(i), par%nproc_dir(i), &
+                        par%nrank_dir(i), grid%periodic_BC(i), &
+                        grid%vert_dims(i), par%n_offset(i))
+    end do
     call grid%copy_vert2cell_dims(par)
 
-    par%n_offset(:) = grid%vert_dims(:)*par%nrank_dir(:)
-
   end subroutine
+
+  pure subroutine split_points(n_vert, nproc, nrank, periodic, n_loc, offset)
+    !! The vertices of rank nrank (0-based) when n_vert vertices are split
+    !! over nproc ranks, and their offset, as 2decomp splits them. The cells
+    !! are split as evenly as possible, the last mod(n_cell, nproc) ranks
+    !! taking one more, and a non-periodic direction (one cell fewer than
+    !! vertices) puts its extra vertex on the last rank. A non-periodic
+    !! direction of P*m cells therefore gives every rank m cells.
+    implicit none
+
+    integer, intent(in) :: n_vert, nproc, nrank
+    logical, intent(in) :: periodic
+    integer, intent(out) :: n_loc, offset
+
+    integer :: n_cell, n_base, n_short
+
+    n_cell = n_vert
+    if (.not. periodic) n_cell = n_vert - 1
+
+    n_base = n_cell/nproc
+    n_short = nproc - mod(n_cell, nproc) ! ranks with n_base cells
+    if (nrank < n_short) then
+      n_loc = n_base
+      offset = nrank*n_base
+    else
+      n_loc = n_base + 1
+      offset = n_short*n_base + (nrank - n_short)*(n_base + 1)
+    end if
+    if (.not. periodic .and. nrank == nproc - 1) n_loc = n_loc + 1
+
+  end subroutine split_points
 
   pure function get_dims(self, data_loc) result(dims)
   !! Getter for local domain dimensions
@@ -400,14 +442,28 @@ contains
 
     if (present(bcs_global)) bcs_global = codes
 
-    ! The four classes the Poisson FFT solver supports, all periodic in z.
+    ! The classes the Poisson FFT solver supports: the four periodic in z,
+    ! and 111, non-periodic everywhere.
     bc_code = FFT_BC_UNSUPPORTED
     if (periodic(3)) then
       if (periodic(1) .and. periodic(2)) bc_code = FFT_BC_000
       if (periodic(1) .and. (.not. periodic(2))) bc_code = FFT_BC_010
       if ((.not. periodic(1)) .and. periodic(2)) bc_code = FFT_BC_100
       if ((.not. periodic(1)) .and. (.not. periodic(2))) bc_code = FFT_BC_110
+    else if (.not. any(periodic)) then
+      bc_code = FFT_BC_111
     end if
   end subroutine classify_boundaries
+
+  pure logical function fft_bc_is_11x(bc_code)
+    !! Whether the FFT_BC_* class bc_code runs the 11x Poisson solver: 110
+    !! and 111 share its spectral layout, plans and buffers, as in
+    !! Incompact3d's poisson_11x.
+    implicit none
+
+    integer, intent(in) :: bc_code
+
+    fft_bc_is_11x = bc_code == FFT_BC_110 .or. bc_code == FFT_BC_111
+  end function fft_bc_is_11x
 
 end module m_mesh

@@ -3,7 +3,7 @@ module m_base_backend
 
   use m_allocator, only: allocator_t
   use m_common, only: dp, DIR_C, DIR_X, VERT, NULL_LOC, X_FACE, MPI_X3D2_DP, &
-                      get_rdr_from_dirs
+                      BC_DIRICHLET, get_rdr_from_dirs
   use m_field, only: field_t
   use m_logger, only: abort_run
   use m_mesh, only: mesh_t
@@ -75,6 +75,7 @@ module m_base_backend
     procedure :: field_shift => field_shift_base
     procedure :: field_volume_integral => field_volume_integral_base
     procedure :: field_set_face => field_set_face_base
+    procedure :: z_face_owned
     procedure :: field_set_y_plane => field_set_y_plane_base
     procedure :: field_set_abl_wall_stress => field_set_abl_wall_stress_base
     procedure :: field_shift_blend_x_band => field_shift_blend_x_band_base
@@ -685,12 +686,14 @@ contains
 
   end subroutine slice_max_sum_base
 
-  subroutine x_slice_weighted_sum_base(self, sum_val, f, i_slice, y_weights)
+  subroutine x_slice_weighted_sum_base(self, sum_val, f, i_slice, y_weights, &
+                                       z_weights)
   !! Weighted sum of the x slice f(i_slice, :, :) of a DIR_X field: the
-  !! point with local y index j counts y_weights(j) times. Gives the flow
-  !! rate through an x face as the discrete divergence sees it, whose y
-  !! interpolation weights the boundary planes differently from the
-  !! interior ones. Caller is responsible for MPI_Allreduce across ranks.
+  !! point with local indices (j, k) counts y_weights(j)*z_weights(k) times,
+  !! with z_weights 1 when absent. Gives the flow rate through an x face as
+  !! the discrete divergence sees it, whose y and z interpolations weight
+  !! the boundary planes differently from the interior ones. Caller is
+  !! responsible for MPI_Allreduce across ranks.
     implicit none
 
     class(base_backend_t) :: self
@@ -698,6 +701,7 @@ contains
     class(field_t), intent(in) :: f
     integer, intent(in) :: i_slice
     real(dp), intent(in) :: y_weights(:)
+    real(dp), optional, intent(in) :: z_weights(:)
 
     sum_val = 0._dp
     call not_implemented('x_slice_weighted_sum')
@@ -764,6 +768,8 @@ contains
     !! 'c_start' and 'c_end' for faces at opposite sides.
     !! 'face' is one of X_FACE, Y_FACE, Z_FACE from common.f90
     !! Optionally, bc_start/bc_end select the BC type (default BC_DIRICHLET).
+    !! z is decomposed, so a Z_FACE is set only on the ranks that hold that
+    !! global boundary (see z_face_owned).
     implicit none
 
     class(base_backend_t) :: self
@@ -777,6 +783,43 @@ contains
     call not_implemented('field_set_face')
 
   end subroutine field_set_face_base
+
+  function z_weight_line(z_weights, nz) result(wz)
+    !! The z weights of x_slice_weighted_sum on the nz local z points:
+    !! z_weights when present, 1 otherwise.
+    implicit none
+
+    real(dp), optional, intent(in) :: z_weights(:)
+    integer, intent(in) :: nz
+    real(dp), allocatable :: wz(:)
+
+    if (present(z_weights)) then
+      if (size(z_weights) /= nz) &
+        call abort_run('x_slice_weighted_sum: one weight per z point needed')
+      wz = z_weights
+    else
+      allocate (wz(nz), source=1._dp)
+    end if
+  end function z_weight_line
+
+  subroutine z_face_owned(self, bc_start, bc_end, set_start, set_end)
+    !! Which global z faces this rank sets in field_set_face: a face that
+    !! carries a prescribed value (bc_start, bc_end optional, default
+    !! BC_DIRICHLET) and that this rank holds, the bottom face on the first
+    !! rank along z and the top face on the last one.
+    implicit none
+
+    class(base_backend_t) :: self
+    integer, optional, intent(in) :: bc_start, bc_end
+    logical, intent(out) :: set_start, set_end
+
+    set_start = self%mesh%par%nrank_dir(3) == 0
+    set_end = self%mesh%par%nrank_dir(3) == self%mesh%par%nproc_dir(3) - 1
+    if (present(bc_start)) &
+      set_start = set_start .and. bc_start == BC_DIRICHLET
+    if (present(bc_end)) set_end = set_end .and. bc_end == BC_DIRICHLET
+
+  end subroutine z_face_owned
 
   subroutine field_set_y_plane_base(self, f, c, plane)
     !! Set one interior y-plane of a DIR_X field to a constant.

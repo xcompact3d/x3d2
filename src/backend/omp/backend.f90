@@ -5,7 +5,7 @@ module m_omp_backend
   use m_allocator, only: allocator_t
   use m_base_backend, only: base_backend_t, source_index_boxes, &
                             check_point_fields, check_labelled_fields, &
-                            abl_wall_upper_plane
+                            abl_wall_upper_plane, z_weight_line
   use m_common, only: dp, MPI_X3D2_DP, get_dirs_from_rdr, move_data_loc, &
                       DIR_X, DIR_Y, DIR_Z, DIR_C, NULL_LOC, &
                       X_FACE, Y_FACE, Z_FACE, VERT, BC_DIRICHLET
@@ -1366,7 +1366,8 @@ contains
 
   end subroutine slice_max_sum_omp
 
-  subroutine x_slice_weighted_sum_omp(self, sum_val, f, i_slice, y_weights)
+  subroutine x_slice_weighted_sum_omp(self, sum_val, f, i_slice, y_weights, &
+                                      z_weights)
     !! [[m_base_backend(module):x_slice_weighted_sum_base(subroutine)]]
     implicit none
     class(omp_backend_t) :: self
@@ -1374,8 +1375,10 @@ contains
     class(field_t), intent(in) :: f
     integer, intent(in) :: i_slice
     real(dp), intent(in) :: y_weights(:)
+    real(dp), optional, intent(in) :: z_weights(:)
 
-    real(dp) :: sum_p
+    real(dp) :: sum_p, sum_z
+    real(dp), allocatable :: wz(:)
     integer :: dims(3), y_stride, i, k, y_block, z
 
     if (f%dir /= DIR_X) &
@@ -1390,17 +1393,20 @@ contains
       call abort_run('x_slice_weighted_sum: i_slice out of range')
     if (size(y_weights) /= dims(2)) &
       call abort_run('x_slice_weighted_sum: one weight per y point needed')
+    wz = z_weight_line(z_weights, dims(3))
 
     sum_p = 0._dp
     ! y-block is the fast-varying component of the group index
-    !$omp parallel do collapse(2) reduction(+:sum_p) private(k)
+    !$omp parallel do reduction(+:sum_p) private(k, sum_z)
     do z = 1, dims(3)
+      sum_z = 0._dp
       do y_block = 1, (dims(2) - 1)/SZ + 1
         k = y_stride*(z - 1) + y_block
         do i = 1, min(SZ, dims(2) - (y_block - 1)*SZ)
-          sum_p = sum_p + y_weights(i + (y_block - 1)*SZ)*f%data(i, i_slice, k)
+          sum_z = sum_z + y_weights(i + (y_block - 1)*SZ)*f%data(i, i_slice, k)
         end do
       end do
+      sum_p = sum_p + wz(z)*sum_z
     end do
     !$omp end parallel do
 
@@ -1493,7 +1499,20 @@ contains
       end do
       !$omp end parallel do
     case (Z_FACE)
-      call abort_run('Setting Z_FACE is not yet supported.')
+      ! Every y-block of the first and the last local z station
+      call self%z_face_owned(bc_start, bc_end, set_start, set_end)
+      n_y_blocks = (dims(2) - 1)/SZ + 1
+      y_stride = y_group_stride(self)
+      k_end = (dims(3) - 1)*y_stride
+      !$omp parallel do collapse(2) private(i_mod)
+      do k = 1, n_y_blocks
+        do j = 1, dims(1)
+          i_mod = min(SZ, dims(2) - (k - 1)*SZ) ! lanes past ny are padding
+          if (set_start) f%data(1:i_mod, j, k) = c_start
+          if (set_end) f%data(1:i_mod, j, k_end + k) = c_end
+        end do
+      end do
+      !$omp end parallel do
     case default
       call abort_run('face is undefined.')
     end select

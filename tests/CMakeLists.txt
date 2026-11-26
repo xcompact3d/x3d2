@@ -415,6 +415,8 @@ function(define_backend_tests backend)
   define_test(unit/test_scalar_product.f90 ${np} ${backend})
   define_test(unit/test_sum_intox.f90 ${np} ${backend})
   define_test(unit/test_boundary_planes.f90 ${serial} ${backend})
+  # z split over two ranks: a Z_FACE belongs to one rank only
+  define_test(unit/test_boundary_planes.f90 2 ${backend})
   define_test(unit/test_abl_seed.f90 ${serial} ${backend})
   # Two ranks in z must draw different noise.
   define_test(unit/test_channel_noise.f90 ${serial} ${backend})
@@ -483,7 +485,7 @@ function(define_backend_tests backend)
     define_verification_test(verification/test_fft.f90 1 ${backend})
   endif()
   if((is_omp AND WITH_2DECOMPFFT) OR ${backend} STREQUAL cuda)
-    foreach(bc ppp pdp dpp ddp pdp_odd dpp_odd ddp_odd)
+    foreach(bc ppp pdp dpp ddp ddd pdp_odd dpp_odd ddp_odd ddd_odd)
       set(X3D2_TEST_NAME_SUFFIX _${bc})
       define_verification_test(verification/test_poisson_bc.f90 1 ${backend} --bc ${bc})
     endforeach()
@@ -543,6 +545,14 @@ function(define_backend_tests backend)
       set(X3D2_TEST_NAME_SUFFIX _ddp_ysplit)
       define_verification_test(verification/test_poisson_bc.f90 2 ${backend} --bc ddp --nproc_dir 1,2,1)
     endif()
+    # The 111 case folds z where it is whole: the z-pencil of the cell-dims
+    # decomposition (OpenMP) or the cuFFTMp Y-slab (CUDA) once z is split
+    set(X3D2_TEST_NAME_SUFFIX _ddd)
+    define_verification_test(verification/test_poisson_bc.f90 2 ${backend} --bc ddd)
+    if(is_omp)
+      set(X3D2_TEST_NAME_SUFFIX _ddd_ysplit)
+      define_verification_test(verification/test_poisson_bc.f90 2 ${backend} --bc ddd --nproc_dir 1,2,1)
+    endif()
     # The backend's factory must stop on a BC code it has no case type for
     set(X3D2_TEST_NAME_SUFFIX _unsupported_bc)
     define_test(unit/test_poisson_fft_abort.f90 ${serial} ${backend} unsupported_bc)
@@ -564,6 +574,33 @@ function(define_backend_tests backend)
     define_test(unit/test_adios2_read_write.f90 ${np} ${backend})
     define_test(unit/test_io_session.f90 ${np} ${backend})
     define_test(unit/test_ab_checkpoint.f90 ${serial} ${backend})
+    # ibm_t reads the mask onto the right points, and stops on a mask of the
+    # wrong shape. ctest checks the output of the second one, not its exit
+    # code: MPI_Abort's depends on the launcher.
+    define_test(unit/test_ibm_mask_read.f90 ${np} ${backend})
+    set(X3D2_TEST_NAME_SUFFIX _mismatch)
+    define_test(unit/test_ibm_mask_read.f90 ${np} ${backend} mismatch)
+    set_tests_properties(test_ibm_mask_read_${backend}_${np}_mismatch
+      PROPERTIES
+      PASS_REGULAR_EXPRESSION "ERROR: IBM mask in test_ibm_mask_read_.* is .* but the mesh has"
+      FAIL_REGULAR_EXPRESSION "must never be reached"
+      TIMEOUT 60)
+    unset(X3D2_TEST_NAME_SUFFIX)
+    # Each test writes <test name>.bp. The mismatch run stops before it can
+    # delete it, so a cleanup fixture does, after either run, without a shell.
+    foreach(ibm_test test_ibm_mask_read_${backend}_${np}
+                     test_ibm_mask_read_${backend}_${np}_mismatch)
+      if(TEST ${ibm_test})
+        add_test(NAME ${ibm_test}_cleanup
+          COMMAND ${CMAKE_COMMAND} -E remove_directory
+                  ${CMAKE_CURRENT_BINARY_DIR}/${ibm_test}.bp)
+        set_tests_properties(${ibm_test}_cleanup PROPERTIES
+          FIXTURES_CLEANUP ${ibm_test}_mask
+          LABELS "unit;${backend}")
+        set_tests_properties(${ibm_test} PROPERTIES
+          FIXTURES_REQUIRED ${ibm_test}_mask)
+      endif()
+    endforeach()
   endif()
   if(WITH_ADIOS2 AND (is_omp OR ${backend} STREQUAL cuda))
     # Writes on one rank layout and reads back on another: needs exactly 4.
@@ -883,15 +920,16 @@ if(SINGLE_PREC)
   set(_nightly_cmp_args --rtol 1e-4
       --ceiling div_u_max=1e-4 --ceiling div_u_mean=1e-5)
   # The channel's enstrophy drifts up to 3.6e-5 from the double precision
-  # golden over its 50 steps from zero initial noise, past the smoke rtol.
+  # golden over its 50 steps from non-zero initial noise, past the smoke rtol.
   set(_channel_cmp_args --rtol 1e-4
-      --ceiling div_u_max=1e-4 --ceiling div_u_mean=1e-5)
+      --ceiling div_u_max=1e-4 --ceiling div_u_mean=1e-5
+      --ceiling-skip-initial)
 else()
   set(_smoke_cmp_args --rtol 1e-10
       --ceiling div_u_max=1e-8 --ceiling div_u_mean=1e-9)
   set(_nightly_cmp_args --rtol 1e-10
       --ceiling div_u_max=1e-12 --ceiling div_u_mean=1e-13)
-  set(_channel_cmp_args ${_smoke_cmp_args})
+  set(_channel_cmp_args ${_smoke_cmp_args} --ceiling-skip-initial)
 endif()
 
 if(WITH_2DECOMPFFT AND _cpu_omp_backend)

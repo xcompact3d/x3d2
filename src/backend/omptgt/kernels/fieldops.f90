@@ -524,25 +524,25 @@ contains
 
   end subroutine slice_max_sum
 
-  subroutine x_slice_weighted_sum(sum_f, f, w, n_f, i_slice, n_i, &
+  subroutine x_slice_weighted_sum(sum_f, f, w, wz, n_f, i_slice, n_i, &
                                   n_groups_pad, n_j)
-    !! Sum of the slice f(:, i_slice, :) with the weight w(j) on the points
-    !! of stacked index j.
+    !! Sum of the slice f(:, i_slice, :) with the weight w(j)*wz(k) on the
+    !! point of stacked index j and repeated index k.
     real(dp), intent(out) :: sum_f
     integer, intent(in) :: n_f, i_slice, n_i, n_groups_pad, n_j
-    real(dp), intent(in) :: f(SZ, n_f, n_groups_pad*n_i), w(n_j)
+    real(dp), intent(in) :: f(SZ, n_f, n_groups_pad*n_i), w(n_j), wz(n_i)
 
     integer :: i, b_i, b_j
 
     sum_f = 0._dp
     !$omp target teams distribute parallel do collapse(3) &
-    !$omp reduction(+:sum_f) map(tofrom:sum_f) map(to:w) &
+    !$omp reduction(+:sum_f) map(tofrom:sum_f) map(to:w, wz) &
     !$omp OMP_DEVICE_ADDR(f)
     do b_j = 1, (n_j - 1)/SZ + 1
       do b_i = 1, n_i
         do i = 1, SZ
           if (i + (b_j - 1)*SZ <= n_j) then
-            sum_f = sum_f + w(i + (b_j - 1)*SZ) &
+            sum_f = sum_f + w(i + (b_j - 1)*SZ)*wz(b_i) &
                     *f(i, i_slice, b_j + (b_i - 1)*n_groups_pad)
           end if
         end do
@@ -728,6 +728,32 @@ contains
     !$omp end target teams distribute parallel do
 
   end subroutine field_set_y_face
+
+  subroutine field_set_z_face(f, c_start, c_end, set_start, set_end, n_f, &
+                              nx, ny, nz, n_yb_pad)
+    !! Sets the bottom (z = 1) and top (z = nz) faces where flagged.
+    integer, intent(in) :: n_f, nx, ny, nz, n_yb_pad
+    real(dp), intent(inout) :: f(SZ, n_f, n_yb_pad*nz)
+    real(dp), intent(in) :: c_start, c_end
+    logical, intent(in) :: set_start, set_end
+
+    integer :: i, j, y_block
+
+    !$omp target teams distribute parallel do collapse(3) OMP_DEVICE_ADDR(f)
+    do y_block = 1, (ny - 1)/SZ + 1
+      do j = 1, nx
+        do i = 1, SZ
+          ! Lanes past ny in the last y-block are padding
+          if (i + (y_block - 1)*SZ <= ny) then
+            if (set_start) f(i, j, y_block) = c_start
+            if (set_end) f(i, j, y_block + (nz - 1)*n_yb_pad) = c_end
+          end if
+        end do
+      end do
+    end do
+    !$omp end target teams distribute parallel do
+
+  end subroutine field_set_z_face
 
   subroutine field_set_y_face_from_field(f, f_start, n_f, nx, ny, nz, &
                                          n_yb_pad)
