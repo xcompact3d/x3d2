@@ -36,10 +36,11 @@ contains
     !! Line l must be the same physical line on every rank along dir.
     implicit none
 
-    !> Contiguous, so that they reach the explicit-shape dummies of the
-    !! kernels without a copy
-    real(dp), device, contiguous, dimension(:, :, :), intent(out) :: x_s, x_e
-    real(dp), device, contiguous, dimension(:, :, :), intent(in) :: d_s, d_e
+    !> Not declared contiguous: nvfortran 24.9 then copies a device actual
+    !! into a temporary with a host memcpy and segfaults. The kernels still
+    !! get the base address, with no descriptor copy
+    real(dp), device, dimension(:, :, :), intent(out) :: x_s, x_e
+    real(dp), device, dimension(:, :, :), intent(in) :: d_s, d_e
     type(cuda_tdsops_t), intent(in) :: tdsops
     type(par_t), intent(in) :: par
     integer, intent(in) :: dir
