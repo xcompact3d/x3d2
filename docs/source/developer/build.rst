@@ -71,20 +71,21 @@ The binary is ``build/bin/x3d2_poisson_solver``. Its usage line is:
    x3d2_poisson_solver nx ny nz [bc_x bc_y bc_z] [--repeat N]
 
 ``nx``, ``ny`` and ``nz`` are the global grid dimensions.
-Each of ``bc_x`` and ``bc_y`` is ``periodic`` (the default) or ``dirichlet``.
-The argument ``bc_z`` must be ``periodic``.
+Each of ``bc_x``, ``bc_y`` and ``bc_z`` is ``periodic`` (the default) or ``dirichlet``.
 A direction with ``dirichlet`` needs an odd grid size.
 Here ``dirichlet`` is the velocity condition. The pressure gets homogeneous Neumann conditions in that direction.
 ``--repeat N`` sets the number of solves (default 1).
 
-The driver supports four boundary condition cases.
+The driver supports five boundary condition cases.
 Each case has a three digit name.
 A digit is ``1`` if the direction is ``dirichlet`` and ``0`` if it is ``periodic``.
-The cases are ``000`` (all periodic), ``100`` (``bc_x`` is ``dirichlet``), ``010`` (``bc_y`` is ``dirichlet``) and ``110`` (``bc_x`` and ``bc_y`` are ``dirichlet``).
-The OpenMP and CUDA backends solve all four cases.
+The cases are ``000`` (all periodic), ``100`` (``bc_x`` is ``dirichlet``), ``010`` (``bc_y`` is ``dirichlet``), ``110`` (``bc_x`` and ``bc_y`` are ``dirichlet``) and ``111`` (all three are ``dirichlet``).
+A ``dirichlet`` z needs ``dirichlet`` x and y as well: the cases ``001``, ``011`` and ``101`` are not supported.
+The OpenMP and CUDA backends solve all five cases.
 The ``010`` case runs on one MPI rank only.
 On the CUDA backend, the ``100`` case on more than one rank needs the number of x cells to divide by the number of ranks.
-On the CUDA backend, the ``110`` case on more than one rank needs the same for the number of x cells and the number of y cells.
+On the CUDA backend, the ``110`` and ``111`` cases on more than one rank need the same for the number of x, y and z cells.
+On the OpenMP backend, the ``110`` and ``111`` cases on more than one rank need the number of cells in a split direction to divide by the number of ranks along it.
 
 The backend follows ``ENABLE_BACKEND``.
 The ``OMP_TGT`` backend has no FFT Poisson solver, so the driver stops with that backend.

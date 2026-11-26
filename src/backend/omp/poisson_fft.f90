@@ -25,7 +25,7 @@ module m_omp_poisson_fft
   type, abstract, extends(poisson_fft_t) :: omp_poisson_fft_t
     !! FFT based Poisson solver, the state and the plain transform that
     !! every boundary condition case shares. Each case extends this type
-    !! with its own buffers, see omp_poisson_000_t to omp_poisson_110_t.
+    !! with its own buffers, see omp_poisson_000_t to omp_poisson_11x_t.
     complex(dp), allocatable, dimension(:, :, :) :: c_x
     !> 2decomp processor grid. p_row splits y in the x-pencil, p_col splits z.
     integer :: p_row = 1, p_col = 1
@@ -97,8 +97,16 @@ module m_omp_poisson_fft
     procedure :: undo_periodicity => undo_periodicity_x_omp
   end type omp_poisson_100_t
 
-  type, extends(omp_poisson_fft_t) :: omp_poisson_110_t
-    !! Non-periodic in x and y, periodic in z
+  type, extends(omp_poisson_fft_t) :: omp_poisson_11x_t
+    !! Non-periodic in x and y, and in z either periodic (110) or not (111).
+    !! Like Incompact3d's poisson_11x, both cases share the (nz/2+1, nx, ny)
+    !! spectral layout and postprocess. 111 folds z as well, inside the
+    !! copies into and out of the transform buffer where z is whole, so the
+    !! r2c transform stands in for a cosine transform; waves_set and the
+    !! half-angle az, bz of a non-periodic z do the rest.
+    !> Position of each z entry in r_tr: the fold for 111, the identity for
+    !! 110.
+    integer, allocatable :: z_dst(:)
     !> Physical space decomposition owned by the FFT, whose ph%xsz is the
     !! (nz, nx_loc, ny_loc) layout the transform reads.
     type(decomp_info), pointer :: ph => null()
@@ -121,7 +129,7 @@ module m_omp_poisson_fft
     procedure :: fft_postprocess => fft_postprocess_110_omp
     procedure :: enforce_periodicity => enforce_periodicity_xy_omp
     procedure :: undo_periodicity => undo_periodicity_xy_omp
-  end type omp_poisson_110_t
+  end type omp_poisson_11x_t
 
   private :: init_omp, init_buffers, init_buffers_010, init_buffers_100, &
              init_buffers_110, fold_index, fold_destinations
@@ -146,8 +154,8 @@ contains
       allocate (omp_poisson_010_t :: poisson_fft)
     case ('100')
       allocate (omp_poisson_100_t :: poisson_fft)
-    case ('110')
-      allocate (omp_poisson_110_t :: poisson_fft)
+    case ('110', '111')
+      allocate (omp_poisson_11x_t :: poisson_fft)
     case default
       call abort_run('Requested BCs are not supported in FFT-based Poisson &
                      &solver!')
@@ -284,14 +292,22 @@ contains
   subroutine init_buffers_110(self, mesh, dims)
     implicit none
 
-    class(omp_poisson_110_t) :: self
+    class(omp_poisson_11x_t) :: self
     type(mesh_t), intent(in) :: mesh
     integer, intent(in) :: dims(3)
 
-    ! ph%xsz is exactly (nz, nx_loc, ny_loc) for the 110 fft plan, on one
+    integer :: k
+
+    ! ph%xsz is exactly (nz, nx_loc, ny_loc) for the 11x fft plan, on one
     ! rank as much as many.
     self%ph => decomp_2d_fft_get_ph()
     allocate (self%r_tr(self%ph%xsz(1), self%ph%xsz(2), self%ph%xsz(3)))
+
+    if (self%periodic_z) then
+      self%z_dst = [(k, k=1, self%nz_glob)]
+    else
+      self%z_dst = fold_destinations(self%nz_glob)
+    end if
 
     if (mesh%par%nproc > 1) then
       ! Cell-dims decomposition of the solver field (x whole, y split by
@@ -301,20 +317,21 @@ contains
       call decomp_info_init(dims(1), dims(2), dims(3), self%dc)
       if (.not. all(self%dc%zsz == [self%ph%xsz(2), self%ph%xsz(3), &
                                     self%ph%xsz(1)])) then
-        call abort_run('The 110 case cell-dims decomposition does not match &
+        call abort_run('The 11x case cell-dims decomposition does not match &
                        &the FFT physical decomposition.')
       end if
       ! The mesh splits the vertices, and the last rank of a non-periodic
       ! direction has one cell fewer than vertices, while dc splits the
-      ! cells directly. The two can hand a rank different y ranges (257
-      ! cells on 2 ranks are 129 + 128 for the mesh but 128 + 129 for dc),
-      ! and the copies between the solver field and r_xp assume they
-      ! agree. A cell count divisible by p_row always agrees.
+      ! cells directly. The two can hand a rank different y (or, in 111, z)
+      ! ranges (257 cells on 2 ranks are 129 + 128 for the mesh but
+      ! 128 + 129 for dc), and the copies between the solver field and r_xp
+      ! assume they agree. A cell count divisible by the ranks along that
+      ! direction always agrees.
       if (.not. all(self%dc%xsz == [self%nx_loc, self%ny_loc, &
                                     self%nz_loc])) then
-        call abort_run('The OpenMP 110 Poisson solver needs the y cell &
-                       &count to be divisible by the number of ranks &
-                       &along y, or split along z instead.')
+        call abort_run('The OpenMP 11x Poisson solver needs the y and z &
+                       &cell counts to be divisible by the number of ranks &
+                       &along them.')
       end if
 
       allocate (self%r_xp(self%dc%xsz(1), self%dc%xsz(2), self%dc%xsz(3)))
@@ -403,8 +420,9 @@ contains
   subroutine fft_forward_110_omp(self, f_in)
     !! Forward FFT for the non-periodic x and y case. Transposes the
     !! physical field (nx, ny, nz) to (nz, nx, ny) so that the r2c
-    !! transform runs along the periodic z direction, then transforms
-    !! with the plan set up in init.
+    !! transform runs along z, then transforms with the plan set up in
+    !! init. The transpose places z through z_dst, which folds a
+    !! non-periodic z (111) at no extra cost.
     !!
     !! On multiple ranks the solver field's x-pencil is redistributed
     !! through the cell-dims decomposition dc to reach the FFT's x-pencil.
@@ -413,7 +431,7 @@ contains
     !! y-pencil of dc where the whole y range is local.
     implicit none
 
-    class(omp_poisson_110_t) :: self
+    class(omp_poisson_11x_t) :: self
     class(field_t), intent(in) :: f_in
 
     integer :: i, j, k
@@ -424,7 +442,7 @@ contains
       do k = 1, self%nz_loc
         do j = 1, self%ny_loc
           do i = 1, self%nx_loc
-            self%r_tr(k, i, j) = f_in%data(i, j, k)
+            self%r_tr(self%z_dst(k), i, j) = f_in%data(i, j, k)
           end do
         end do
       end do
@@ -465,7 +483,7 @@ contains
       do k = 1, self%dc%zsz(3)
         do j = 1, self%dc%zsz(2)
           do i = 1, self%dc%zsz(1)
-            self%r_tr(k, i, j) = self%r_zp(i, j, k)
+            self%r_tr(self%z_dst(k), i, j) = self%r_zp(i, j, k)
           end do
         end do
       end do
@@ -531,7 +549,7 @@ contains
 
   subroutine fft_backward_110_omp(self, f_out)
     !! Backward FFT for the non-periodic x and y case, undoing the
-    !! transpose applied by fft_forward_110_omp. Only the unpadded
+    !! transpose (and z fold) applied by fft_forward_110_omp. Only the unpadded
     !! extents are written, which is all undo_periodicity_xy_omp goes on
     !! to read.
     !!
@@ -540,7 +558,7 @@ contains
     !! redistributing back to the solver field's x-pencil.
     implicit none
 
-    class(omp_poisson_110_t) :: self
+    class(omp_poisson_11x_t) :: self
     class(field_t), intent(inout) :: f_out
 
     integer :: i, j, k
@@ -553,7 +571,7 @@ contains
       do k = 1, self%nz_loc
         do j = 1, self%ny_loc
           do i = 1, self%nx_loc
-            f_out%data(i, j, k) = self%r_tr(k, i, j)
+            f_out%data(i, j, k) = self%r_tr(self%z_dst(k), i, j)
           end do
         end do
       end do
@@ -563,7 +581,7 @@ contains
       do k = 1, self%dc%zsz(3)
         do j = 1, self%dc%zsz(2)
           do i = 1, self%dc%zsz(1)
-            self%r_zp(i, j, k) = self%r_tr(k, i, j)
+            self%r_zp(i, j, k) = self%r_tr(self%z_dst(k), i, j)
           end do
         end do
       end do
@@ -704,7 +722,7 @@ contains
     !! where dim3 (Y modes) is always whole.
     implicit none
 
-    class(omp_poisson_110_t) :: self
+    class(omp_poisson_11x_t) :: self
 
     if (self%p_col == 1) then
       call process_spectral_110( &
@@ -870,7 +888,7 @@ contains
     !! range is local.
     implicit none
 
-    class(omp_poisson_110_t) :: self
+    class(omp_poisson_11x_t) :: self
     class(field_t), intent(inout) :: f_out
     class(field_t), intent(in) :: f_in
 
@@ -924,7 +942,7 @@ contains
     !! still local, in the y-pencil.
     implicit none
 
-    class(omp_poisson_110_t) :: self
+    class(omp_poisson_11x_t) :: self
     class(field_t), intent(inout) :: f_out
     class(field_t), intent(in) :: f_in
 

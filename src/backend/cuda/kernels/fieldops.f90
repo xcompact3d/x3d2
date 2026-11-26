@@ -426,10 +426,12 @@ contains
     integer :: i, j, b, n_mod, b_end
 
     j = threadIdx%x + (blockIdx%x - 1)*blockDim%x ! from 1 to nx
-    b = blockIdx%y ! from 1 to nz
+    b = blockIdx%y ! from 1 to the local z count of the field
 
     ! DIR_X groups are ordered z fastest: b = (y_block - 1)*nz + z, so the
     ! bottom face lives in groups 1..nz and the top face nz*(n_y_blocks-1)+z.
+    ! nz is the padded z count, the group stride: a cell field on a
+    ! non-periodic z holds one z station fewer on the last rank.
     n_mod = mod(ny - 1, SZ) + 1
     b_end = b + (ny - 1)/SZ*nz
 
@@ -439,6 +441,34 @@ contains
     end if
 
   end subroutine field_set_y_face
+
+  attributes(global) subroutine field_set_z_face( &
+    f, c_start, c_end, set_start, set_end, nx, ny, nz, nz_pad)
+  !! Set the bottom (local z = 1) and top (local z = nz) Z_FACE planes of a
+  !! DIR_X field where flagged. DIR_X groups are ordered z fastest,
+  !! b = (y_block - 1)*nz_pad + z, with nz_pad the padded z count. Launch with
+  !! blocks = dim3((nx - 1)/64 + 1, n_y_blocks, 1), threads = dim3(64, 1, 1).
+    implicit none
+
+    real(dp), device, intent(inout), dimension(:, :, :) :: f
+    real(dp), value, intent(in) :: c_start, c_end
+    logical, value, intent(in) :: set_start, set_end
+    integer, value, intent(in) :: nx, ny, nz, nz_pad
+
+    integer :: i, j, y_block, n_lane
+
+    j = threadIdx%x + (blockIdx%x - 1)*blockDim%x ! from 1 to nx
+    y_block = blockIdx%y
+
+    if (j <= nx) then
+      n_lane = min(SZ, ny - (y_block - 1)*SZ) ! lanes past ny are padding
+      do i = 1, n_lane
+        if (set_start) f(i, j, (y_block - 1)*nz_pad + 1) = c_start
+        if (set_end) f(i, j, (y_block - 1)*nz_pad + nz) = c_end
+      end do
+    end if
+
+  end subroutine field_set_z_face
   attributes(global) subroutine field_plane_partial_sums( &
     partial, f, nx, ny, nz)
   !! First pass of field_plane_sums: partial(j, z) is the sum over x of

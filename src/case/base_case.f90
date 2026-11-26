@@ -220,16 +220,17 @@ contains
     flow_rate_diff = flow_rate_in - flow_rate_out
   end subroutine compute_outflow_params
 
-  function outflow_flow_rate_correction(self, u, out_vel, y_weights) &
-    result(flow_rate_diff)
+  function outflow_flow_rate_correction(self, u, out_vel, y_weights, &
+                                        z_weights) result(flow_rate_diff)
     !! The flow_rate_diff for the X_FACE stamp of field_set_face_from_field
     !! that makes the flow rate out equal the flow rate in exactly, as the
     !! pressure projection sees them. The x staggered derivative sums to
     !! (u(nx) - u(1))/dx over the cells, so only the two face planes enter,
-    !! each weighted over y by y_weights: the case passes the weights of the
-    !! y interpolation (1/2 on a non-periodic boundary plane, 1 elsewhere),
-    !! with 0 on any plane it overwrites with the same value on both faces
-    !! after the stamp. The stamp is linear in u,
+    !! each weighted over y by y_weights and over z by z_weights (1 when
+    !! absent): the case passes the weights of the y and z interpolations
+    !! (1/2 on a non-periodic boundary plane, 1 elsewhere), with 0 on any
+    !! plane it overwrites with the same value on both faces after the
+    !! stamp. The stamp is linear in u,
     !! u(nx) <- (1 - c)*u(nx) + c*u(nx - 1) + flow_rate_diff, so the sums of
     !! the planes before it give the outlet flow rate after it. Call it with
     !! u as it is about to be stamped, once bc_start_u_x holds this substep's
@@ -240,6 +241,7 @@ contains
     class(field_t), intent(in) :: u
     real(dp), intent(in) :: out_vel
     real(dp), intent(in) :: y_weights(:)
+    real(dp), optional, intent(in) :: z_weights(:)
     real(dp) :: flow_rate_diff
 
     integer :: dims(3), nx, ierr
@@ -248,13 +250,18 @@ contains
     dims = self%solver%mesh%get_dims(VERT)
     nx = dims(1)
     call self%solver%backend%x_slice_weighted_sum( &
-      sums(1), self%bc_start_u_x, 1, y_weights)
-    call self%solver%backend%x_slice_weighted_sum(sums(2), u, nx, y_weights)
+      sums(1), self%bc_start_u_x, 1, y_weights, z_weights)
     call self%solver%backend%x_slice_weighted_sum( &
-      sums(3), u, nx - 1, y_weights)
+      sums(2), u, nx, y_weights, z_weights)
+    call self%solver%backend%x_slice_weighted_sum( &
+      sums(3), u, nx - 1, y_weights, z_weights)
     ! The correction is added to every point of the outlet plane, so it
     ! moves the weighted flow rate by the total weight of the plane
-    sums(4) = sum(y_weights)*real(dims(3), dp)
+    if (present(z_weights)) then
+      sums(4) = sum(y_weights)*sum(z_weights)
+    else
+      sums(4) = sum(y_weights)*real(dims(3), dp)
+    end if
     call MPI_Allreduce(MPI_IN_PLACE, sums, 4, MPI_X3D2_DP, MPI_SUM, &
                        MPI_COMM_WORLD, ierr)
 

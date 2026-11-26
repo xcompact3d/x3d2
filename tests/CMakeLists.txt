@@ -415,6 +415,8 @@ function(define_backend_tests backend)
   define_test(unit/test_scalar_product.f90 ${np} ${backend})
   define_test(unit/test_sum_intox.f90 ${np} ${backend})
   define_test(unit/test_boundary_planes.f90 ${serial} ${backend})
+  # z split over two ranks: a Z_FACE belongs to one rank only
+  define_test(unit/test_boundary_planes.f90 2 ${backend})
   define_test(unit/test_abl_seed.f90 ${serial} ${backend})
   # Two ranks in z must draw different noise.
   define_test(unit/test_channel_noise.f90 ${serial} ${backend})
@@ -483,7 +485,7 @@ function(define_backend_tests backend)
     define_verification_test(verification/test_fft.f90 1 ${backend})
   endif()
   if((is_omp AND WITH_2DECOMPFFT) OR ${backend} STREQUAL cuda)
-    foreach(bc ppp pdp dpp ddp pdp_odd dpp_odd ddp_odd)
+    foreach(bc ppp pdp dpp ddp ddd pdp_odd dpp_odd ddp_odd ddd_odd)
       set(X3D2_TEST_NAME_SUFFIX _${bc})
       define_verification_test(verification/test_poisson_bc.f90 1 ${backend} --bc ${bc})
     endforeach()
@@ -542,6 +544,14 @@ function(define_backend_tests backend)
       # transposes, which the z split above does not reach
       set(X3D2_TEST_NAME_SUFFIX _ddp_ysplit)
       define_verification_test(verification/test_poisson_bc.f90 2 ${backend} --bc ddp --nproc_dir 1,2,1)
+    endif()
+    # The 111 case folds z where it is whole: the z-pencil of the cell-dims
+    # decomposition (OpenMP) or the cuFFTMp Y-slab (CUDA) once z is split
+    set(X3D2_TEST_NAME_SUFFIX _ddd)
+    define_verification_test(verification/test_poisson_bc.f90 2 ${backend} --bc ddd)
+    if(is_omp)
+      set(X3D2_TEST_NAME_SUFFIX _ddd_ysplit)
+      define_verification_test(verification/test_poisson_bc.f90 2 ${backend} --bc ddd --nproc_dir 1,2,1)
     endif()
     # The backend's factory must stop on a BC code it has no case type for
     set(X3D2_TEST_NAME_SUFFIX _unsupported_bc)
