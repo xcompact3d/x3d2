@@ -282,12 +282,30 @@ find_package(Python3 COMPONENTS Interpreter REQUIRED)
 
 function(define_regression_case_test case_name input_file golden_file np backend)
   # Trailing arguments are passed through to the comparator (e.g. --ceiling).
-  set(extra_args "${ARGN}")
+  # Files or directories listed after COPY_FILES are copied from
+  # tests/regression into the work directory each time the test runs, not at
+  # configure time (e.g. an IBM mask).
+  cmake_parse_arguments(PARSE_ARGV 5 ARG "" "" "COPY_FILES")
+  set(extra_args "${ARG_UNPARSED_ARGUMENTS}")
   string(REPLACE ";" " " extra_args_str "${extra_args}")
 
   set(test_name regression_${case_name}_${backend}_${np})
   set(work_dir ${CMAKE_CURRENT_BINARY_DIR}/regression/${test_name})
   file(MAKE_DIRECTORY ${work_dir})
+  # Stage the copied files in front of the run, so each run starts from a
+  # fresh copy and a removed or added file cannot go stale.
+  set(stage_cmd "")
+  foreach(copy_file IN LISTS ARG_COPY_FILES)
+    set(copy_path ${CMAKE_CURRENT_SOURCE_DIR}/regression/${copy_file})
+    get_filename_component(copy_name ${copy_file} NAME)
+    if(IS_DIRECTORY ${copy_path})
+      string(APPEND stage_cmd
+        "${CMAKE_COMMAND} -E remove_directory ${work_dir}/${copy_name} && "
+        "${CMAKE_COMMAND} -E copy_directory ${copy_path} ${work_dir}/${copy_name} && ")
+    else()
+      string(APPEND stage_cmd "${CMAKE_COMMAND} -E copy ${copy_path} ${work_dir}/ && ")
+    endif()
+  endforeach()
   set(comparator ${CMAKE_CURRENT_SOURCE_DIR}/regression/compare_monitoring.py)
   set(input ${CMAKE_CURRENT_SOURCE_DIR}/regression/${input_file})
   set(golden ${CMAKE_CURRENT_SOURCE_DIR}/regression/${golden_file})
@@ -306,7 +324,7 @@ function(define_regression_case_test case_name input_file golden_file np backend
   add_test(
     NAME ${test_name}
     COMMAND sh -c
-      "${launcher} $<TARGET_FILE:xcompact> ${input} && \
+      "${stage_cmd}${launcher} $<TARGET_FILE:xcompact> ${input} && \
        ${Python3_EXECUTABLE} ${comparator} golden \
        --produced monitoring.csv --golden ${golden} ${extra_args_str}"
     WORKING_DIRECTORY ${work_dir})
@@ -924,17 +942,33 @@ if(SINGLE_PREC)
   set(_channel_cmp_args --rtol 1e-4
       --ceiling div_u_max=1e-4 --ceiling div_u_mean=1e-5
       --ceiling-skip-initial)
+  set(_cylinder_cmp_args --rtol 1e-5
+      --ceiling div_u_max=5e-5 --ceiling div_u_mean=3e-6)
 else()
   set(_smoke_cmp_args --rtol 1e-10
       --ceiling div_u_max=1e-8 --ceiling div_u_mean=1e-9)
   set(_nightly_cmp_args --rtol 1e-10
       --ceiling div_u_max=1e-12 --ceiling div_u_mean=1e-13)
   set(_channel_cmp_args ${_smoke_cmp_args} --ceiling-skip-initial)
+  set(_cylinder_cmp_args --rtol 1e-10
+      --ceiling div_u_max=3e-6 --ceiling div_u_mean=1e-6)
 endif()
+# The cylinder case holds a solid body with the immersed boundary method,
+# which leaves a divergence near the body that is not round-off. The largest
+# observed values over the 30 steps are div_u_max 2.2e-7 and div_u_mean 4.6e-8
+# in double precision, and 4.0e-6 and 2.4e-7 in single precision. The ceilings
+# sit 12 to 22 times above these, so they still catch a solver that stops
+# enforcing the constraint.
 
 if(WITH_2DECOMPFFT AND _cpu_omp_backend)
   define_regression_case_test(tgv_smoke tgv_smoke.x3d tgv_smoke_golden_omp.csv 2 omp
     ${_smoke_cmp_args})
+  # The 110 cylinder case reads its IBM mask from the work directory through ADIOS2.
+  if(WITH_ADIOS2)
+    define_regression_case_test(cylinder_110_smoke cylinder_110_smoke.x3d
+      cylinder_110_smoke_golden_omp.csv 1 omp ${_cylinder_cmp_args}
+      COPY_FILES ibm_110.bp)
+  endif()
 endif()
 
 # CUDA regression cases. The channel cases run the 010 FFT Poisson solver with
@@ -952,6 +986,12 @@ if(${ENABLE_BACKEND} STREQUAL "CUDA")
     channel_smoke_golden_cuda.csv 1 cuda ${_channel_cmp_args})
   define_regression_case_test(channel_bottom_smoke channel_bottom_smoke.x3d
     channel_bottom_smoke_golden_cuda.csv 1 cuda ${_channel_cmp_args})
+  # The 110 cylinder case reads its IBM mask from the work directory through ADIOS2.
+  if(WITH_ADIOS2)
+    define_regression_case_test(cylinder_110_smoke cylinder_110_smoke.x3d
+      cylinder_110_smoke_golden_cuda.csv 1 cuda ${_cylinder_cmp_args}
+      COPY_FILES ibm_110.bp)
+  endif()
 endif()
 
 # The driver has its backend fixed at compile time, so register it as OMP only
@@ -968,6 +1008,7 @@ endif()
 unset(_smoke_cmp_args)
 unset(_nightly_cmp_args)
 unset(_channel_cmp_args)
+unset(_cylinder_cmp_args)
 unset(_cpu_omp_backend)
 
 set(EXECUTABLE_OUTPUT_PATH "bin")

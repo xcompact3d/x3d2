@@ -1,0 +1,43 @@
+&domain_settings
+! Small cylinder smoke case for the regression suite: 65 x 33 x 16, 30 steps.
+! Not physically resolved -- it runs the 110 FFT Poisson solver with the
+! immersed boundary mask in ibm_110.bp (a cylinder of radius 0.8 about
+! x = 5, y = 6, axis along z, made with py4x3d2 for this grid). It catches
+! crashes, NaNs and numerical drift by comparing monitoring.csv against a
+! committed golden file. The test copies ibm_110.bp into its work directory.
+flow_case_name = 'cylinder'
+
+L_global = 20d0, 12d0, 6d0
+
+dims_global = 65, 33, 16
+
+nproc_dir = 1, 1, 1
+
+BC_x = 'dirichlet', 'dirichlet'
+BC_y = 'neumann', 'neumann'
+BC_z = 'periodic', 'periodic'
+/End
+
+&solver_params
+Re = 300d0
+time_intg = 'AB3'
+dt = 0.0075d0
+n_iters = 30
+n_output = 5
+poisson_solver_type = 'FFT'
+der1st_scheme = 'compact6'
+der2nd_scheme = 'compact6'
+interpl_scheme = 'classic'
+stagder_scheme = 'compact6'
+ibm_on = T
+ibm_file = 'ibm_110.bp'
+/End
+
+&checkpoint_params
+snapshot_freq = 0
+/End
+
+&cylinder_nml
+init_noise = 0. 0. 0.
+inlet_noise = 0. 0. 0.
+/End
