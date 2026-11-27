@@ -1,10 +1,15 @@
 program test_curl_uniform
   !! The curl of a uniform flow must be zero at free-slip walls
   !!
-  !! Sets u = 1, v = 0.5 and w = 0.25 on a small mesh, calls solver_t%curl,
-  !! the routine behind the enstrophy in the monitoring output, and checks
-  !! that max|omega| is zero to round-off. All three components are non-zero,
-  !! so every curl derivative acts on a non-zero field.
+  !! Sets u = 1, v = 0.5 and w = 0.25 on a small mesh and checks that, to
+  !! round-off, max|omega| from solver_t%curl (behind the enstrophy in the
+  !! monitoring output) is zero, and so is the vorticity magnitude from
+  !! compute_derived_fields (the snapshot output). All three components are
+  !! non-zero, so every curl derivative acts on a non-zero field.
+  !!
+  !! The Q-criterion is not checked: it also needs dv/dy and dw/dz, and a
+  !! uniform v or w breaks the free-slip condition v = 0 or w = 0 at the
+  !! wall, so those derivatives are not zero there.
   !!
   !! A uniform field has no vorticity, whatever the boundary conditions. The
   !! curl differentiates tangential components, which are even across a
@@ -28,6 +33,7 @@ program test_curl_uniform
   use m_backend_runtime, only: backend_runtime_t, backend_is_cuda
   use m_common, only: dp, MPI_X3D2_DP, DIR_C, DIR_X, DIR_Y, DIR_Z, VERT
   use m_mesh, only: mesh_t
+  use m_postprocess, only: compute_derived_fields
   use m_mpi, only: MPI_COMM_WORLD, MPI_Allreduce, MPI_MAX
   use m_solver, only: solver_t
   use m_tdsops_setup, only: allocate_tdsops
@@ -136,6 +142,15 @@ contains
     local_max = max(local_max, maxval(abs(host(1:dims(1), 1:dims(2), &
                                                1:dims(3)))))
 
+    ! The snapshot vorticity magnitude reads solver%u, v, w
+    solver%u => u
+    solver%v => v
+    solver%w => w
+    call compute_derived_fields(solver, .true., .false.)
+    call solver%backend%get_field_data(host, solver%vort)
+    local_max = max(local_max, maxval(abs(host(1:dims(1), 1:dims(2), &
+                                               1:dims(3)))))
+
     call MPI_Allreduce(local_max, global_max, 1, MPI_X3D2_DP, &
                        MPI_MAX, MPI_COMM_WORLD, ierr)
 
@@ -154,6 +169,7 @@ contains
     call solver%backend%allocator%release_block(o_i)
     call solver%backend%allocator%release_block(o_j)
     call solver%backend%allocator%release_block(o_k)
+    call solver%backend%allocator%release_block(solver%vort)
   end subroutine run_config
 
 end program test_curl_uniform

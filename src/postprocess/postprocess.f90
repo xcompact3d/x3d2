@@ -45,7 +45,10 @@ contains
     if (output_qcriterion .and. .not. associated(solver%qcrit)) &
       solver%qcrit => solver%backend%allocator%get_block(DIR_X, VERT)
 
-    ! Compute all 9 velocity gradient components
+    ! Compute all 9 velocity gradient components. An off-diagonal
+    ! derivative (dv/dx, du/dy, ...) is of a component tangential to its
+    ! direction, which is even across a free-slip boundary, so it takes
+    ! the symmetric operator. The diagonal ones keep der1st.
     ! du/dx (x-derivative in x-pencil, no reorder needed)
     dudx => solver%backend%allocator%get_block(DIR_X)
     call solver%backend%tds_solve(dudx, solver%u, &
@@ -54,19 +57,19 @@ contains
     ! dv/dx
     dvdx => solver%backend%allocator%get_block(DIR_X)
     call solver%backend%tds_solve(dvdx, solver%v, &
-                                  solver%xdirps%der1st)
+                                  solver%xdirps%der1st_sym)
 
     ! dw/dx
     dwdx => solver%backend%allocator%get_block(DIR_X)
     call solver%backend%tds_solve(dwdx, solver%w, &
-                                  solver%xdirps%der1st)
+                                  solver%xdirps%der1st_sym)
 
     ! du/dy
     u_y => solver%backend%allocator%get_block(DIR_Y)
     dudy_y => solver%backend%allocator%get_block(DIR_Y)
     call solver%backend%reorder(u_y, solver%u, RDR_X2Y)
     call solver%backend%tds_solve(dudy_y, u_y, &
-                                  solver%ydirps%der1st)
+                                  solver%ydirps%der1st_sym)
     dudy_x => solver%backend%allocator%get_block(DIR_X)
     call solver%backend%reorder(dudy_x, dudy_y, RDR_Y2X)
     call solver%backend%allocator%release_block(u_y)
@@ -88,7 +91,7 @@ contains
     dwdy_y => solver%backend%allocator%get_block(DIR_Y)
     call solver%backend%reorder(w_y, solver%w, RDR_X2Y)
     call solver%backend%tds_solve(dwdy_y, w_y, &
-                                  solver%ydirps%der1st)
+                                  solver%ydirps%der1st_sym)
     dwdy_x => solver%backend%allocator%get_block(DIR_X)
     call solver%backend%reorder(dwdy_x, dwdy_y, RDR_Y2X)
     call solver%backend%allocator%release_block(w_y)
@@ -99,7 +102,7 @@ contains
     dudz_z => solver%backend%allocator%get_block(DIR_Z)
     call solver%backend%reorder(u_z, solver%u, RDR_X2Z)
     call solver%backend%tds_solve(dudz_z, u_z, &
-                                  solver%zdirps%der1st)
+                                  solver%zdirps%der1st_sym)
     dudz_x => solver%backend%allocator%get_block(DIR_X)
     call solver%backend%reorder(dudz_x, dudz_z, RDR_Z2X)
     call solver%backend%allocator%release_block(u_z)
@@ -110,7 +113,7 @@ contains
     dvdz_z => solver%backend%allocator%get_block(DIR_Z)
     call solver%backend%reorder(v_z, solver%v, RDR_X2Z)
     call solver%backend%tds_solve(dvdz_z, v_z, &
-                                  solver%zdirps%der1st)
+                                  solver%zdirps%der1st_sym)
     dvdz_x => solver%backend%allocator%get_block(DIR_X)
     call solver%backend%reorder(dvdz_x, dvdz_z, RDR_Z2X)
     call solver%backend%allocator%release_block(v_z)
