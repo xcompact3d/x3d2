@@ -698,6 +698,10 @@ contains
 
   subroutine curl(self, o_i_hat, o_j_hat, o_k_hat, u, v, w)
     !! Wrapper for curl
+    !!
+    !! Every derivative in the curl is of a velocity component along
+    !! another direction (dw/dy, dv/dz, ...), which is even across a
+    !! free-slip boundary, so the curl takes the symmetric operators.
     implicit none
 
     class(solver_t) :: self
@@ -707,7 +711,8 @@ contains
 
     call self%vector_calculus%curl( &
       o_i_hat, o_j_hat, o_k_hat, u, v, w, &
-      self%xdirps%der1st, self%ydirps%der1st, self%zdirps%der1st &
+      self%xdirps%der1st_sym, self%ydirps%der1st_sym, &
+      self%zdirps%der1st_sym &
       )
 
   end subroutine curl

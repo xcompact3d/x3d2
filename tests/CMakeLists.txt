@@ -483,6 +483,13 @@ function(define_backend_tests backend)
     define_verification_test(verification/test_laplacian_stretched.f90 2 ${backend})
   endif()
   define_verification_test(verification/test_les_field.f90 ${serial} ${backend})
+  # The curl of a uniform flow, with and without a decomposition in z.
+  foreach(bc 000 110 111)
+    set(X3D2_TEST_NAME_SUFFIX _${bc})
+    define_verification_test(verification/test_curl_uniform.f90 ${serial} ${backend} ${bc})
+    define_verification_test(verification/test_curl_uniform.f90 2 ${backend} ${bc})
+  endforeach()
+  unset(X3D2_TEST_NAME_SUFFIX)
   define_verification_test(verification/test_thom.f90 ${serial} ${backend})
   define_verification_test(verification/test_filter.f90 ${serial} ${backend})
   # The filter along a decomposed direction must match the undecomposed one.
