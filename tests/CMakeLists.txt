@@ -960,21 +960,24 @@ else()
   set(_cylinder_cmp_args --rtol 1e-10
       --ceiling div_u_max=3e-6 --ceiling div_u_mean=1e-6)
 endif()
-# The cylinder case holds a solid body with the immersed boundary method,
+# The cylinder cases hold a solid body with the immersed boundary method,
 # which leaves a divergence near the body that is not round-off. The largest
-# observed values over the 30 steps are div_u_max 2.2e-7 and div_u_mean 4.6e-8
-# in double precision, and 4.0e-6 and 2.4e-7 in single precision. The ceilings
-# sit 12 to 22 times above these, so they still catch a solver that stops
-# enforcing the constraint.
+# observed values over the 30 steps, across the 100, 110 and 111 cases, are
+# div_u_max 2.3e-7 and div_u_mean 4.6e-8 in double precision, and 4.0e-6 and
+# 2.4e-7 in single precision. The ceilings sit 12 to 22 times above these, so
+# they still catch a solver that stops enforcing the constraint.
 
 if(WITH_2DECOMPFFT AND _cpu_omp_backend)
   define_regression_case_test(tgv_smoke tgv_smoke.x3d tgv_smoke_golden_omp.csv 2 omp
     ${_smoke_cmp_args})
-  # The 110 cylinder case reads its IBM mask from the work directory through ADIOS2.
+  # The cylinder cases read their shared IBM mask from the work directory
+  # through ADIOS2, one case per FFT Poisson case type with non-periodic x.
   if(WITH_ADIOS2)
-    define_regression_case_test(cylinder_110_smoke cylinder_110_smoke.x3d
-      cylinder_110_smoke_golden_omp.csv 1 omp ${_cylinder_cmp_args}
-      COPY_FILES ibm_110.bp)
+    foreach(bc 100 110 111)
+      define_regression_case_test(cylinder_${bc}_smoke cylinder_${bc}_smoke.x3d
+        cylinder_${bc}_smoke_golden_omp.csv 1 omp ${_cylinder_cmp_args}
+        COPY_FILES ibm_cylinder.bp)
+    endforeach()
   endif()
 endif()
 
@@ -993,11 +996,14 @@ if(${ENABLE_BACKEND} STREQUAL "CUDA")
     channel_smoke_golden_cuda.csv 1 cuda ${_channel_cmp_args})
   define_regression_case_test(channel_bottom_smoke channel_bottom_smoke.x3d
     channel_bottom_smoke_golden_cuda.csv 1 cuda ${_channel_cmp_args})
-  # The 110 cylinder case reads its IBM mask from the work directory through ADIOS2.
+  # The cylinder cases read their shared IBM mask from the work directory
+  # through ADIOS2, one case per FFT Poisson case type with non-periodic x.
   if(WITH_ADIOS2)
-    define_regression_case_test(cylinder_110_smoke cylinder_110_smoke.x3d
-      cylinder_110_smoke_golden_cuda.csv 1 cuda ${_cylinder_cmp_args}
-      COPY_FILES ibm_110.bp)
+    foreach(bc 100 110 111)
+      define_regression_case_test(cylinder_${bc}_smoke cylinder_${bc}_smoke.x3d
+        cylinder_${bc}_smoke_golden_cuda.csv 1 cuda ${_cylinder_cmp_args}
+        COPY_FILES ibm_cylinder.bp)
+    endforeach()
   endif()
 endif()
 
