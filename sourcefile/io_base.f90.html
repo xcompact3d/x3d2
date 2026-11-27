@@ -1,0 +1,1772 @@
+<!-- -*- mode: jinja2 -*- -->
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+      <meta name="description" content="x3d2 is the current codename for what is to become Xcompact3d version 2.0.">
+    <meta name="author" content="Xcompact3d Team" >
+    <link rel="icon" href="../favicon.png">
+
+    <title>io_base.f90 &ndash; x3d2</title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+            integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <!-- Font Awesome -->
+    <link href="../css/fontawesome.min.css" rel="stylesheet">
+    <link href="../css/brands.min.css" rel="stylesheet">
+    <link href="../css/regular.min.css" rel="stylesheet">
+    <link href="../css/solid.min.css" rel="stylesheet">
+    <link href="../css/v4-font-face.min.css" rel="stylesheet">
+    <link href="../css/v4-shims.min.css" rel="stylesheet">
+    <!-- MathJax -->
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        TeX: { equationNumbers: { autoNumber: "AMS" } }
+      });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@2.7.9/MathJax.js?config=TeX-AMS-MML_HTMLorMML" async
+            integrity="sha256-DViIOMYdwlM/axqoGDPeUyf0urLoHMN4QACBKyB58Uw=" crossorigin="anonymous"></script>
+    <!-- Other scripts and stylesheets -->
+    <link href="../css/local.css" rel="stylesheet">
+    <link href="../css/pygments.css" rel="stylesheet">
+    <script src="../js/svg-pan-zoom.min.js"></script>
+  </head>
+
+  <body>
+
+    <!-- Fixed navbar -->
+    <div class="container-fluid mb-sm-4 mb-xl-2">
+      <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+        <div class="container">
+          <a class="navbar-brand" href="../index.html">x3d2 </a>
+          <button type="button" class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#navbar"
+                  aria-expanded="false" aria-controls="navbar" aria-label="Toggle navigation">
+                  <span class="navbar-toggler-icon">
+          </button>
+
+          <div id="navbar" class="navbar-collapse collapse">
+            <ul class="navbar-nav">
+                  <li class="nav-item">
+                    <a class="nav-link" href="../lists/files.html">Source Files</a>
+                  </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/modules.html">Modules</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/procedures.html">Procedures</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/absint.html">Abstract Interfaces</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/types.html">Derived Types</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/namelists.html">Namelists</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/programs.html">Programs</a>
+                </li>
+            </ul>
+              <div class="d-flex align-items-end flex-grow-1">
+                <form action="../search.html" role="search" class="ms-auto">
+                  <input type="text" class="form-control" aria-label="Search" placeholder="Search" name="q" id="tipue_search_input" autocomplete="off" required>
+                </form>
+              </div>
+          </div><!--/.nav-collapse -->
+        </div>
+      </nav>
+    </div>
+
+    <div class="container">
+  <div class="row">
+    <h1>io_base.f90
+      <small>Source File</small>
+      
+    </h1>
+      <div class="container p-2 mb-4 bg-light border rounded-3">
+    <div class="row align-items-center justify-content-between" id="info-bar">
+      <div class="col">
+        <ul class="list-inline" style="margin-bottom:0px;display:inline">
+
+            <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
+              <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
+                 title=" 0.8% of total for source files.">199 statements</a>
+            </li>
+
+            <li class="list-inline-item" id="source-file">
+              <i class="fa fa-code"></i>
+              <a href="../src/io_base.f90"> Source File</a>
+            </li>
+        </ul>
+      </div>
+      <div class="col">
+        <nav aria-label="breadcrumb">
+          <ol class="breadcrumb justify-content-end mb-0">
+            <li class="breadcrumb-item active" aria-current="page">io_base.f90</li>
+          </ol>
+        </nav>
+      </div>
+    </div>
+  </div>
+  <script>
+    // Enable Bootstrap tooltips
+    (function () {
+      const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+      const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+    })();
+  </script>
+
+  </div>
+  <div class="row">
+    <div class="col-md-3 hidden-xs hidden-sm visible-md visible-lg">
+        <div id="sidebar">
+      <h3>Contents</h3>
+  
+  
+  
+  
+  
+      <div class="card mb-4">
+      <a data-bs-toggle="collapse" href="#mods-0"
+         aria-expanded="false" aria-controls="mods-0">
+         <h4 class="card-header bg-primary text-white">Modules</h4>
+      </a>
+      <div id="mods-0" class="collapse">
+        <div class="list-group list-group-flush">
+            <a class="list-group-item" href="../module/m_io_base.html">m_io_base</a>
+        </div>
+      </div>
+    </div>
+
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+    <div class="card card-primary">
+      <div class="card-header text-left"><h3 class="card-title">Source Code</h3></div>
+      <div class="list-group">
+        <a class="list-group-item" href="../sourcefile/io_base.f90.html#src">io_base.f90</a>
+      </div>
+    </div>
+
+
+  </div>
+
+    </div>
+    <div class="col-md-9" id='text'>
+      
+      <br>
+        <div class="card">
+          <div class="card-header">
+            <h3 class="card-title">This file depends on</h3>
+          </div>
+          <div class="card-body">
+            <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: sourcefile~~io_base.f90~~EfferentGraph Pages: 1 -->
+<svg id="sourcefileio_basef90EfferentGraph" width="641pt" height="251pt"
+ viewBox="0.00 0.00 641.00 251.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="sourcefile~~io_base.f90~~EfferentGraph" class="graph" transform="scale(0.677475 0.677475) rotate(0) translate(4 366.64)">
+<title>sourcefile~~io_base.f90~~EfferentGraph</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-366.64 942.16,-366.64 942.16,4 -4,4"/>
+<!-- sourcefile~io_base.f90 -->
+<g id="sourcefile~~io_base.f90~~EfferentGraph_node1" class="node">
+<title>sourcefile~io_base.f90</title>
+<polygon fill="none" stroke="black" points="938.16,-197.15 865.89,-197.15 865.89,-172.88 938.16,-172.88 938.16,-197.15"/>
+<text xml:space="preserve" text-anchor="middle" x="902.02" y="-181.42" font-family="Helvetica,sans-Serif" font-size="10.50">io_base.f90</text>
+</g>
+<!-- sourcefile~backend.f90 -->
+<g id="sourcefile~~io_base.f90~~EfferentGraph_node2" class="node">
+<title>sourcefile~backend.f90</title>
+<g id="a_sourcefile~~io_base.f90~~EfferentGraph_node2"><a xlink:href="../sourcefile/backend.f90.html" xlink:title="backend.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="829.89,-197.15 752.37,-197.15 752.37,-172.88 829.89,-172.88 829.89,-197.15"/>
+<text xml:space="preserve" text-anchor="middle" x="791.13" y="-181.42" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">backend.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~io_base.f90&#45;&gt;sourcefile~backend.f90 -->
+<g id="sourcefile~~io_base.f90~~EfferentGraph_edge1" class="edge">
+<title>sourcefile~io_base.f90&#45;&gt;sourcefile~backend.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M865.67,-185.02C857.99,-185.02 849.72,-185.02 841.61,-185.02"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="841.83,-181.52 831.83,-185.02 841.83,-188.52 841.83,-181.52"/>
+</g>
+<!-- sourcefile~common.f90~2 -->
+<g id="sourcefile~~io_base.f90~~EfferentGraph_node3" class="node">
+<title>sourcefile~common.f90~2</title>
+<g id="a_sourcefile~~io_base.f90~~EfferentGraph_node3"><a xlink:href="../sourcefile/common.f90~2.html" xlink:title="common.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="179.79,-143.15 100.77,-143.15 100.77,-118.88 179.79,-118.88 179.79,-143.15"/>
+<text xml:space="preserve" text-anchor="middle" x="140.28" y="-127.42" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">common.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~io_base.f90&#45;&gt;sourcefile~common.f90~2 -->
+<g id="sourcefile~~io_base.f90~~EfferentGraph_edge2" class="edge">
+<title>sourcefile~io_base.f90&#45;&gt;sourcefile~common.f90~2</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M890.05,-172.65C859.34,-139.48 768.5,-51.02 672.98,-51.02 672.98,-51.02 672.98,-51.02 417.32,-51.02 327.35,-51.02 299,-35.81 215.79,-70.02 194.15,-78.92 173.9,-96.32 159.99,-110.26"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="157.64,-107.66 153.24,-117.3 162.69,-112.51 157.64,-107.66"/>
+</g>
+<!-- sourcefile~field.f90 -->
+<g id="sourcefile~~io_base.f90~~EfferentGraph_node4" class="node">
+<title>sourcefile~field.f90</title>
+<g id="a_sourcefile~~io_base.f90~~EfferentGraph_node4"><a xlink:href="../sourcefile/field.f90.html" xlink:title="field.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="445.83,-217.15 390.81,-217.15 390.81,-192.88 445.83,-192.88 445.83,-217.15"/>
+<text xml:space="preserve" text-anchor="middle" x="418.32" y="-201.42" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">field.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~io_base.f90&#45;&gt;sourcefile~field.f90 -->
+<g id="sourcefile~~io_base.f90~~EfferentGraph_edge3" class="edge">
+<title>sourcefile~io_base.f90&#45;&gt;sourcefile~field.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M865.84,-196.65C803.48,-216.03 669.23,-252.11 553.84,-245.02"/>
+</g>
+<!-- sourcefile~backend.f90&#45;&gt;sourcefile~common.f90~2 -->
+<g id="sourcefile~~io_base.f90~~EfferentGraph_edge5" class="edge">
+<title>sourcefile~backend.f90&#45;&gt;sourcefile~common.f90~2</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M752.09,-193.22C729.28,-197.71 699.61,-202.8 672.98,-205.02"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M670.98,-205.02C634.62,-208.05 627.48,-190.71 591.6,-184.02 515.87,-169.91 495.03,-179.26 419.32,-165.02"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M417.32,-165.02C351.7,-150.9 336.86,-138.67 270.17,-131.02"/>
+</g>
+<!-- sourcefile~backend.f90&#45;&gt;sourcefile~field.f90 -->
+<g id="sourcefile~~io_base.f90~~EfferentGraph_edge6" class="edge">
+<title>sourcefile~backend.f90&#45;&gt;sourcefile~field.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M670.98,-205.02C616.16,-209.59 608.75,-248.39 553.84,-245.02"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M551.84,-245.02C518.78,-242.99 482.91,-231.55 456.84,-221.43"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="458.29,-218.24 447.7,-217.76 455.68,-224.73 458.29,-218.24"/>
+</g>
+<!-- sourcefile~allocator.f90 -->
+<g id="sourcefile~~io_base.f90~~EfferentGraph_node5" class="node">
+<title>sourcefile~allocator.f90</title>
+<g id="a_sourcefile~~io_base.f90~~EfferentGraph_node5"><a xlink:href="../sourcefile/allocator.f90.html" xlink:title="allocator.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="591.6,-217.15 514.08,-217.15 514.08,-192.88 591.6,-192.88 591.6,-217.15"/>
+<text xml:space="preserve" text-anchor="middle" x="552.84" y="-201.42" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">allocator.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~backend.f90&#45;&gt;sourcefile~allocator.f90 -->
+<g id="sourcefile~~io_base.f90~~EfferentGraph_edge4" class="edge">
+<title>sourcefile~backend.f90&#45;&gt;sourcefile~allocator.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M670.98,-205.02C648.86,-206.86 624.3,-207.14 603.4,-206.84"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="603.47,-203.34 593.41,-206.65 603.34,-210.34 603.47,-203.34"/>
+</g>
+<!-- sourcefile~logger.f90 -->
+<g id="sourcefile~~io_base.f90~~EfferentGraph_node6" class="node">
+<title>sourcefile~logger.f90</title>
+<g id="a_sourcefile~~io_base.f90~~EfferentGraph_node6"><a xlink:href="../sourcefile/logger.f90.html" xlink:title="logger.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="64.77,-143.15 0,-143.15 0,-118.88 64.77,-118.88 64.77,-143.15"/>
+<text xml:space="preserve" text-anchor="middle" x="32.38" y="-127.42" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">logger.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~backend.f90&#45;&gt;sourcefile~logger.f90 -->
+<g id="sourcefile~~io_base.f90~~EfferentGraph_edge7" class="edge">
+<title>sourcefile~backend.f90&#45;&gt;sourcefile~logger.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M670.98,-325.02C503.63,-386.05 444.36,-362.34 270.17,-325.02"/>
+</g>
+<!-- sourcefile~mesh.f90 -->
+<g id="sourcefile~~io_base.f90~~EfferentGraph_node7" class="node">
+<title>sourcefile~mesh.f90</title>
+<g id="a_sourcefile~~io_base.f90~~EfferentGraph_node7"><a xlink:href="../sourcefile/mesh.f90.html" xlink:title="mesh.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="583.35,-297.15 522.33,-297.15 522.33,-272.88 583.35,-272.88 583.35,-297.15"/>
+<text xml:space="preserve" text-anchor="middle" x="552.84" y="-281.42" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">mesh.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~backend.f90&#45;&gt;sourcefile~mesh.f90 -->
+<g id="sourcefile~~io_base.f90~~EfferentGraph_edge8" class="edge">
+<title>sourcefile~backend.f90&#45;&gt;sourcefile~mesh.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M785.11,-197.26C772.05,-227.12 733.72,-302.87 672.98,-325.02"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M670.98,-325.02C655.7,-330.59 617.52,-315.58 588.87,-302.39"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="590.72,-299.39 580.18,-298.29 587.73,-305.72 590.72,-299.39"/>
+</g>
+<!-- sourcefile~poisson_fft.f90~3 -->
+<g id="sourcefile~~io_base.f90~~EfferentGraph_node8" class="node">
+<title>sourcefile~poisson_fft.f90~3</title>
+<g id="a_sourcefile~~io_base.f90~~EfferentGraph_node8"><a xlink:href="../sourcefile/poisson_fft.f90~3.html" xlink:title="poisson_fft.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="716.37,-159.15 627.6,-159.15 627.6,-134.88 716.37,-134.88 716.37,-159.15"/>
+<text xml:space="preserve" text-anchor="middle" x="671.98" y="-143.42" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">poisson_fft.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~backend.f90&#45;&gt;sourcefile~poisson_fft.f90~3 -->
+<g id="sourcefile~~io_base.f90~~EfferentGraph_edge9" class="edge">
+<title>sourcefile~backend.f90&#45;&gt;sourcefile~poisson_fft.f90~3</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M752.1,-172.68C742.68,-169.63 732.45,-166.31 722.57,-163.11"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="723.66,-159.78 713.07,-160.02 721.5,-166.44 723.66,-159.78"/>
+</g>
+<!-- sourcefile~tdsops.f90 -->
+<g id="sourcefile~~io_base.f90~~EfferentGraph_node9" class="node">
+<title>sourcefile~tdsops.f90</title>
+<g id="a_sourcefile~~io_base.f90~~EfferentGraph_node9"><a xlink:href="../sourcefile/tdsops.f90.html" xlink:title="tdsops.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="302.31,-103.15 236.04,-103.15 236.04,-78.88 302.31,-78.88 302.31,-103.15"/>
+<text xml:space="preserve" text-anchor="middle" x="269.17" y="-87.42" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">tdsops.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~backend.f90&#45;&gt;sourcefile~tdsops.f90 -->
+<g id="sourcefile~~io_base.f90~~EfferentGraph_edge10" class="edge">
+<title>sourcefile~backend.f90&#45;&gt;sourcefile~tdsops.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M779.01,-172.6C765.66,-158.62 741.86,-136.47 716.37,-126.02 578.3,-69.39 396.27,-78.03 313.94,-85.88"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="313.64,-82.39 304.04,-86.87 314.34,-89.36 313.64,-82.39"/>
+</g>
+<!-- sourcefile~common.f90~2&#45;&gt;sourcefile~logger.f90 -->
+<g id="sourcefile~~io_base.f90~~EfferentGraph_edge11" class="edge">
+<title>sourcefile~common.f90~2&#45;&gt;sourcefile~logger.f90</title>
+<path fill="none" stroke="#00ff00" stroke-dasharray="5,2" d="M100.45,-131.02C92.68,-131.02 84.47,-131.02 76.56,-131.02"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="76.78,-127.52 66.78,-131.02 76.78,-134.52 76.78,-127.52"/>
+</g>
+<!-- sourcefile~field.f90&#45;&gt;sourcefile~common.f90~2 -->
+<g id="sourcefile~~io_base.f90~~EfferentGraph_edge12" class="edge">
+<title>sourcefile~field.f90&#45;&gt;sourcefile~common.f90~2</title>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M390.49,-193.69C380.4,-189.29 368.87,-184.09 358.56,-179.02 318.45,-159.29 314.59,-136.11 270.17,-131.02"/>
+</g>
+<!-- sourcefile~allocator.f90&#45;&gt;sourcefile~common.f90~2 -->
+<g id="sourcefile~~io_base.f90~~EfferentGraph_edge13" class="edge">
+<title>sourcefile~allocator.f90&#45;&gt;sourcefile~common.f90~2</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M517.47,-192.42C491.01,-183.27 453.33,-171.42 419.32,-165.02"/>
+</g>
+<!-- sourcefile~allocator.f90&#45;&gt;sourcefile~field.f90 -->
+<g id="sourcefile~~io_base.f90~~EfferentGraph_edge14" class="edge">
+<title>sourcefile~allocator.f90&#45;&gt;sourcefile~field.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M513.87,-205.02C496.13,-205.02 475.07,-205.02 457.33,-205.02"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="457.46,-201.52 447.46,-205.02 457.46,-208.52 457.46,-201.52"/>
+</g>
+<!-- sourcefile~mesh.f90&#45;&gt;sourcefile~common.f90~2 -->
+<g id="sourcefile~~io_base.f90~~EfferentGraph_edge15" class="edge">
+<title>sourcefile~mesh.f90&#45;&gt;sourcefile~common.f90~2</title>
+<path fill="none" stroke="#00ff66" stroke-dasharray="5,2" d="M523.06,-272.4C496.68,-261.79 456.22,-247.9 419.32,-245.02"/>
+<path fill="none" stroke="#00ff66" stroke-dasharray="5,2" d="M417.32,-245.02C352.12,-239.93 334.16,-258.54 270.17,-245.02"/>
+<path fill="none" stroke="#00ff66" stroke-dasharray="5,2" d="M268.17,-245.02C216.6,-234.12 175.39,-183.26 155.07,-153.28"/>
+<polygon fill="#00ff66" stroke="#00ff66" points="158.01,-151.37 149.6,-144.91 152.15,-155.2 158.01,-151.37"/>
+</g>
+<!-- sourcefile~mesh.f90&#45;&gt;sourcefile~field.f90 -->
+<g id="sourcefile~~io_base.f90~~EfferentGraph_edge17" class="edge">
+<title>sourcefile~mesh.f90&#45;&gt;sourcefile~field.f90</title>
+<path fill="none" stroke="#00ff66" stroke-dasharray="5,2" d="M533.25,-272.54C527.1,-268.32 520.24,-263.53 514.08,-259.02 497.73,-247.04 495.48,-241.42 478.08,-231.02 471.33,-226.98 463.83,-223.19 456.52,-219.83"/>
+<polygon fill="#00ff66" stroke="#00ff66" points="457.99,-216.65 447.43,-215.82 455.17,-223.06 457.99,-216.65"/>
+</g>
+<!-- sourcefile~mesh.f90&#45;&gt;sourcefile~logger.f90 -->
+<g id="sourcefile~~io_base.f90~~EfferentGraph_edge18" class="edge">
+<title>sourcefile~mesh.f90&#45;&gt;sourcefile~logger.f90</title>
+<path fill="none" stroke="#00ff66" stroke-dasharray="5,2" d="M268.17,-245.02C212.99,-233.36 189.16,-274.83 141.28,-245.02"/>
+<path fill="none" stroke="#00ff66" stroke-dasharray="5,2" d="M139.28,-245.02C100.21,-220.69 66.24,-178.25 47.89,-152.58"/>
+<polygon fill="#00ff66" stroke="#00ff66" points="50.89,-150.77 42.29,-144.57 45.15,-154.77 50.89,-150.77"/>
+</g>
+<!-- sourcefile~decomp_dummy.f90 -->
+<g id="sourcefile~~io_base.f90~~EfferentGraph_node10" class="node">
+<title>sourcefile~decomp_dummy.f90</title>
+<g id="a_sourcefile~~io_base.f90~~EfferentGraph_node10"><a xlink:href="../sourcefile/decomp_dummy.f90.html" xlink:title="decomp_dummy.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="478.08,-297.15 358.56,-297.15 358.56,-272.88 478.08,-272.88 478.08,-297.15"/>
+<text xml:space="preserve" text-anchor="middle" x="418.32" y="-281.42" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">decomp_dummy.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~mesh.f90&#45;&gt;sourcefile~decomp_dummy.f90 -->
+<g id="sourcefile~~io_base.f90~~EfferentGraph_edge16" class="edge">
+<title>sourcefile~mesh.f90&#45;&gt;sourcefile~decomp_dummy.f90</title>
+<path fill="none" stroke="#00ff66" stroke-dasharray="5,2" d="M522.1,-285.02C512.43,-285.02 501.25,-285.02 489.89,-285.02"/>
+<polygon fill="#00ff66" stroke="#00ff66" points="490.05,-281.52 480.05,-285.02 490.05,-288.52 490.05,-281.52"/>
+</g>
+<!-- sourcefile~mesh_content.f90 -->
+<g id="sourcefile~~io_base.f90~~EfferentGraph_node11" class="node">
+<title>sourcefile~mesh_content.f90</title>
+<g id="a_sourcefile~~io_base.f90~~EfferentGraph_node11"><a xlink:href="../sourcefile/mesh_content.f90.html" xlink:title="mesh_content.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="322.56,-297.15 215.79,-297.15 215.79,-272.88 322.56,-272.88 322.56,-297.15"/>
+<text xml:space="preserve" text-anchor="middle" x="269.17" y="-281.42" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">mesh_content.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~mesh.f90&#45;&gt;sourcefile~mesh_content.f90 -->
+<g id="sourcefile~~io_base.f90~~EfferentGraph_edge19" class="edge">
+<title>sourcefile~mesh.f90&#45;&gt;sourcefile~mesh_content.f90</title>
+<path fill="none" stroke="#00ff66" stroke-dasharray="5,2" d="M417.32,-245.02C378.47,-241.99 335.65,-255.67 306.27,-267.84"/>
+<polygon fill="#00ff66" stroke="#00ff66" points="304.89,-264.63 297.09,-271.8 307.66,-271.05 304.89,-264.63"/>
+</g>
+<!-- sourcefile~poisson_fft.f90~3&#45;&gt;sourcefile~common.f90~2 -->
+<g id="sourcefile~~io_base.f90~~EfferentGraph_edge20" class="edge">
+<title>sourcefile~poisson_fft.f90~3&#45;&gt;sourcefile~common.f90~2</title>
+<path fill="none" stroke="#0066ff" stroke-dasharray="5,2" d="M417.32,-127.02C351.99,-123.53 335.17,-138.47 270.17,-131.02"/>
+<path fill="none" stroke="#0066ff" stroke-dasharray="5,2" d="M268.17,-131.02C243.09,-128.14 215.02,-127.84 191.68,-128.39"/>
+<polygon fill="#0066ff" stroke="#0066ff" points="191.69,-124.89 181.8,-128.68 191.9,-131.88 191.69,-124.89"/>
+</g>
+<!-- sourcefile~poisson_fft.f90~3&#45;&gt;sourcefile~field.f90 -->
+<g id="sourcefile~~io_base.f90~~EfferentGraph_edge21" class="edge">
+<title>sourcefile~poisson_fft.f90~3&#45;&gt;sourcefile~field.f90</title>
+<path fill="none" stroke="#0066ff" stroke-dasharray="5,2" d="M551.84,-127.02C511.8,-129.34 512.98,-159.25 478.08,-179.02 471.3,-182.86 463.84,-186.54 456.58,-189.87"/>
+<polygon fill="#0066ff" stroke="#0066ff" points="455.31,-186.6 447.57,-193.84 458.14,-193 455.31,-186.6"/>
+</g>
+<!-- sourcefile~poisson_fft.f90~3&#45;&gt;sourcefile~logger.f90 -->
+<g id="sourcefile~~io_base.f90~~EfferentGraph_edge22" class="edge">
+<title>sourcefile~poisson_fft.f90~3&#45;&gt;sourcefile~logger.f90</title>
+<path fill="none" stroke="#0066ff" stroke-dasharray="5,2" d="M651.19,-134.55C581.24,-92.07 339.31,41.39 141.28,-13.02"/>
+<path fill="none" stroke="#0066ff" stroke-dasharray="5,2" d="M139.28,-13.02C92.24,-26.84 59.39,-78.56 43.76,-108.74"/>
+<polygon fill="#0066ff" stroke="#0066ff" points="40.76,-106.91 39.46,-117.42 47.04,-110.02 40.76,-106.91"/>
+</g>
+<!-- sourcefile~poisson_fft.f90~3&#45;&gt;sourcefile~mesh.f90 -->
+<g id="sourcefile~~io_base.f90~~EfferentGraph_edge23" class="edge">
+<title>sourcefile~poisson_fft.f90~3&#45;&gt;sourcefile~mesh.f90</title>
+<path fill="none" stroke="#0066ff" stroke-dasharray="5,2" d="M656.61,-159.58C647.59,-167.91 636.1,-179.43 627.6,-191.02 607.38,-218.6 614.34,-233.48 591.6,-259.02 589.54,-261.34 587.23,-263.55 584.79,-265.64"/>
+<polygon fill="#0066ff" stroke="#0066ff" points="582.69,-262.85 576.86,-271.7 586.93,-268.41 582.69,-262.85"/>
+</g>
+<!-- sourcefile~poisson_fft.f90~3&#45;&gt;sourcefile~tdsops.f90 -->
+<g id="sourcefile~~io_base.f90~~EfferentGraph_edge24" class="edge">
+<title>sourcefile~poisson_fft.f90~3&#45;&gt;sourcefile~tdsops.f90</title>
+<path fill="none" stroke="#0066ff" stroke-dasharray="5,2" d="M627.3,-134.75C605.39,-129.82 578.35,-125.6 553.84,-127.02"/>
+<path fill="none" stroke="#0066ff" stroke-dasharray="5,2" d="M551.84,-127.02C493.04,-130.43 478.13,-130.17 419.32,-127.02"/>
+<path fill="none" stroke="#0066ff" stroke-dasharray="5,2" d="M417.32,-127.02C381.73,-125.12 342.59,-115.14 313.63,-106.17"/>
+<polygon fill="#0066ff" stroke="#0066ff" points="314.7,-102.84 304.11,-103.14 312.57,-109.51 314.7,-102.84"/>
+</g>
+<!-- sourcefile~tdsops.f90&#45;&gt;sourcefile~common.f90~2 -->
+<g id="sourcefile~~io_base.f90~~EfferentGraph_edge25" class="edge">
+<title>sourcefile~tdsops.f90&#45;&gt;sourcefile~common.f90~2</title>
+<path fill="none" stroke="#cc00ff" stroke-dasharray="5,2" d="M235.83,-101.22C222.12,-105.54 205.84,-110.67 190.68,-115.45"/>
+<polygon fill="#cc00ff" stroke="#cc00ff" points="189.83,-112.05 181.34,-118.39 191.93,-118.72 189.83,-112.05"/>
+</g>
+<!-- sourcefile~tdsops.f90&#45;&gt;sourcefile~logger.f90 -->
+<g id="sourcefile~~io_base.f90~~EfferentGraph_edge26" class="edge">
+<title>sourcefile~tdsops.f90&#45;&gt;sourcefile~logger.f90</title>
+<path fill="none" stroke="#cc00ff" stroke-dasharray="5,2" d="M259.19,-78.73C239.56,-53.53 190.65,0.55 141.28,-13.02"/>
+</g>
+<!-- sourcefile~decomp_dummy.f90&#45;&gt;sourcefile~logger.f90 -->
+<g id="sourcefile~~io_base.f90~~EfferentGraph_edge27" class="edge">
+<title>sourcefile~decomp_dummy.f90&#45;&gt;sourcefile~logger.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M384.82,-297.6C348.49,-311 291.92,-329.68 270.17,-325.02"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M268.17,-325.02C243.96,-319.83 237.32,-318.26 215.79,-306.02 178.59,-284.87 177.61,-267.64 141.28,-245.02"/>
+</g>
+<!-- sourcefile~decomp_dummy.f90&#45;&gt;sourcefile~mesh_content.f90 -->
+<g id="sourcefile~~io_base.f90~~EfferentGraph_edge28" class="edge">
+<title>sourcefile~decomp_dummy.f90&#45;&gt;sourcefile~mesh_content.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M358.32,-285.02C350.48,-285.02 342.4,-285.02 334.47,-285.02"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="334.52,-281.52 324.52,-285.02 334.52,-288.52 334.52,-281.52"/>
+</g>
+<!-- sourcefile~mesh_content.f90&#45;&gt;sourcefile~common.f90~2 -->
+<g id="sourcefile~~io_base.f90~~EfferentGraph_edge29" class="edge">
+<title>sourcefile~mesh_content.f90&#45;&gt;sourcefile~common.f90~2</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M235.53,-272.5C228.51,-268.84 221.5,-264.36 215.79,-259.02 183.75,-229.04 161.32,-182.17 149.92,-154.23"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="153.19,-152.96 146.27,-144.93 146.67,-155.52 153.19,-152.96"/>
+</g>
+<!-- sourcefile~mesh_content.f90&#45;&gt;sourcefile~logger.f90 -->
+<g id="sourcefile~~io_base.f90~~EfferentGraph_edge30" class="edge">
+<title>sourcefile~mesh_content.f90&#45;&gt;sourcefile~logger.f90</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M215.31,-274.68C191.48,-268.48 163.73,-259 141.28,-245.02"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var pansourcefileio_basef90EfferentGraph = svgPanZoom('#sourcefileio_basef90EfferentGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#EfferentGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="EfferentGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="200pt" height="32pt"
+ viewBox="0.00 0.00 200.00 32.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(4 28.27)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-28.27 195.52,-28.27 195.52,4 -4,4"/>
+<!-- Source File -->
+<g id="node1" class="node">
+<title>Source File</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="69.27,-24.27 0,-24.27 0,0 69.27,0 69.27,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="34.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Source File</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node2" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="191.52,-24.27 87.75,-24.27 87.75,0 191.52,0 191.52,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="139.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a file to a file which it depends on. A file
+is dependent upon another if the latter must be compiled before the former
+can be.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header">
+            <h3 class="card-title">Files dependent on this one</h3>
+          </div>
+          <div class="card-body">
+            <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: sourcefile~~io_base.f90~~AfferentGraph Pages: 1 -->
+<svg id="sourcefileio_basef90AfferentGraph" width="641pt" height="211pt"
+ viewBox="0.00 0.00 641.00 211.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="sourcefile~~io_base.f90~~AfferentGraph" class="graph" transform="scale(0.338838 0.338838) rotate(0) translate(4 618.85)">
+<title>sourcefile~~io_base.f90~~AfferentGraph</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-618.85 1887.76,-618.85 1887.76,4 -4,4"/>
+<!-- sourcefile~io_base.f90 -->
+<g id="sourcefile~~io_base.f90~~AfferentGraph_node1" class="node">
+<title>sourcefile~io_base.f90</title>
+<polygon fill="none" stroke="black" points="72.27,-283.56 0,-283.56 0,-259.29 72.27,-259.29 72.27,-283.56"/>
+<text xml:space="preserve" text-anchor="middle" x="36.13" y="-267.83" font-family="Helvetica,sans-Serif" font-size="10.50">io_base.f90</text>
+</g>
+<!-- sourcefile~io.f90 -->
+<g id="sourcefile~~io_base.f90~~AfferentGraph_node2" class="node">
+<title>sourcefile~io.f90</title>
+<g id="a_sourcefile~~io_base.f90~~AfferentGraph_node2"><a xlink:href="../sourcefile/io.f90.html" xlink:title="io.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="162.27,-305.56 108.27,-305.56 108.27,-281.29 162.27,-281.29 162.27,-305.56"/>
+<text xml:space="preserve" text-anchor="middle" x="135.27" y="-289.83" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">io.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~io.f90&#45;&gt;sourcefile~io_base.f90 -->
+<g id="sourcefile~~io_base.f90~~AfferentGraph_edge1" class="edge">
+<title>sourcefile~io.f90&#45;&gt;sourcefile~io_base.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M107.98,-287.48C100.49,-285.78 92.09,-283.88 83.77,-281.99"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="84.56,-278.58 74.04,-279.79 83.02,-285.41 84.56,-278.58"/>
+</g>
+<!-- sourcefile~io.f90~2 -->
+<g id="sourcefile~~io_base.f90~~AfferentGraph_node3" class="node">
+<title>sourcefile~io.f90~2</title>
+<g id="a_sourcefile~~io_base.f90~~AfferentGraph_node3"><a xlink:href="../sourcefile/io.f90~2.html" xlink:title="io.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="162.27,-221.56 108.27,-221.56 108.27,-197.29 162.27,-197.29 162.27,-221.56"/>
+<text xml:space="preserve" text-anchor="middle" x="135.27" y="-205.83" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">io.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~io.f90~2&#45;&gt;sourcefile~io_base.f90 -->
+<g id="sourcefile~~io_base.f90~~AfferentGraph_edge2" class="edge">
+<title>sourcefile~io.f90~2&#45;&gt;sourcefile~io_base.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M114.61,-221.98C100.79,-230.8 82.05,-242.76 66.47,-252.71"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="64.58,-249.76 58.04,-258.09 68.35,-255.66 64.58,-249.76"/>
+</g>
+<!-- sourcefile~io_field_utils.f90 -->
+<g id="sourcefile~~io_base.f90~~AfferentGraph_node4" class="node">
+<title>sourcefile~io_field_utils.f90</title>
+<g id="a_sourcefile~~io_base.f90~~AfferentGraph_node4"><a xlink:href="../sourcefile/io_field_utils.f90.html" xlink:title="io_field_utils.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="659.2,-432.56 562.18,-432.56 562.18,-408.29 659.2,-408.29 659.2,-432.56"/>
+<text xml:space="preserve" text-anchor="middle" x="610.69" y="-416.83" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">io_field_utils.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~io_field_utils.f90&#45;&gt;sourcefile~io_base.f90 -->
+<g id="sourcefile~~io_base.f90~~AfferentGraph_edge3" class="edge">
+<title>sourcefile~io_field_utils.f90&#45;&gt;sourcefile~io_base.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M564.85,-433.06C507.34,-449 410.67,-474.91 374.04,-479.43 350.22,-482.37 342.84,-486.91 320.04,-479.43 204.88,-441.65 97.97,-337.11 55.95,-292.28"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="58.59,-289.98 49.23,-285.02 53.45,-294.74 58.59,-289.98"/>
+</g>
+<!-- sourcefile~solver.f90 -->
+<g id="sourcefile~~io_base.f90~~AfferentGraph_node23" class="node">
+<title>sourcefile~solver.f90</title>
+<g id="a_sourcefile~~io_base.f90~~AfferentGraph_node23"><a xlink:href="../sourcefile/solver.f90.html" xlink:title="solver.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="493.18,-510.56 430.66,-510.56 430.66,-486.29 493.18,-486.29 493.18,-510.56"/>
+<text xml:space="preserve" text-anchor="middle" x="461.92" y="-494.83" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">solver.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~io_field_utils.f90&#45;&gt;sourcefile~solver.f90 -->
+<g id="sourcefile~~io_base.f90~~AfferentGraph_edge62" class="edge">
+<title>sourcefile~io_field_utils.f90&#45;&gt;sourcefile~solver.f90</title>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M578.57,-433.04C569.2,-437.07 558.98,-441.72 549.81,-446.43 530,-456.6 508.51,-469.45 491.87,-479.82"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="490.06,-476.82 483.46,-485.11 493.79,-482.74 490.06,-476.82"/>
+</g>
+<!-- sourcefile~io_session.f90 -->
+<g id="sourcefile~~io_base.f90~~AfferentGraph_node5" class="node">
+<title>sourcefile~io_session.f90</title>
+<g id="a_sourcefile~~io_base.f90~~AfferentGraph_node5"><a xlink:href="../sourcefile/io_session.f90.html" xlink:title="io_session.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="284.04,-305.56 198.27,-305.56 198.27,-281.29 284.04,-281.29 284.04,-305.56"/>
+<text xml:space="preserve" text-anchor="middle" x="241.15" y="-289.83" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">io_session.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~io_session.f90&#45;&gt;sourcefile~io_base.f90 -->
+<g id="sourcefile~~io_base.f90~~AfferentGraph_edge4" class="edge">
+<title>sourcefile~io_session.f90&#45;&gt;sourcefile~io_base.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M223.76,-280.87C203.99,-267.1 169.3,-247.22 136.27,-249.43"/>
+</g>
+<!-- sourcefile~io_session.f90&#45;&gt;sourcefile~io.f90 -->
+<g id="sourcefile~~io_base.f90~~AfferentGraph_edge8" class="edge">
+<title>sourcefile~io_session.f90&#45;&gt;sourcefile~io.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M197.9,-293.43C189.99,-293.43 181.77,-293.43 174.01,-293.43"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="174.2,-289.93 164.2,-293.43 174.2,-296.93 174.2,-289.93"/>
+</g>
+<!-- sourcefile~snapshot_manager.f90 -->
+<g id="sourcefile~~io_base.f90~~AfferentGraph_node6" class="node">
+<title>sourcefile~snapshot_manager.f90</title>
+<g id="a_sourcefile~~io_base.f90~~AfferentGraph_node6"><a xlink:href="../sourcefile/snapshot_manager.f90.html" xlink:title="snapshot_manager.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="845.1,-396.56 712.83,-396.56 712.83,-372.29 845.1,-372.29 845.1,-396.56"/>
+<text xml:space="preserve" text-anchor="middle" x="778.96" y="-380.83" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">snapshot_manager.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~snapshot_manager.f90&#45;&gt;sourcefile~io_base.f90 -->
+<g id="sourcefile~~io_base.f90~~AfferentGraph_edge5" class="edge">
+<title>sourcefile~snapshot_manager.f90&#45;&gt;sourcefile~io_base.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M731.77,-371.87C723.63,-369.31 715.29,-366.46 707.58,-363.43 634.78,-334.81 608.13,-337.55 549.81,-285.43 527.75,-265.71 539.78,-243.61 513.81,-229.43 366.33,-148.91 303.93,-238.21 136.27,-249.43"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M134.27,-249.43C117.6,-250.28 99.68,-253.62 83.83,-257.45"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="82.99,-254.05 74.17,-259.92 84.73,-260.84 82.99,-254.05"/>
+</g>
+<!-- sourcefile~snapshot_manager.f90&#45;&gt;sourcefile~io.f90 -->
+<g id="sourcefile~~io_base.f90~~AfferentGraph_edge9" class="edge">
+<title>sourcefile~snapshot_manager.f90&#45;&gt;sourcefile~io.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M751.54,-396.95C737.56,-404.34 720.64,-414.56 707.58,-426.43 687.58,-444.6 693.06,-459.03 671.58,-475.43 648.92,-492.73 639.45,-491.9 611.69,-498.43"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M609.69,-498.43C566.51,-508.58 280.39,-364.94 242.15,-342.43"/>
+</g>
+<!-- sourcefile~snapshot_manager.f90&#45;&gt;sourcefile~io_field_utils.f90 -->
+<g id="sourcefile~~io_base.f90~~AfferentGraph_edge11" class="edge">
+<title>sourcefile~snapshot_manager.f90&#45;&gt;sourcefile~io_field_utils.f90</title>
+<path fill="none" stroke="#00ff66" stroke-dasharray="5,2" d="M719.81,-397.02C703.83,-400.48 686.5,-404.23 670.48,-407.7"/>
+<polygon fill="#00ff66" stroke="#00ff66" points="670.15,-404.19 661.12,-409.73 671.63,-411.03 670.15,-404.19"/>
+</g>
+<!-- sourcefile~snapshot_manager.f90&#45;&gt;sourcefile~io_session.f90 -->
+<g id="sourcefile~~io_base.f90~~AfferentGraph_edge18" class="edge">
+<title>sourcefile~snapshot_manager.f90&#45;&gt;sourcefile~io_session.f90</title>
+<path fill="none" stroke="#0066ff" stroke-dasharray="5,2" d="M712.46,-385.5C603.3,-386.44 389.35,-384.47 320.04,-356.43 316.83,-355.13 287.47,-331.07 265.74,-313.07"/>
+<polygon fill="#0066ff" stroke="#0066ff" points="268.09,-310.47 258.16,-306.77 263.62,-315.85 268.09,-310.47"/>
+</g>
+<!-- sourcefile~snapshot_manager.f90&#45;&gt;sourcefile~solver.f90 -->
+<g id="sourcefile~~io_base.f90~~AfferentGraph_edge66" class="edge">
+<title>sourcefile~snapshot_manager.f90&#45;&gt;sourcefile~solver.f90</title>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M609.69,-498.43C574.99,-506.59 534.37,-505.83 504.68,-503.46"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="505.25,-500 494.98,-502.59 504.62,-506.97 505.25,-500"/>
+</g>
+<!-- sourcefile~adm.f90 -->
+<g id="sourcefile~~io_base.f90~~AfferentGraph_node7" class="node">
+<title>sourcefile~adm.f90</title>
+<g id="a_sourcefile~~io_base.f90~~AfferentGraph_node7"><a xlink:href="../sourcefile/adm.f90.html" xlink:title="adm.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="971.37,-196.56 915.6,-196.56 915.6,-172.29 971.37,-172.29 971.37,-196.56"/>
+<text xml:space="preserve" text-anchor="middle" x="943.48" y="-180.83" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">adm.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~adm.f90&#45;&gt;sourcefile~io_session.f90 -->
+<g id="sourcefile~~io_base.f90~~AfferentGraph_edge12" class="edge">
+<title>sourcefile~adm.f90&#45;&gt;sourcefile~io_session.f90</title>
+<path fill="none" stroke="#0066ff" stroke-dasharray="5,2" d="M915.41,-172.16C857.17,-147.66 716.73,-98.74 611.69,-144.43"/>
+</g>
+<!-- sourcefile~turbine_model.f90 -->
+<g id="sourcefile~~io_base.f90~~AfferentGraph_node24" class="node">
+<title>sourcefile~turbine_model.f90</title>
+<g id="a_sourcefile~~io_base.f90~~AfferentGraph_node24"><a xlink:href="../sourcefile/turbine_model.f90.html" xlink:title="turbine_model.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="833.47,-116.56 724.45,-116.56 724.45,-92.29 833.47,-92.29 833.47,-116.56"/>
+<text xml:space="preserve" text-anchor="middle" x="778.96" y="-100.83" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">turbine_model.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~adm.f90&#45;&gt;sourcefile~turbine_model.f90 -->
+<g id="sourcefile~~io_base.f90~~AfferentGraph_edge72" class="edge">
+<title>sourcefile~adm.f90&#45;&gt;sourcefile~turbine_model.f90</title>
+<path fill="none" stroke="#aa00ff" stroke-dasharray="5,2" d="M915.29,-173.33C905.88,-169.11 895.43,-163.96 886.35,-158.43 869.04,-147.88 868.07,-140.28 850.35,-130.43 844.22,-127.02 837.56,-123.9 830.86,-121.09"/>
+<polygon fill="#aa00ff" stroke="#aa00ff" points="832.37,-117.92 821.78,-117.5 829.79,-124.43 832.37,-117.92"/>
+</g>
+<!-- sourcefile~alm.f90 -->
+<g id="sourcefile~~io_base.f90~~AfferentGraph_node8" class="node">
+<title>sourcefile~alm.f90</title>
+<g id="a_sourcefile~~io_base.f90~~AfferentGraph_node8"><a xlink:href="../sourcefile/alm.f90.html" xlink:title="alm.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="970.48,-36.56 916.48,-36.56 916.48,-12.29 970.48,-12.29 970.48,-36.56"/>
+<text xml:space="preserve" text-anchor="middle" x="943.48" y="-20.83" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">alm.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~alm.f90&#45;&gt;sourcefile~io_session.f90 -->
+<g id="sourcefile~~io_base.f90~~AfferentGraph_edge13" class="edge">
+<title>sourcefile~alm.f90&#45;&gt;sourcefile~io_session.f90</title>
+<path fill="none" stroke="#0066ff" stroke-dasharray="5,2" d="M916.05,-27.91C872.19,-34.04 781.83,-48.15 707.58,-69.43 536.92,-118.34 498.78,-149.67 348.04,-243.43"/>
+</g>
+<!-- sourcefile~alm.f90&#45;&gt;sourcefile~turbine_model.f90 -->
+<g id="sourcefile~~io_base.f90~~AfferentGraph_edge73" class="edge">
+<title>sourcefile~alm.f90&#45;&gt;sourcefile~turbine_model.f90</title>
+<path fill="none" stroke="#aa00ff" stroke-dasharray="5,2" d="M916.12,-36.4C906.69,-40.75 896.01,-45.74 886.35,-50.43 861.96,-62.26 834.7,-76.11 813.88,-86.82"/>
+<polygon fill="#aa00ff" stroke="#aa00ff" points="812.55,-83.57 805.27,-91.26 815.76,-89.79 812.55,-83.57"/>
+</g>
+<!-- sourcefile~checkpoint_manager.f90 -->
+<g id="sourcefile~~io_base.f90~~AfferentGraph_node9" class="node">
+<title>sourcefile~checkpoint_manager.f90</title>
+<g id="a_sourcefile~~io_base.f90~~AfferentGraph_node9"><a xlink:href="../sourcefile/checkpoint_manager.f90.html" xlink:title="checkpoint_manager.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="850.35,-354.56 707.58,-354.56 707.58,-330.29 850.35,-330.29 850.35,-354.56"/>
+<text xml:space="preserve" text-anchor="middle" x="778.96" y="-338.83" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">checkpoint_manager.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~checkpoint_manager.f90&#45;&gt;sourcefile~io.f90 -->
+<g id="sourcefile~~io_base.f90~~AfferentGraph_edge6" class="edge">
+<title>sourcefile~checkpoint_manager.f90&#45;&gt;sourcefile~io.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M346.04,-342.43C300.36,-335.68 281.94,-365.85 242.15,-342.43"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M240.15,-342.43C218.6,-329.74 193.22,-317.72 172.94,-308.76"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="174.51,-305.62 163.95,-304.84 171.72,-312.04 174.51,-305.62"/>
+</g>
+<!-- sourcefile~checkpoint_manager.f90&#45;&gt;sourcefile~io_field_utils.f90 -->
+<g id="sourcefile~~io_base.f90~~AfferentGraph_edge10" class="edge">
+<title>sourcefile~checkpoint_manager.f90&#45;&gt;sourcefile~io_field_utils.f90</title>
+<path fill="none" stroke="#00ff66" stroke-dasharray="5,2" d="M730.07,-354.98C722.43,-357.48 714.7,-360.31 707.58,-363.43 683.49,-373.99 657.96,-389.39 639.31,-401.53"/>
+<polygon fill="#00ff66" stroke="#00ff66" points="637.38,-398.61 630.97,-407.04 641.24,-404.44 637.38,-398.61"/>
+</g>
+<!-- sourcefile~checkpoint_manager.f90&#45;&gt;sourcefile~io_session.f90 -->
+<g id="sourcefile~~io_base.f90~~AfferentGraph_edge14" class="edge">
+<title>sourcefile~checkpoint_manager.f90&#45;&gt;sourcefile~io_session.f90</title>
+<path fill="none" stroke="#0066ff" stroke-dasharray="5,2" d="M707.31,-347.32C621.89,-352.11 473.92,-356.8 348.04,-342.43"/>
+<path fill="none" stroke="#0066ff" stroke-dasharray="5,2" d="M346.04,-342.43C318.49,-338.36 290.08,-324.15 269.95,-312.07"/>
+<polygon fill="#0066ff" stroke="#0066ff" points="271.85,-309.13 261.51,-306.81 268.15,-315.07 271.85,-309.13"/>
+</g>
+<!-- sourcefile~checkpoint_state.f90 -->
+<g id="sourcefile~~io_base.f90~~AfferentGraph_node10" class="node">
+<title>sourcefile~checkpoint_state.f90</title>
+<g id="a_sourcefile~~io_base.f90~~AfferentGraph_node10"><a xlink:href="../sourcefile/checkpoint_state.f90.html" xlink:title="checkpoint_state.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="671.58,-234.56 549.81,-234.56 549.81,-210.29 671.58,-210.29 671.58,-234.56"/>
+<text xml:space="preserve" text-anchor="middle" x="610.69" y="-218.83" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">checkpoint_state.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~checkpoint_manager.f90&#45;&gt;sourcefile~checkpoint_state.f90 -->
+<g id="sourcefile~~io_base.f90~~AfferentGraph_edge25" class="edge">
+<title>sourcefile~checkpoint_manager.f90&#45;&gt;sourcefile~checkpoint_state.f90</title>
+<path fill="none" stroke="#33ff00" stroke-dasharray="5,2" d="M763.82,-329.82C749.51,-317.01 726.83,-296.53 707.58,-278.43 691.32,-263.14 690.55,-255.17 671.58,-243.43 669.57,-242.18 667.47,-241 665.32,-239.87"/>
+<polygon fill="#33ff00" stroke="#33ff00" points="666.86,-236.73 656.32,-235.68 663.9,-243.08 666.86,-236.73"/>
+</g>
+<!-- sourcefile~stats.f90 -->
+<g id="sourcefile~~io_base.f90~~AfferentGraph_node15" class="node">
+<title>sourcefile~stats.f90</title>
+<g id="a_sourcefile~~io_base.f90~~AfferentGraph_node15"><a xlink:href="../sourcefile/stats.f90.html" xlink:title="stats.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="638.95,-276.56 582.43,-276.56 582.43,-252.29 638.95,-252.29 638.95,-276.56"/>
+<text xml:space="preserve" text-anchor="middle" x="610.69" y="-260.83" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">stats.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~checkpoint_manager.f90&#45;&gt;sourcefile~stats.f90 -->
+<g id="sourcefile~~io_base.f90~~AfferentGraph_edge36" class="edge">
+<title>sourcefile~checkpoint_manager.f90&#45;&gt;sourcefile~stats.f90</title>
+<path fill="none" stroke="#cc00ff" stroke-dasharray="5,2" d="M753.18,-329.92C731.72,-319.19 699.77,-303.43 671.58,-290.43 664.53,-287.18 656.96,-283.8 649.66,-280.6"/>
+<polygon fill="#cc00ff" stroke="#cc00ff" points="651.19,-277.46 640.63,-276.68 648.4,-283.88 651.19,-277.46"/>
+</g>
+<!-- sourcefile~checkpoint_manager.f90&#45;&gt;sourcefile~solver.f90 -->
+<g id="sourcefile~~io_base.f90~~AfferentGraph_edge59" class="edge">
+<title>sourcefile~checkpoint_manager.f90&#45;&gt;sourcefile~solver.f90</title>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M720.43,-354.92C715.8,-357.28 711.43,-360.09 707.58,-363.43 678.73,-388.44 700.72,-416.76 671.58,-441.43 646.48,-462.68 558.06,-481.53 504.71,-491.32"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="504.28,-487.84 495.06,-493.06 505.52,-494.73 504.28,-487.84"/>
+</g>
+<!-- sourcefile~checkpoint_state.f90&#45;&gt;sourcefile~io_session.f90 -->
+<g id="sourcefile~~io_base.f90~~AfferentGraph_edge15" class="edge">
+<title>sourcefile~checkpoint_state.f90&#45;&gt;sourcefile~io_session.f90</title>
+<path fill="none" stroke="#0066ff" stroke-dasharray="5,2" d="M549.47,-231.96C522.97,-235.92 491.45,-240.3 462.92,-243.43"/>
+</g>
+<!-- sourcefile~context.f90 -->
+<g id="sourcefile~~io_base.f90~~AfferentGraph_node11" class="node">
+<title>sourcefile~context.f90</title>
+<g id="a_sourcefile~~io_base.f90~~AfferentGraph_node11"><a xlink:href="../sourcefile/context.f90.html" xlink:title="context.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1428.93,-590.56 1358.16,-590.56 1358.16,-566.29 1428.93,-566.29 1428.93,-590.56"/>
+<text xml:space="preserve" text-anchor="middle" x="1393.54" y="-574.83" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">context.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~context.f90&#45;&gt;sourcefile~io.f90 -->
+<g id="sourcefile~~io_base.f90~~AfferentGraph_edge7" class="edge">
+<title>sourcefile~context.f90&#45;&gt;sourcefile~io.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1366.02,-590.98C1349.85,-597.94 1328.53,-605.88 1308.66,-609.43 1251.12,-619.72 1235.53,-612.17 1177.14,-609.43 834.25,-593.34 736.08,-626.84 410.04,-519.43 368.47,-505.73 352.48,-508.82 320.04,-479.43 268.13,-432.41 303.35,-376.51 242.15,-342.43"/>
+</g>
+<!-- sourcefile~memcheck_device.f90 -->
+<g id="sourcefile~~io_base.f90~~AfferentGraph_node30" class="node">
+<title>sourcefile~memcheck_device.f90</title>
+<g id="a_sourcefile~~io_base.f90~~AfferentGraph_node30"><a xlink:href="../sourcefile/memcheck_device.f90.html" xlink:title="memcheck_device.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1308.66,-600.56 1177.14,-600.56 1177.14,-576.29 1308.66,-576.29 1308.66,-600.56"/>
+<text xml:space="preserve" text-anchor="middle" x="1242.9" y="-584.83" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">memcheck_device.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~context.f90&#45;&gt;sourcefile~memcheck_device.f90 -->
+<g id="sourcefile~~io_base.f90~~AfferentGraph_edge84" class="edge">
+<title>sourcefile~context.f90&#45;&gt;sourcefile~memcheck_device.f90</title>
+<path fill="none" stroke="#00ff66" stroke-dasharray="5,2" d="M1357.69,-580.77C1346.48,-581.53 1333.57,-582.4 1320.57,-583.27"/>
+<polygon fill="#00ff66" stroke="#00ff66" points="1320.41,-579.77 1310.67,-583.94 1320.88,-586.76 1320.41,-579.77"/>
+</g>
+<!-- sourcefile~ibm.f90 -->
+<g id="sourcefile~~io_base.f90~~AfferentGraph_node12" class="node">
+<title>sourcefile~ibm.f90</title>
+<g id="a_sourcefile~~io_base.f90~~AfferentGraph_node12"><a xlink:href="../sourcefile/ibm.f90.html" xlink:title="ibm.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="374.04,-470.56 320.04,-470.56 320.04,-446.29 374.04,-446.29 374.04,-470.56"/>
+<text xml:space="preserve" text-anchor="middle" x="347.04" y="-454.83" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ibm.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~ibm.f90&#45;&gt;sourcefile~io_session.f90 -->
+<g id="sourcefile~~io_base.f90~~AfferentGraph_edge16" class="edge">
+<title>sourcefile~ibm.f90&#45;&gt;sourcefile~io_session.f90</title>
+<path fill="none" stroke="#0066ff" stroke-dasharray="5,2" d="M340.99,-446.18C329.17,-417.79 299.52,-348.38 284.04,-328.43 279.8,-322.96 274.57,-317.76 269.26,-313.13"/>
+<polygon fill="#0066ff" stroke="#0066ff" points="271.54,-310.48 261.58,-306.87 267.12,-315.9 271.54,-310.48"/>
+</g>
+<!-- sourcefile~inflow_planes.f90 -->
+<g id="sourcefile~~io_base.f90~~AfferentGraph_node13" class="node">
+<title>sourcefile~inflow_planes.f90</title>
+<g id="a_sourcefile~~io_base.f90~~AfferentGraph_node13"><a xlink:href="../sourcefile/inflow_planes.f90.html" xlink:title="inflow_planes.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="513.81,-57.56 410.04,-57.56 410.04,-33.29 513.81,-33.29 513.81,-57.56"/>
+<text xml:space="preserve" text-anchor="middle" x="461.92" y="-41.83" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">inflow_planes.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~inflow_planes.f90&#45;&gt;sourcefile~io_session.f90 -->
+<g id="sourcefile~~io_base.f90~~AfferentGraph_edge17" class="edge">
+<title>sourcefile~inflow_planes.f90&#45;&gt;sourcefile~io_session.f90</title>
+<path fill="none" stroke="#0066ff" stroke-dasharray="5,2" d="M454.7,-57.88C433.76,-99.56 366.14,-232.17 348.04,-243.43"/>
+<path fill="none" stroke="#0066ff" stroke-dasharray="5,2" d="M346.04,-243.43C326.11,-255.83 302.63,-267.36 283.05,-276.22"/>
+<polygon fill="#0066ff" stroke="#0066ff" points="281.72,-272.98 274,-280.24 284.56,-279.38 281.72,-272.98"/>
+</g>
+<!-- sourcefile~io_manager.f90 -->
+<g id="sourcefile~~io_base.f90~~AfferentGraph_node14" class="node">
+<title>sourcefile~io_manager.f90</title>
+<g id="a_sourcefile~~io_base.f90~~AfferentGraph_node14"><a xlink:href="../sourcefile/io_manager.f90.html" xlink:title="io_manager.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="990.49,-362.56 896.47,-362.56 896.47,-338.29 990.49,-338.29 990.49,-362.56"/>
+<text xml:space="preserve" text-anchor="middle" x="943.48" y="-346.83" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">io_manager.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~io_manager.f90&#45;&gt;sourcefile~snapshot_manager.f90 -->
+<g id="sourcefile~~io_base.f90~~AfferentGraph_edge21" class="edge">
+<title>sourcefile~io_manager.f90&#45;&gt;sourcefile~snapshot_manager.f90</title>
+<path fill="none" stroke="#cc00ff" stroke-dasharray="5,2" d="M896.35,-360.08C882.3,-363.02 866.52,-366.32 851.22,-369.52"/>
+<polygon fill="#cc00ff" stroke="#cc00ff" points="850.75,-366.04 841.68,-371.52 852.19,-372.9 850.75,-366.04"/>
+</g>
+<!-- sourcefile~io_manager.f90&#45;&gt;sourcefile~checkpoint_manager.f90 -->
+<g id="sourcefile~~io_base.f90~~AfferentGraph_edge24" class="edge">
+<title>sourcefile~io_manager.f90&#45;&gt;sourcefile~checkpoint_manager.f90</title>
+<path fill="none" stroke="#cbff00" stroke-dasharray="5,2" d="M896.35,-348.16C885.61,-347.63 873.86,-347.05 862.08,-346.47"/>
+<polygon fill="#cbff00" stroke="#cbff00" points="862.49,-342.99 852.33,-345.99 862.14,-349.98 862.49,-342.99"/>
+</g>
+<!-- sourcefile~io_manager.f90&#45;&gt;sourcefile~checkpoint_state.f90 -->
+<g id="sourcefile~~io_base.f90~~AfferentGraph_edge26" class="edge">
+<title>sourcefile~io_manager.f90&#45;&gt;sourcefile~checkpoint_state.f90</title>
+<path fill="none" stroke="#33ff00" stroke-dasharray="5,2" d="M924.45,-338.01C895.46,-318.71 836.03,-281.95 779.96,-264.43"/>
+<path fill="none" stroke="#33ff00" stroke-dasharray="5,2" d="M777.96,-264.43C745.7,-254.34 709.34,-244.94 678.87,-237.6"/>
+<polygon fill="#33ff00" stroke="#33ff00" points="679.94,-234.26 669.4,-235.34 678.32,-241.07 679.94,-234.26"/>
+</g>
+<!-- sourcefile~io_manager.f90&#45;&gt;sourcefile~stats.f90 -->
+<g id="sourcefile~~io_base.f90~~AfferentGraph_edge37" class="edge">
+<title>sourcefile~io_manager.f90&#45;&gt;sourcefile~stats.f90</title>
+<path fill="none" stroke="#cc00ff" stroke-dasharray="5,2" d="M777.96,-264.43C735.94,-251.3 684.98,-253.81 650.64,-257.99"/>
+<polygon fill="#cc00ff" stroke="#cc00ff" points="650.17,-254.52 640.73,-259.32 651.1,-261.46 650.17,-254.52"/>
+</g>
+<!-- sourcefile~io_manager.f90&#45;&gt;sourcefile~solver.f90 -->
+<g id="sourcefile~~io_base.f90~~AfferentGraph_edge63" class="edge">
+<title>sourcefile~io_manager.f90&#45;&gt;sourcefile~solver.f90</title>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M916.33,-362.93C906.73,-367.78 895.88,-373.57 886.35,-379.43 869.54,-389.76 867.24,-395.22 850.35,-405.43 820.45,-423.5 813.03,-429.15 779.96,-440.43"/>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M777.96,-440.43C746.25,-451.24 734.63,-447.66 707.58,-467.43 686.9,-482.54 692.14,-497.16 671.58,-512.43 648.56,-529.52 640.37,-536.03 611.69,-536.43"/>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M609.69,-536.43C572.71,-536.94 532.09,-525.44 502.99,-514.96"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="504.44,-511.76 493.84,-511.55 501.99,-518.32 504.44,-511.76"/>
+</g>
+<!-- sourcefile~stats.f90&#45;&gt;sourcefile~io_session.f90 -->
+<g id="sourcefile~~io_base.f90~~AfferentGraph_edge19" class="edge">
+<title>sourcefile~stats.f90&#45;&gt;sourcefile~io_session.f90</title>
+<path fill="none" stroke="#0066ff" stroke-dasharray="5,2" d="M582.17,-256.32C552.73,-248.62 504.63,-238.86 462.92,-243.43"/>
+</g>
+<!-- sourcefile~stats.f90&#45;&gt;sourcefile~solver.f90 -->
+<g id="sourcefile~~io_base.f90~~AfferentGraph_edge67" class="edge">
+<title>sourcefile~stats.f90&#45;&gt;sourcefile~solver.f90</title>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M601.8,-277.01C578.01,-314.95 506.74,-428.58 476.61,-476.61"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="473.83,-474.46 471.48,-484.79 479.76,-478.18 473.83,-474.46"/>
+</g>
+<!-- sourcefile~turbine_dummy.f90 -->
+<g id="sourcefile~~io_base.f90~~AfferentGraph_node16" class="node">
+<title>sourcefile~turbine_dummy.f90</title>
+<g id="a_sourcefile~~io_base.f90~~AfferentGraph_node16"><a xlink:href="../sourcefile/turbine_dummy.f90.html" xlink:title="turbine_dummy.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1000.62,-116.56 886.35,-116.56 886.35,-92.29 1000.62,-92.29 1000.62,-116.56"/>
+<text xml:space="preserve" text-anchor="middle" x="943.48" y="-100.83" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">turbine_dummy.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~turbine_dummy.f90&#45;&gt;sourcefile~io_session.f90 -->
+<g id="sourcefile~~io_base.f90~~AfferentGraph_edge20" class="edge">
+<title>sourcefile~turbine_dummy.f90&#45;&gt;sourcefile~io_session.f90</title>
+<path fill="none" stroke="#0066ff" stroke-dasharray="5,2" d="M896.43,-91.8C881.82,-88.37 865.51,-85.14 850.35,-83.43 787.29,-76.33 768.5,-65.69 707.58,-83.43 659.08,-97.55 657.77,-123.75 611.69,-144.43"/>
+<path fill="none" stroke="#0066ff" stroke-dasharray="5,2" d="M609.69,-144.43C580.69,-156.76 576.02,-164.92 549.81,-182.43 510.57,-208.63 509.83,-238.29 462.92,-243.43"/>
+<path fill="none" stroke="#0066ff" stroke-dasharray="5,2" d="M460.92,-243.43C411.05,-248.89 390.64,-216.93 348.04,-243.43"/>
+</g>
+<!-- sourcefile~turbine_dummy.f90&#45;&gt;sourcefile~turbine_model.f90 -->
+<g id="sourcefile~~io_base.f90~~AfferentGraph_edge74" class="edge">
+<title>sourcefile~turbine_dummy.f90&#45;&gt;sourcefile~turbine_model.f90</title>
+<path fill="none" stroke="#aa00ff" stroke-dasharray="5,2" d="M886.1,-104.43C872.85,-104.43 858.62,-104.43 845.03,-104.43"/>
+<polygon fill="#aa00ff" stroke="#aa00ff" points="845.3,-100.93 835.3,-104.43 845.3,-107.93 845.3,-100.93"/>
+</g>
+<!-- sourcefile~abl.f90 -->
+<g id="sourcefile~~io_base.f90~~AfferentGraph_node17" class="node">
+<title>sourcefile~abl.f90</title>
+<g id="a_sourcefile~~io_base.f90~~AfferentGraph_node17"><a xlink:href="../sourcefile/abl.f90.html" xlink:title="abl.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1269.9,-272.56 1215.9,-272.56 1215.9,-248.29 1269.9,-248.29 1269.9,-272.56"/>
+<text xml:space="preserve" text-anchor="middle" x="1242.9" y="-256.83" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">abl.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~abl.f90&#45;&gt;sourcefile~inflow_planes.f90 -->
+<g id="sourcefile~~io_base.f90~~AfferentGraph_edge33" class="edge">
+<title>sourcefile~abl.f90&#45;&gt;sourcefile~inflow_planes.f90</title>
+<path fill="none" stroke="#0066ff" stroke-dasharray="5,2" d="M1236,-248.06C1218.77,-213.3 1164.95,-114.07 1089.88,-64.43"/>
+<path fill="none" stroke="#0066ff" stroke-dasharray="5,2" d="M1087.88,-64.43C1048.41,-38.33 1045.75,-17.64 1000.62,-3.43 967.06,7.14 729.21,-10.43 707.58,-12.43 645.22,-18.19 574.34,-28.13 524.99,-35.6"/>
+<polygon fill="#0066ff" stroke="#0066ff" points="524.71,-32.1 515.36,-37.06 525.77,-39.02 524.71,-32.1"/>
+</g>
+<!-- sourcefile~base_case.f90 -->
+<g id="sourcefile~~io_base.f90~~AfferentGraph_node18" class="node">
+<title>sourcefile~base_case.f90</title>
+<g id="a_sourcefile~~io_base.f90~~AfferentGraph_node18"><a xlink:href="../sourcefile/base_case.f90.html" xlink:title="base_case.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1132.51,-475.56 1045.24,-475.56 1045.24,-451.29 1132.51,-451.29 1132.51,-475.56"/>
+<text xml:space="preserve" text-anchor="middle" x="1088.88" y="-459.83" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">base_case.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~abl.f90&#45;&gt;sourcefile~base_case.f90 -->
+<g id="sourcefile~~io_base.f90~~AfferentGraph_edge41" class="edge">
+<title>sourcefile~abl.f90&#45;&gt;sourcefile~base_case.f90</title>
+<path fill="none" stroke="#ffaa00" stroke-dasharray="5,2" d="M1225.79,-272.89C1211.9,-284.12 1191.83,-301.57 1177.14,-319.43 1144.7,-358.86 1115.9,-411.53 1100.88,-441.01"/>
+<polygon fill="#ffaa00" stroke="#ffaa00" points="1097.85,-439.24 1096.5,-449.74 1104.11,-442.37 1097.85,-439.24"/>
+</g>
+<!-- sourcefile~abl.f90&#45;&gt;sourcefile~turbine_model.f90 -->
+<g id="sourcefile~~io_base.f90~~AfferentGraph_edge71" class="edge">
+<title>sourcefile~abl.f90&#45;&gt;sourcefile~turbine_model.f90</title>
+<path fill="none" stroke="#aa00ff" stroke-dasharray="5,2" d="M1087.88,-64.43C1047.44,-37.55 911.45,-68.31 834.4,-88.89"/>
+<polygon fill="#aa00ff" stroke="#aa00ff" points="833.68,-85.46 824.94,-91.45 835.51,-92.22 833.68,-85.46"/>
+</g>
+<!-- sourcefile~turbine_setup.f90 -->
+<g id="sourcefile~~io_base.f90~~AfferentGraph_node25" class="node">
+<title>sourcefile~turbine_setup.f90</title>
+<g id="a_sourcefile~~io_base.f90~~AfferentGraph_node25"><a xlink:href="../sourcefile/turbine_setup.f90.html" xlink:title="turbine_setup.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1141.14,-196.56 1036.62,-196.56 1036.62,-172.29 1141.14,-172.29 1141.14,-196.56"/>
+<text xml:space="preserve" text-anchor="middle" x="1088.88" y="-180.83" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">turbine_setup.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~abl.f90&#45;&gt;sourcefile~turbine_setup.f90 -->
+<g id="sourcefile~~io_base.f90~~AfferentGraph_edge77" class="edge">
+<title>sourcefile~abl.f90&#45;&gt;sourcefile~turbine_setup.f90</title>
+<path fill="none" stroke="#ff00aa" stroke-dasharray="5,2" d="M1216.8,-247.88C1191.82,-235.39 1153.27,-216.12 1125.21,-202.09"/>
+<polygon fill="#ff00aa" stroke="#ff00aa" points="1126.88,-199.02 1116.37,-197.67 1123.75,-205.28 1126.88,-199.02"/>
+</g>
+<!-- sourcefile~base_case.f90&#45;&gt;sourcefile~io_manager.f90 -->
+<g id="sourcefile~~io_base.f90~~AfferentGraph_edge34" class="edge">
+<title>sourcefile~base_case.f90&#45;&gt;sourcefile~io_manager.f90</title>
+<path fill="none" stroke="#3200ff" stroke-dasharray="5,2" d="M1076.99,-450.86C1061.35,-433.32 1031.05,-401.23 1000.62,-379.43 994.94,-375.36 988.62,-371.53 982.32,-368.06"/>
+<polygon fill="#3200ff" stroke="#3200ff" points="984.36,-365.17 973.88,-363.63 981.11,-371.37 984.36,-365.17"/>
+</g>
+<!-- sourcefile~base_case.f90&#45;&gt;sourcefile~solver.f90 -->
+<g id="sourcefile~~io_base.f90~~AfferentGraph_edge57" class="edge">
+<title>sourcefile~base_case.f90&#45;&gt;sourcefile~solver.f90</title>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M1045.02,-470.07C1016.59,-473.94 978.4,-478.13 944.48,-478.43"/>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M942.48,-478.43C868.31,-479.09 850.17,-416.48 779.96,-440.43"/>
+</g>
+<!-- sourcefile~monitoring.f90 -->
+<g id="sourcefile~~io_base.f90~~AfferentGraph_node31" class="node">
+<title>sourcefile~monitoring.f90</title>
+<g id="a_sourcefile~~io_base.f90~~AfferentGraph_node31"><a xlink:href="../sourcefile/monitoring.f90.html" xlink:title="monitoring.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="988.62,-412.56 898.35,-412.56 898.35,-388.29 988.62,-388.29 988.62,-412.56"/>
+<text xml:space="preserve" text-anchor="middle" x="943.48" y="-396.83" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">monitoring.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~base_case.f90&#45;&gt;sourcefile~monitoring.f90 -->
+<g id="sourcefile~~io_base.f90~~AfferentGraph_edge86" class="edge">
+<title>sourcefile~base_case.f90&#45;&gt;sourcefile~monitoring.f90</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M1059.21,-450.83C1037.52,-441.3 1007.5,-428.11 983.6,-417.62"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="985.06,-414.43 974.49,-413.61 982.24,-420.84 985.06,-414.43"/>
+</g>
+<!-- sourcefile~postprocess.f90 -->
+<g id="sourcefile~~io_base.f90~~AfferentGraph_node32" class="node">
+<title>sourcefile~postprocess.f90</title>
+<g id="a_sourcefile~~io_base.f90~~AfferentGraph_node32"><a xlink:href="../sourcefile/postprocess.f90.html" xlink:title="postprocess.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="826.35,-500.56 731.58,-500.56 731.58,-476.29 826.35,-476.29 826.35,-500.56"/>
+<text xml:space="preserve" text-anchor="middle" x="778.96" y="-484.83" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">postprocess.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~base_case.f90&#45;&gt;sourcefile~postprocess.f90 -->
+<g id="sourcefile~~io_base.f90~~AfferentGraph_edge88" class="edge">
+<title>sourcefile~base_case.f90&#45;&gt;sourcefile~postprocess.f90</title>
+<path fill="none" stroke="#0066ff" stroke-dasharray="5,2" d="M942.48,-478.43C907.77,-478.74 868.96,-481.05 837.97,-483.38"/>
+<polygon fill="#0066ff" stroke="#0066ff" points="837.71,-479.89 828.01,-484.15 838.25,-486.87 837.71,-479.89"/>
+</g>
+<!-- sourcefile~build.f90 -->
+<g id="sourcefile~~io_base.f90~~AfferentGraph_node19" class="node">
+<title>sourcefile~build.f90</title>
+<g id="a_sourcefile~~io_base.f90~~AfferentGraph_node19"><a xlink:href="../sourcefile/build.f90.html" xlink:title="build.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1756.74,-530.56 1698.72,-530.56 1698.72,-506.29 1756.74,-506.29 1756.74,-530.56"/>
+<text xml:space="preserve" text-anchor="middle" x="1727.73" y="-514.83" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">build.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~build.f90&#45;&gt;sourcefile~context.f90 -->
+<g id="sourcefile~~io_base.f90~~AfferentGraph_edge28" class="edge">
+<title>sourcefile~build.f90&#45;&gt;sourcefile~context.f90</title>
+<path fill="none" stroke="#00ff66" stroke-dasharray="5,2" d="M1629.71,-422.43C1575.51,-399.76 1574.54,-473.03 1521.56,-498.43"/>
+<path fill="none" stroke="#00ff66" stroke-dasharray="5,2" d="M1519.56,-498.43C1501.41,-507.14 1495.8,-507.24 1478.43,-517.43 1457.27,-529.85 1434.87,-546.33 1418.55,-559.03"/>
+<polygon fill="#00ff66" stroke="#00ff66" points="1416.57,-556.13 1410.88,-565.07 1420.9,-561.63 1416.57,-556.13"/>
+</g>
+<!-- sourcefile~build.f90&#45;&gt;sourcefile~abl.f90 -->
+<g id="sourcefile~~io_base.f90~~AfferentGraph_edge39" class="edge">
+<title>sourcefile~build.f90&#45;&gt;sourcefile~abl.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1718.92,-505.88C1704.66,-484.27 1672.13,-440.6 1631.71,-422.43"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1629.71,-422.43C1592.98,-405.92 1599.38,-378.05 1562.7,-361.43 1494.2,-330.38 1469.42,-349.49 1394.54,-342.43"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1392.54,-342.43C1348.11,-336.51 1348.31,-307.34 1308.66,-286.43 1299.88,-281.8 1290.08,-277.47 1280.83,-273.72"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1282.29,-270.54 1271.7,-270.16 1279.74,-277.06 1282.29,-270.54"/>
+</g>
+<!-- sourcefile~build.f90&#45;&gt;sourcefile~base_case.f90 -->
+<g id="sourcefile~~io_base.f90~~AfferentGraph_edge42" class="edge">
+<title>sourcefile~build.f90&#45;&gt;sourcefile~base_case.f90</title>
+<path fill="none" stroke="#ffaa00" stroke-dasharray="5,2" d="M1392.54,-342.43C1375.65,-340.18 1260.39,-376.1 1243.9,-380.43"/>
+<path fill="none" stroke="#ffaa00" stroke-dasharray="5,2" d="M1241.9,-380.43C1212.89,-388.05 1202.73,-383.78 1177.14,-399.43 1157.29,-411.57 1159.79,-423.52 1141.14,-437.43 1137.32,-440.28 1133.13,-442.98 1128.86,-445.47"/>
+<polygon fill="#ffaa00" stroke="#ffaa00" points="1127.29,-442.34 1120.17,-450.19 1130.63,-448.49 1127.29,-442.34"/>
+</g>
+<!-- sourcefile~estimate.f90 -->
+<g id="sourcefile~~io_base.f90~~AfferentGraph_node20" class="node">
+<title>sourcefile~estimate.f90</title>
+<g id="a_sourcefile~~io_base.f90~~AfferentGraph_node20"><a xlink:href="../sourcefile/estimate.f90.html" xlink:title="estimate.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1559.7,-550.56 1481.43,-550.56 1481.43,-526.29 1559.7,-526.29 1559.7,-550.56"/>
+<text xml:space="preserve" text-anchor="middle" x="1520.56" y="-534.83" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">estimate.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~build.f90&#45;&gt;sourcefile~estimate.f90 -->
+<g id="sourcefile~~io_base.f90~~AfferentGraph_edge52" class="edge">
+<title>sourcefile~build.f90&#45;&gt;sourcefile~estimate.f90</title>
+<path fill="none" stroke="#00ff00" stroke-dasharray="5,2" d="M1698.63,-521.17C1665.97,-524.35 1611.45,-529.67 1571.52,-533.56"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="1571.28,-530.07 1561.66,-534.52 1571.95,-537.03 1571.28,-530.07"/>
+</g>
+<!-- sourcefile~report.f90 -->
+<g id="sourcefile~~io_base.f90~~AfferentGraph_node22" class="node">
+<title>sourcefile~report.f90</title>
+<g id="a_sourcefile~~io_base.f90~~AfferentGraph_node22"><a xlink:href="../sourcefile/report.f90.html" xlink:title="report.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1662.72,-510.56 1598.7,-510.56 1598.7,-486.29 1662.72,-486.29 1662.72,-510.56"/>
+<text xml:space="preserve" text-anchor="middle" x="1630.71" y="-494.83" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">report.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~build.f90&#45;&gt;sourcefile~report.f90 -->
+<g id="sourcefile~~io_base.f90~~AfferentGraph_edge55" class="edge">
+<title>sourcefile~build.f90&#45;&gt;sourcefile~report.f90</title>
+<path fill="none" stroke="#00a9ff" stroke-dasharray="5,2" d="M1698.22,-512.43C1690.72,-510.85 1682.45,-509.11 1674.38,-507.41"/>
+<polygon fill="#00a9ff" stroke="#00a9ff" points="1675.17,-504 1664.67,-505.37 1673.73,-510.85 1675.17,-504"/>
+</g>
+<!-- sourcefile~case_factory.f90 -->
+<g id="sourcefile~~io_base.f90~~AfferentGraph_node26" class="node">
+<title>sourcefile~case_factory.f90</title>
+<g id="a_sourcefile~~io_base.f90~~AfferentGraph_node26"><a xlink:href="../sourcefile/case_factory.f90.html" xlink:title="case_factory.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1442.43,-432.56 1344.66,-432.56 1344.66,-408.29 1442.43,-408.29 1442.43,-432.56"/>
+<text xml:space="preserve" text-anchor="middle" x="1393.54" y="-416.83" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">case_factory.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~build.f90&#45;&gt;sourcefile~case_factory.f90 -->
+<g id="sourcefile~~io_base.f90~~AfferentGraph_edge79" class="edge">
+<title>sourcefile~build.f90&#45;&gt;sourcefile~case_factory.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1629.71,-422.43C1573.57,-398.95 1503.08,-402.13 1453.99,-408.89"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1453.49,-405.43 1444.11,-410.35 1454.51,-412.35 1453.49,-405.43"/>
+</g>
+<!-- sourcefile~build.f90&#45;&gt;sourcefile~monitoring.f90 -->
+<g id="sourcefile~~io_base.f90~~AfferentGraph_edge87" class="edge">
+<title>sourcefile~build.f90&#45;&gt;sourcefile~monitoring.f90</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M1392.54,-342.43C1354.22,-337.33 1346.97,-324.59 1308.66,-319.43 1250.73,-311.63 1234.78,-309.68 1177.14,-319.43 1105.46,-331.55 1026.39,-363.29 981.35,-383.25"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="980,-380.02 972.31,-387.31 982.87,-386.4 980,-380.02"/>
+</g>
+<!-- sourcefile~estimate.f90&#45;&gt;sourcefile~context.f90 -->
+<g id="sourcefile~~io_base.f90~~AfferentGraph_edge29" class="edge">
+<title>sourcefile~estimate.f90&#45;&gt;sourcefile~context.f90</title>
+<path fill="none" stroke="#00ff66" stroke-dasharray="5,2" d="M1481.03,-550.76C1468.14,-554.88 1453.65,-559.52 1440.26,-563.8"/>
+<polygon fill="#00ff66" stroke="#00ff66" points="1439.24,-560.46 1430.78,-566.84 1441.37,-567.12 1439.24,-560.46"/>
+</g>
+<!-- sourcefile~memcheck.f90 -->
+<g id="sourcefile~~io_base.f90~~AfferentGraph_node21" class="node">
+<title>sourcefile~memcheck.f90</title>
+<g id="a_sourcefile~~io_base.f90~~AfferentGraph_node21"><a xlink:href="../sourcefile/memcheck.f90.html" xlink:title="memcheck.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1883.76,-550.56 1792.74,-550.56 1792.74,-526.29 1883.76,-526.29 1883.76,-550.56"/>
+<text xml:space="preserve" text-anchor="middle" x="1838.25" y="-534.83" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">memcheck.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~memcheck.f90&#45;&gt;sourcefile~context.f90 -->
+<g id="sourcefile~~io_base.f90~~AfferentGraph_edge30" class="edge">
+<title>sourcefile~memcheck.f90&#45;&gt;sourcefile~context.f90</title>
+<path fill="none" stroke="#00ff66" stroke-dasharray="5,2" d="M1629.71,-578.43C1564.3,-572.54 1488.23,-574.05 1440.73,-575.99"/>
+<polygon fill="#00ff66" stroke="#00ff66" points="1440.65,-572.49 1430.81,-576.42 1440.95,-579.48 1440.65,-572.49"/>
+</g>
+<!-- sourcefile~memcheck.f90&#45;&gt;sourcefile~build.f90 -->
+<g id="sourcefile~~io_base.f90~~AfferentGraph_edge51" class="edge">
+<title>sourcefile~memcheck.f90&#45;&gt;sourcefile~build.f90</title>
+<path fill="none" stroke="#aaff00" stroke-dasharray="5,2" d="M1792.48,-530.18C1784.4,-528.69 1776.03,-527.15 1768.12,-525.69"/>
+<polygon fill="#aaff00" stroke="#aaff00" points="1768.9,-522.27 1758.43,-523.9 1767.63,-529.16 1768.9,-522.27"/>
+</g>
+<!-- sourcefile~memcheck.f90&#45;&gt;sourcefile~estimate.f90 -->
+<g id="sourcefile~~io_base.f90~~AfferentGraph_edge53" class="edge">
+<title>sourcefile~memcheck.f90&#45;&gt;sourcefile~estimate.f90</title>
+<path fill="none" stroke="#00ff00" stroke-dasharray="5,2" d="M1726.73,-578.43C1684.51,-577.5 1673.77,-582.22 1631.71,-578.43"/>
+<path fill="none" stroke="#00ff00" stroke-dasharray="5,2" d="M1629.71,-578.43C1603.39,-576.06 1575.47,-565.5 1554.58,-555.83"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="1556.24,-552.74 1545.72,-551.55 1553.2,-559.05 1556.24,-552.74"/>
+</g>
+<!-- sourcefile~memcheck.f90&#45;&gt;sourcefile~report.f90 -->
+<g id="sourcefile~~io_base.f90~~AfferentGraph_edge56" class="edge">
+<title>sourcefile~memcheck.f90&#45;&gt;sourcefile~report.f90</title>
+<path fill="none" stroke="#00a9ff" stroke-dasharray="5,2" d="M1817.25,-550.94C1796.07,-562.93 1761.25,-579.14 1728.73,-578.43"/>
+<path fill="none" stroke="#00a9ff" stroke-dasharray="5,2" d="M1726.73,-578.43C1690.67,-577.64 1661.17,-543.74 1645.05,-520.32"/>
+<polygon fill="#00a9ff" stroke="#00a9ff" points="1648.03,-518.48 1639.62,-512.03 1642.17,-522.31 1648.03,-518.48"/>
+</g>
+<!-- sourcefile~report.f90&#45;&gt;sourcefile~context.f90 -->
+<g id="sourcefile~~io_base.f90~~AfferentGraph_edge31" class="edge">
+<title>sourcefile~report.f90&#45;&gt;sourcefile~context.f90</title>
+<path fill="none" stroke="#00ff66" stroke-dasharray="5,2" d="M1598.3,-491.5C1575.82,-488.15 1545.44,-486.98 1521.56,-498.43"/>
+</g>
+<!-- sourcefile~report.f90&#45;&gt;sourcefile~estimate.f90 -->
+<g id="sourcefile~~io_base.f90~~AfferentGraph_edge54" class="edge">
+<title>sourcefile~report.f90&#45;&gt;sourcefile~estimate.f90</title>
+<path fill="none" stroke="#00ff00" stroke-dasharray="5,2" d="M1598.43,-510C1588.32,-513.74 1576.92,-517.96 1566.05,-521.98"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="1565.01,-518.63 1556.84,-525.38 1567.43,-525.2 1565.01,-518.63"/>
+</g>
+<!-- sourcefile~report.f90&#45;&gt;sourcefile~memcheck_device.f90 -->
+<g id="sourcefile~~io_base.f90~~AfferentGraph_edge85" class="edge">
+<title>sourcefile~report.f90&#45;&gt;sourcefile~memcheck_device.f90</title>
+<path fill="none" stroke="#00ff66" stroke-dasharray="5,2" d="M1598.32,-489.78C1567.45,-482.62 1519.16,-475.01 1478.43,-484.43 1396.6,-503.36 1386.53,-535.95 1308.66,-567.43 1304.64,-569.05 1300.45,-570.64 1296.22,-572.17"/>
+<polygon fill="#00ff66" stroke="#00ff66" points="1295.39,-568.75 1287.1,-575.35 1297.69,-575.36 1295.39,-568.75"/>
+</g>
+<!-- sourcefile~solver.f90&#45;&gt;sourcefile~ibm.f90 -->
+<g id="sourcefile~~io_base.f90~~AfferentGraph_edge32" class="edge">
+<title>sourcefile~solver.f90&#45;&gt;sourcefile~ibm.f90</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M430.38,-487.6C416.43,-482.66 399.8,-476.77 385.14,-471.57"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="386.41,-468.31 375.82,-468.27 384.08,-474.91 386.41,-468.31"/>
+</g>
+<!-- sourcefile~turbine_model.f90&#45;&gt;sourcefile~checkpoint_state.f90 -->
+<g id="sourcefile~~io_base.f90~~AfferentGraph_edge27" class="edge">
+<title>sourcefile~turbine_model.f90&#45;&gt;sourcefile~checkpoint_state.f90</title>
+<path fill="none" stroke="#33ff00" stroke-dasharray="5,2" d="M760.17,-117.06C730.92,-137.82 672.51,-179.27 638.32,-203.53"/>
+<polygon fill="#33ff00" stroke="#33ff00" points="636.72,-200.37 630.6,-209.02 640.78,-206.08 636.72,-200.37"/>
+</g>
+<!-- sourcefile~turbine_setup.f90&#45;&gt;sourcefile~adm.f90 -->
+<g id="sourcefile~~io_base.f90~~AfferentGraph_edge22" class="edge">
+<title>sourcefile~turbine_setup.f90&#45;&gt;sourcefile~adm.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1036.52,-184.43C1018.93,-184.43 999.56,-184.43 983.14,-184.43"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="983.3,-180.93 973.3,-184.43 983.3,-187.93 983.3,-180.93"/>
+</g>
+<!-- sourcefile~turbine_setup.f90&#45;&gt;sourcefile~alm.f90 -->
+<g id="sourcefile~~io_base.f90~~AfferentGraph_edge23" class="edge">
+<title>sourcefile~turbine_setup.f90&#45;&gt;sourcefile~alm.f90</title>
+<path fill="none" stroke="#ff9900" stroke-dasharray="5,2" d="M1077.32,-171.82C1061.1,-152.54 1028.95,-114.67 1000.62,-83.43 988.93,-70.54 975.5,-56.4 964.71,-45.2"/>
+<polygon fill="#ff9900" stroke="#ff9900" points="967.23,-42.77 957.76,-38.01 962.2,-47.63 967.23,-42.77"/>
+</g>
+<!-- sourcefile~turbine_setup.f90&#45;&gt;sourcefile~io_manager.f90 -->
+<g id="sourcefile~~io_base.f90~~AfferentGraph_edge35" class="edge">
+<title>sourcefile~turbine_setup.f90&#45;&gt;sourcefile~io_manager.f90</title>
+<path fill="none" stroke="#3200ff" stroke-dasharray="5,2" d="M1077.1,-196.91C1052.71,-225.15 993.04,-294.22 962.76,-329.28"/>
+<polygon fill="#3200ff" stroke="#3200ff" points="960.27,-326.81 956.38,-336.66 965.56,-331.38 960.27,-326.81"/>
+</g>
+<!-- sourcefile~turbine_setup.f90&#45;&gt;sourcefile~turbine_dummy.f90 -->
+<g id="sourcefile~~io_base.f90~~AfferentGraph_edge38" class="edge">
+<title>sourcefile~turbine_setup.f90&#45;&gt;sourcefile~turbine_dummy.f90</title>
+<path fill="none" stroke="#ff0098" stroke-dasharray="5,2" d="M1069.2,-171.96C1051.79,-160.56 1024.93,-143.52 1000.62,-130.43 995.18,-127.5 989.36,-124.58 983.59,-121.8"/>
+<polygon fill="#ff0098" stroke="#ff0098" points="985.28,-118.73 974.74,-117.64 982.3,-125.06 985.28,-118.73"/>
+</g>
+<!-- sourcefile~turbine_setup.f90&#45;&gt;sourcefile~solver.f90 -->
+<g id="sourcefile~~io_base.f90~~AfferentGraph_edge69" class="edge">
+<title>sourcefile~turbine_setup.f90&#45;&gt;sourcefile~solver.f90</title>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M1044.3,-197.05C1030.46,-200.48 1015.01,-203.72 1000.62,-205.43 969.53,-209.12 741.87,-202.08 671.58,-201.43 617.46,-200.93 593.12,-168.97 549.81,-201.43 505.07,-234.95 475.65,-410.27 466.21,-474.67"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="462.76,-474.1 464.8,-484.5 469.69,-475.09 462.76,-474.1"/>
+</g>
+<!-- sourcefile~turbine_setup.f90&#45;&gt;sourcefile~turbine_model.f90 -->
+<g id="sourcefile~~io_base.f90~~AfferentGraph_edge75" class="edge">
+<title>sourcefile~turbine_setup.f90&#45;&gt;sourcefile~turbine_model.f90</title>
+<path fill="none" stroke="#aa00ff" stroke-dasharray="5,2" d="M1039.43,-171.84C985.25,-157.77 897.49,-134.96 839.26,-119.83"/>
+<polygon fill="#aa00ff" stroke="#aa00ff" points="840.41,-116.52 829.85,-117.39 838.65,-123.29 840.41,-116.52"/>
+</g>
+<!-- sourcefile~case_factory.f90&#45;&gt;sourcefile~abl.f90 -->
+<g id="sourcefile~~io_base.f90~~AfferentGraph_edge40" class="edge">
+<title>sourcefile~case_factory.f90&#45;&gt;sourcefile~abl.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1383,-407.83C1367.96,-388.24 1337.47,-349.59 1308.66,-319.43 1295.64,-305.8 1280.05,-291.54 1267.43,-280.45"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1269.83,-277.91 1259.99,-273.99 1265.24,-283.19 1269.83,-277.91"/>
+</g>
+<!-- sourcefile~case_factory.f90&#45;&gt;sourcefile~base_case.f90 -->
+<g id="sourcefile~~io_base.f90~~AfferentGraph_edge43" class="edge">
+<title>sourcefile~case_factory.f90&#45;&gt;sourcefile~base_case.f90</title>
+<path fill="none" stroke="#ffaa00" stroke-dasharray="5,2" d="M1371.44,-407.81C1342.68,-392.21 1289.53,-369.02 1243.9,-380.43"/>
+</g>
+<!-- sourcefile~channel.f90 -->
+<g id="sourcefile~~io_base.f90~~AfferentGraph_node27" class="node">
+<title>sourcefile~channel.f90</title>
+<g id="a_sourcefile~~io_base.f90~~AfferentGraph_node27"><a xlink:href="../sourcefile/channel.f90.html" xlink:title="channel.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1280.16,-558.56 1205.64,-558.56 1205.64,-534.29 1280.16,-534.29 1280.16,-558.56"/>
+<text xml:space="preserve" text-anchor="middle" x="1242.9" y="-542.83" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">channel.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~case_factory.f90&#45;&gt;sourcefile~channel.f90 -->
+<g id="sourcefile~~io_base.f90~~AfferentGraph_edge81" class="edge">
+<title>sourcefile~case_factory.f90&#45;&gt;sourcefile~channel.f90</title>
+<path fill="none" stroke="#ff9900" stroke-dasharray="5,2" d="M1362.59,-432.83C1356.1,-436.51 1349.69,-441.03 1344.66,-446.43 1318.35,-474.65 1337.45,-499.74 1308.66,-525.43 1303.63,-529.91 1297.63,-533.44 1291.34,-536.22"/>
+<polygon fill="#ff9900" stroke="#ff9900" points="1290.17,-532.92 1282.02,-539.69 1292.61,-539.48 1290.17,-532.92"/>
+</g>
+<!-- sourcefile~cylinder.f90 -->
+<g id="sourcefile~~io_base.f90~~AfferentGraph_node28" class="node">
+<title>sourcefile~cylinder.f90</title>
+<g id="a_sourcefile~~io_base.f90~~AfferentGraph_node28"><a xlink:href="../sourcefile/cylinder.f90.html" xlink:title="cylinder.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1279.41,-516.56 1206.39,-516.56 1206.39,-492.29 1279.41,-492.29 1279.41,-516.56"/>
+<text xml:space="preserve" text-anchor="middle" x="1242.9" y="-500.83" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">cylinder.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~case_factory.f90&#45;&gt;sourcefile~cylinder.f90 -->
+<g id="sourcefile~~io_base.f90~~AfferentGraph_edge82" class="edge">
+<title>sourcefile~case_factory.f90&#45;&gt;sourcefile~cylinder.f90</title>
+<path fill="none" stroke="#cbff00" stroke-dasharray="5,2" d="M1366.32,-432.83C1359.03,-436.76 1351.3,-441.4 1344.66,-446.43 1326.37,-460.28 1328.14,-471.31 1308.66,-483.43 1303.07,-486.91 1296.84,-489.87 1290.52,-492.37"/>
+<polygon fill="#cbff00" stroke="#cbff00" points="1289.56,-488.99 1281.31,-495.65 1291.91,-495.59 1289.56,-488.99"/>
+</g>
+<!-- sourcefile~generic.f90 -->
+<g id="sourcefile~~io_base.f90~~AfferentGraph_node29" class="node">
+<title>sourcefile~generic.f90</title>
+<g id="a_sourcefile~~io_base.f90~~AfferentGraph_node29"><a xlink:href="../sourcefile/generic.f90.html" xlink:title="generic.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1279.03,-474.56 1206.76,-474.56 1206.76,-450.29 1279.03,-450.29 1279.03,-474.56"/>
+<text xml:space="preserve" text-anchor="middle" x="1242.9" y="-458.83" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">generic.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~case_factory.f90&#45;&gt;sourcefile~generic.f90 -->
+<g id="sourcefile~~io_base.f90~~AfferentGraph_edge83" class="edge">
+<title>sourcefile~case_factory.f90&#45;&gt;sourcefile~generic.f90</title>
+<path fill="none" stroke="#33ff00" stroke-dasharray="5,2" d="M1347.95,-433.03C1329.82,-438.15 1308.86,-444.07 1290.53,-449.25"/>
+<polygon fill="#33ff00" stroke="#33ff00" points="1289.63,-445.87 1280.96,-451.96 1291.54,-452.61 1289.63,-445.87"/>
+</g>
+<!-- sourcefile~tgv.f90 -->
+<g id="sourcefile~~io_base.f90~~AfferentGraph_node33" class="node">
+<title>sourcefile~tgv.f90</title>
+<g id="a_sourcefile~~io_base.f90~~AfferentGraph_node33"><a xlink:href="../sourcefile/tgv.f90.html" xlink:title="tgv.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1269.9,-432.56 1215.9,-432.56 1215.9,-408.29 1269.9,-408.29 1269.9,-432.56"/>
+<text xml:space="preserve" text-anchor="middle" x="1242.9" y="-416.83" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">tgv.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~case_factory.f90&#45;&gt;sourcefile~tgv.f90 -->
+<g id="sourcefile~~io_base.f90~~AfferentGraph_edge89" class="edge">
+<title>sourcefile~case_factory.f90&#45;&gt;sourcefile~tgv.f90</title>
+<path fill="none" stroke="#3200ff" stroke-dasharray="5,2" d="M1344.28,-420.43C1324.02,-420.43 1300.8,-420.43 1281.8,-420.43"/>
+<polygon fill="#3200ff" stroke="#3200ff" points="1281.8,-416.93 1271.8,-420.43 1281.8,-423.93 1281.8,-416.93"/>
+</g>
+<!-- sourcefile~wind_turbine.f90 -->
+<g id="sourcefile~~io_base.f90~~AfferentGraph_node34" class="node">
+<title>sourcefile~wind_turbine.f90</title>
+<g id="a_sourcefile~~io_base.f90~~AfferentGraph_node34"><a xlink:href="../sourcefile/wind_turbine.f90.html" xlink:title="wind_turbine.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1292.91,-352.56 1192.89,-352.56 1192.89,-328.29 1292.91,-328.29 1292.91,-352.56"/>
+<text xml:space="preserve" text-anchor="middle" x="1242.9" y="-336.83" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">wind_turbine.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~case_factory.f90&#45;&gt;sourcefile~wind_turbine.f90 -->
+<g id="sourcefile~~io_base.f90~~AfferentGraph_edge90" class="edge">
+<title>sourcefile~case_factory.f90&#45;&gt;sourcefile~wind_turbine.f90</title>
+<path fill="none" stroke="#cc00ff" stroke-dasharray="5,2" d="M1375.13,-407.82C1358.56,-396.17 1332.66,-378.83 1308.66,-366.43 1302.44,-363.22 1295.74,-360.13 1289.08,-357.28"/>
+<polygon fill="#cc00ff" stroke="#cc00ff" points="1290.7,-354.16 1280.13,-353.58 1288.03,-360.63 1290.7,-354.16"/>
+</g>
+<!-- sourcefile~channel.f90&#45;&gt;sourcefile~base_case.f90 -->
+<g id="sourcefile~~io_base.f90~~AfferentGraph_edge44" class="edge">
+<title>sourcefile~channel.f90&#45;&gt;sourcefile~base_case.f90</title>
+<path fill="none" stroke="#ffaa00" stroke-dasharray="5,2" d="M1205.33,-537.78C1195.77,-534.67 1185.74,-530.62 1177.14,-525.43 1158.03,-513.91 1159.2,-503.54 1141.14,-490.43 1136.79,-487.27 1132.02,-484.25 1127.2,-481.46"/>
+<polygon fill="#ffaa00" stroke="#ffaa00" points="1129.13,-478.52 1118.68,-476.78 1125.76,-484.66 1129.13,-478.52"/>
+</g>
+<!-- sourcefile~channel.f90&#45;&gt;sourcefile~solver.f90 -->
+<g id="sourcefile~~io_base.f90~~AfferentGraph_edge58" class="edge">
+<title>sourcefile~channel.f90&#45;&gt;sourcefile~solver.f90</title>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M1205.48,-534.6C1164.25,-521.49 1101.31,-502.43 1089.88,-504.43"/>
+</g>
+<!-- sourcefile~cylinder.f90&#45;&gt;sourcefile~base_case.f90 -->
+<g id="sourcefile~~io_base.f90~~AfferentGraph_edge45" class="edge">
+<title>sourcefile~cylinder.f90&#45;&gt;sourcefile~base_case.f90</title>
+<path fill="none" stroke="#ffaa00" stroke-dasharray="5,2" d="M1206.26,-494.82C1187.66,-489.8 1164.52,-483.56 1143.79,-477.97"/>
+<polygon fill="#ffaa00" stroke="#ffaa00" points="1144.91,-474.64 1134.34,-475.42 1143.08,-481.4 1144.91,-474.64"/>
+</g>
+<!-- sourcefile~cylinder.f90&#45;&gt;sourcefile~solver.f90 -->
+<g id="sourcefile~~io_base.f90~~AfferentGraph_edge60" class="edge">
+<title>sourcefile~cylinder.f90&#45;&gt;sourcefile~solver.f90</title>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M1205.97,-500.97C1174.97,-498.81 1129.14,-497.58 1089.88,-504.43"/>
+</g>
+<!-- sourcefile~generic.f90&#45;&gt;sourcefile~base_case.f90 -->
+<g id="sourcefile~~io_base.f90~~AfferentGraph_edge46" class="edge">
+<title>sourcefile~generic.f90&#45;&gt;sourcefile~base_case.f90</title>
+<path fill="none" stroke="#ffaa00" stroke-dasharray="5,2" d="M1206.64,-462.66C1188.07,-462.78 1164.88,-462.94 1144.08,-463.07"/>
+<polygon fill="#ffaa00" stroke="#ffaa00" points="1144.3,-459.57 1134.32,-463.14 1144.34,-466.57 1144.3,-459.57"/>
+</g>
+<!-- sourcefile~generic.f90&#45;&gt;sourcefile~solver.f90 -->
+<g id="sourcefile~~io_base.f90~~AfferentGraph_edge61" class="edge">
+<title>sourcefile~generic.f90&#45;&gt;sourcefile~solver.f90</title>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M1206.41,-474.34C1175.88,-484.07 1130.47,-497.34 1089.88,-504.43"/>
+</g>
+<!-- sourcefile~memcheck_device.f90&#45;&gt;sourcefile~base_case.f90 -->
+<g id="sourcefile~~io_base.f90~~AfferentGraph_edge47" class="edge">
+<title>sourcefile~memcheck_device.f90&#45;&gt;sourcefile~base_case.f90</title>
+<path fill="none" stroke="#ffaa00" stroke-dasharray="5,2" d="M1189.6,-575.83C1185.1,-573.49 1180.86,-570.72 1177.14,-567.43 1148.83,-542.42 1167.21,-517.77 1141.14,-490.43 1138.23,-487.37 1134.89,-484.6 1131.35,-482.08"/>
+<polygon fill="#ffaa00" stroke="#ffaa00" points="1133.27,-479.16 1122.93,-476.85 1129.58,-485.1 1133.27,-479.16"/>
+</g>
+<!-- sourcefile~monitoring.f90&#45;&gt;sourcefile~solver.f90 -->
+<g id="sourcefile~~io_base.f90~~AfferentGraph_edge64" class="edge">
+<title>sourcefile~monitoring.f90&#45;&gt;sourcefile~solver.f90</title>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M898.08,-409.16C865.07,-416.18 819.16,-427.06 779.96,-440.43"/>
+</g>
+<!-- sourcefile~postprocess.f90&#45;&gt;sourcefile~solver.f90 -->
+<g id="sourcefile~~io_base.f90~~AfferentGraph_edge65" class="edge">
+<title>sourcefile~postprocess.f90&#45;&gt;sourcefile~solver.f90</title>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M751,-501.05C718.67,-515.03 662.47,-535.72 611.69,-536.43"/>
+</g>
+<!-- sourcefile~tgv.f90&#45;&gt;sourcefile~base_case.f90 -->
+<g id="sourcefile~~io_base.f90~~AfferentGraph_edge48" class="edge">
+<title>sourcefile~tgv.f90&#45;&gt;sourcefile~base_case.f90</title>
+<path fill="none" stroke="#ffaa00" stroke-dasharray="5,2" d="M1215.42,-427.92C1195.72,-433.49 1168.17,-441.28 1143.89,-448.15"/>
+<polygon fill="#ffaa00" stroke="#ffaa00" points="1143.13,-444.73 1134.46,-450.82 1145.04,-451.47 1143.13,-444.73"/>
+</g>
+<!-- sourcefile~tgv.f90&#45;&gt;sourcefile~solver.f90 -->
+<g id="sourcefile~~io_base.f90~~AfferentGraph_edge68" class="edge">
+<title>sourcefile~tgv.f90&#45;&gt;sourcefile~solver.f90</title>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M1215.49,-425.44C1203.11,-428.64 1188.6,-433.69 1177.14,-441.43 1156.48,-455.37 1161.38,-469.89 1141.14,-484.43 1121.28,-498.7 1113.97,-500.22 1089.88,-504.43"/>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M1087.88,-504.43C878.92,-540.9 823.79,-533.48 611.69,-536.43"/>
+</g>
+<!-- sourcefile~wind_turbine.f90&#45;&gt;sourcefile~base_case.f90 -->
+<g id="sourcefile~~io_base.f90~~AfferentGraph_edge49" class="edge">
+<title>sourcefile~wind_turbine.f90&#45;&gt;sourcefile~base_case.f90</title>
+<path fill="none" stroke="#ffaa00" stroke-dasharray="5,2" d="M1197.91,-353.05C1190.41,-356.55 1183.13,-360.95 1177.14,-366.43 1151.05,-390.33 1166.16,-412.41 1141.14,-437.43 1138.38,-440.19 1135.26,-442.72 1131.95,-445.02"/>
+<polygon fill="#ffaa00" stroke="#ffaa00" points="1130.32,-441.92 1123.61,-450.11 1133.97,-447.89 1130.32,-441.92"/>
+</g>
+<!-- sourcefile~wind_turbine.f90&#45;&gt;sourcefile~solver.f90 -->
+<g id="sourcefile~~io_base.f90~~AfferentGraph_edge70" class="edge">
+<title>sourcefile~wind_turbine.f90&#45;&gt;sourcefile~solver.f90</title>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M1208.03,-352.91C1151.76,-373.47 1041.18,-413 1000.62,-421.43 904.25,-441.46 873.13,-408.66 779.96,-440.43"/>
+</g>
+<!-- sourcefile~wind_turbine.f90&#45;&gt;sourcefile~turbine_model.f90 -->
+<g id="sourcefile~~io_base.f90~~AfferentGraph_edge76" class="edge">
+<title>sourcefile~wind_turbine.f90&#45;&gt;sourcefile~turbine_model.f90</title>
+<path fill="none" stroke="#aa00ff" stroke-dasharray="5,2" d="M1192.51,-328.36C1121.12,-309.5 986.69,-268.5 886.35,-205.43 850.91,-183.15 817.13,-147.85 797.48,-125.43"/>
+<polygon fill="#aa00ff" stroke="#aa00ff" points="800.36,-123.41 791.18,-118.11 795.05,-127.97 800.36,-123.41"/>
+</g>
+<!-- sourcefile~wind_turbine.f90&#45;&gt;sourcefile~turbine_setup.f90 -->
+<g id="sourcefile~~io_base.f90~~AfferentGraph_edge78" class="edge">
+<title>sourcefile~wind_turbine.f90&#45;&gt;sourcefile~turbine_setup.f90</title>
+<path fill="none" stroke="#ff00aa" stroke-dasharray="5,2" d="M1224.89,-327.8C1210.82,-316.72 1190.96,-299.58 1177.14,-281.43 1155.71,-253.28 1166.16,-235.45 1141.14,-210.43 1138.38,-207.66 1135.26,-205.14 1131.95,-202.84"/>
+<polygon fill="#ff00aa" stroke="#ff00aa" points="1133.97,-199.97 1123.61,-197.75 1130.32,-205.94 1133.97,-199.97"/>
+</g>
+<!-- sourcefile~xcompact.f90 -->
+<g id="sourcefile~~io_base.f90~~AfferentGraph_node35" class="node">
+<title>sourcefile~xcompact.f90</title>
+<g id="a_sourcefile~~io_base.f90~~AfferentGraph_node35"><a xlink:href="../sourcefile/xcompact.f90.html" xlink:title="xcompact.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1562.7,-394.56 1478.43,-394.56 1478.43,-370.29 1562.7,-370.29 1562.7,-394.56"/>
+<text xml:space="preserve" text-anchor="middle" x="1520.56" y="-378.83" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">xcompact.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~xcompact.f90&#45;&gt;sourcefile~base_case.f90 -->
+<g id="sourcefile~~io_base.f90~~AfferentGraph_edge50" class="edge">
+<title>sourcefile~xcompact.f90&#45;&gt;sourcefile~base_case.f90</title>
+<path fill="none" stroke="#ffaa00" stroke-dasharray="5,2" d="M1478.17,-375.79C1423.57,-368.46 1324.92,-360.18 1243.9,-380.43"/>
+</g>
+<!-- sourcefile~xcompact.f90&#45;&gt;sourcefile~case_factory.f90 -->
+<g id="sourcefile~~io_base.f90~~AfferentGraph_edge80" class="edge">
+<title>sourcefile~xcompact.f90&#45;&gt;sourcefile~case_factory.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1478.28,-394.98C1468.15,-398.06 1457.17,-401.39 1446.6,-404.61"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1445.78,-401.2 1437.23,-407.45 1447.82,-407.89 1445.78,-401.2"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var pansourcefileio_basef90AfferentGraph = svgPanZoom('#sourcefileio_basef90AfferentGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#AfferentGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="AfferentGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="200pt" height="32pt"
+ viewBox="0.00 0.00 200.00 32.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(4 28.27)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-28.27 195.52,-28.27 195.52,4 -4,4"/>
+<!-- Source File -->
+<g id="node1" class="node">
+<title>Source File</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="69.27,-24.27 0,-24.27 0,0 69.27,0 69.27,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="34.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Source File</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node2" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="191.52,-24.27 87.75,-24.27 87.75,0 191.52,0 191.52,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="139.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a file to a file which it depends on. A file
+is dependent upon another if the latter must be compiled before the former
+can be.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+          </div>
+        </div>
+<br>
+      <section>
+        <h2><span class="anchor" id="src"></span>Source Code</h2>
+        <div class="hl codehilite"><pre><span></span><a id="ln-1" name="ln-1" href="#ln-1"></a><span class="k">module </span><span class="n">m_io_base</span>
+<a id="ln-2" name="ln-2" href="#ln-2"></a><span class="c">!! @brief Provides the abstract base types and interfaces for the session-based</span>
+<a id="ln-3" name="ln-3" href="#ln-3"></a><span class="c">!! I/O architecture.</span>
+<a id="ln-4" name="ln-4" href="#ln-4"></a><span class="c">!!</span>
+<a id="ln-5" name="ln-5" href="#ln-5"></a><span class="c">!! @details This internal module defines the fundamental building blocks of</span>
+<a id="ln-6" name="ln-6" href="#ln-6"></a><span class="c">!! the I/O system. It establishes a polymorphic layer that allows the</span>
+<a id="ln-7" name="ln-7" href="#ln-7"></a><span class="c">!! high-level user session to interact with various I/O backends through a</span>
+<a id="ln-8" name="ln-8" href="#ln-8"></a><span class="c">!! consistent interface.</span>
+<a id="ln-9" name="ln-9" href="#ln-9"></a><span class="c">!!</span>
+<a id="ln-10" name="ln-10" href="#ln-10"></a><span class="c">!! The architecture is designed in distinct layers:</span>
+<a id="ln-11" name="ln-11" href="#ln-11"></a><span class="c">!! User code</span>
+<a id="ln-12" name="ln-12" href="#ln-12"></a><span class="c">!! - interacts only with the Session layer</span>
+<a id="ln-13" name="ln-13" href="#ln-13"></a><span class="c">!!</span>
+<a id="ln-14" name="ln-14" href="#ln-14"></a><span class="c">!! Session layer (`m_io_session`)</span>
+<a id="ln-15" name="ln-15" href="#ln-15"></a><span class="c">!! - manages all I/O complexity (file handles, state, etc.)</span>
+<a id="ln-16" name="ln-16" href="#ln-16"></a><span class="c">!! - instantiates the I/O backend selected at compile-time</span>
+<a id="ln-17" name="ln-17" href="#ln-17"></a><span class="c">!! - provides `reader_session_t` and `writer_session_t` for users</span>
+<a id="ln-18" name="ln-18" href="#ln-18"></a><span class="c">!!</span>
+<a id="ln-19" name="ln-19" href="#ln-19"></a><span class="c">!! Backend layer (`m_io_backend`)</span>
+<a id="ln-20" name="ln-20" href="#ln-20"></a><span class="c">!! - concrete implementation of an I/O backed (e.g., ADIOS2)</span>
+<a id="ln-21" name="ln-21" href="#ln-21"></a><span class="c">!! - extends the abstract base types defined in this module</span>
+<a id="ln-22" name="ln-22" href="#ln-22"></a><span class="c">!!</span>
+<a id="ln-23" name="ln-23" href="#ln-23"></a><span class="c">!! Base layer (`m_io_base`, this module)</span>
+<a id="ln-24" name="ln-24" href="#ln-24"></a><span class="c">!! - provides abstract `io_reader_t`, `io_writer_t` and `io_file_t` types</span>
+<a id="ln-25" name="ln-25" href="#ln-25"></a><span class="c">!! - deferred bindings make every backend implement the full interface at</span>
+<a id="ln-26" name="ln-26" href="#ln-26"></a><span class="c">!!   compile time; only optional capabilities have default implementations</span>
+<a id="ln-27" name="ln-27" href="#ln-27"></a><span class="c">!!</span>
+<a id="ln-28" name="ln-28" href="#ln-28"></a><span class="c">!! @note This is an internal module and should not be used directly by users.</span>
+<a id="ln-29" name="ln-29" href="#ln-29"></a><span class="c">!! The sole public interface for I/O is the high-level session API provided in</span>
+<a id="ln-30" name="ln-30" href="#ln-30"></a><span class="c">!! `m_io_session`.</span>
+<a id="ln-31" name="ln-31" href="#ln-31"></a>
+<a id="ln-32" name="ln-32" href="#ln-32"></a><span class="w">  </span><span class="k">use </span><span class="n">m_common</span><span class="p">,</span><span class="w"> </span><span class="k">only</span><span class="p">:</span><span class="w"> </span><span class="n">dp</span><span class="p">,</span><span class="w"> </span><span class="n">i8</span>
+<a id="ln-33" name="ln-33" href="#ln-33"></a><span class="w">  </span><span class="k">use </span><span class="n">m_field</span><span class="p">,</span><span class="w"> </span><span class="k">only</span><span class="p">:</span><span class="w"> </span><span class="n">field_t</span>
+<a id="ln-34" name="ln-34" href="#ln-34"></a><span class="w">  </span><span class="k">use </span><span class="n">m_base_backend</span><span class="p">,</span><span class="w"> </span><span class="k">only</span><span class="p">:</span><span class="w"> </span><span class="n">base_backend_t</span>
+<a id="ln-35" name="ln-35" href="#ln-35"></a>
+<a id="ln-36" name="ln-36" href="#ln-36"></a><span class="w">  </span><span class="k">implicit none</span>
+<a id="ln-37" name="ln-37" href="#ln-37"></a>
+<a id="ln-38" name="ln-38" href="#ln-38"></a><span class="k">  private</span>
+<a id="ln-39" name="ln-39" href="#ln-39"></a><span class="k">  public</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">io_reader_t</span><span class="p">,</span><span class="w"> </span><span class="n">io_writer_t</span><span class="p">,</span><span class="w"> </span><span class="n">io_file_t</span>
+<a id="ln-40" name="ln-40" href="#ln-40"></a><span class="w">  </span><span class="k">public</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">io_mode_read</span><span class="p">,</span><span class="w"> </span><span class="n">io_mode_write</span><span class="p">,</span><span class="w"> </span><span class="n">io_mode_append</span>
+<a id="ln-41" name="ln-41" href="#ln-41"></a>
+<a id="ln-42" name="ln-42" href="#ln-42"></a><span class="w">  </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">parameter</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">io_mode_read</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span>
+<a id="ln-43" name="ln-43" href="#ln-43"></a><span class="w">  </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">parameter</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">io_mode_write</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">2</span>
+<a id="ln-44" name="ln-44" href="#ln-44"></a><span class="w">  </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">parameter</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">io_mode_append</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">3</span>
+<a id="ln-45" name="ln-45" href="#ln-45"></a>
+<a id="ln-46" name="ln-46" href="#ln-46"></a><span class="w">  </span><span class="c">!&gt; Base file handle for I/O operations</span>
+<a id="ln-47" name="ln-47" href="#ln-47"></a><span class="w">  </span><span class="k">type</span><span class="p">,</span><span class="w"> </span><span class="k">abstract</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">io_file_t</span>
+<a id="ln-48" name="ln-48" href="#ln-48"></a><span class="w">  </span><span class="k">contains</span>
+<a id="ln-49" name="ln-49" href="#ln-49"></a><span class="k">    procedure</span><span class="p">(</span><span class="n">file_op</span><span class="p">),</span><span class="w"> </span><span class="k">deferred</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="k">close</span>
+<a id="ln-50" name="ln-50" href="#ln-50"></a><span class="k">    procedure</span><span class="p">(</span><span class="n">file_op</span><span class="p">),</span><span class="w"> </span><span class="k">deferred</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">begin_step</span>
+<a id="ln-51" name="ln-51" href="#ln-51"></a><span class="w">    </span><span class="k">procedure</span><span class="p">(</span><span class="n">file_op</span><span class="p">),</span><span class="w"> </span><span class="k">deferred</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">end_step</span>
+<a id="ln-52" name="ln-52" href="#ln-52"></a><span class="w">    </span><span class="k">procedure</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">is_file_functional</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="n">base_is_file_functional</span>
+<a id="ln-53" name="ln-53" href="#ln-53"></a><span class="w">  </span><span class="k">end type </span><span class="n">io_file_t</span>
+<a id="ln-54" name="ln-54" href="#ln-54"></a>
+<a id="ln-55" name="ln-55" href="#ln-55"></a><span class="w">  </span><span class="c">!&gt; Base I/O reader type for polymorphic usage</span>
+<a id="ln-56" name="ln-56" href="#ln-56"></a><span class="w">  </span><span class="k">type</span><span class="p">,</span><span class="w"> </span><span class="k">abstract</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">io_reader_t</span>
+<a id="ln-57" name="ln-57" href="#ln-57"></a><span class="w">  </span><span class="k">contains</span>
+<a id="ln-58" name="ln-58" href="#ln-58"></a><span class="k">    procedure</span><span class="p">(</span><span class="n">reader_init</span><span class="p">),</span><span class="w"> </span><span class="k">deferred</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">init</span>
+<a id="ln-59" name="ln-59" href="#ln-59"></a><span class="w">    </span><span class="k">procedure</span><span class="p">(</span><span class="n">reader_open</span><span class="p">),</span><span class="w"> </span><span class="k">deferred</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="k">open</span>
+<a id="ln-60" name="ln-60" href="#ln-60"></a><span class="k">    procedure</span><span class="p">(</span><span class="n">reader_finalise</span><span class="p">),</span><span class="w"> </span><span class="k">deferred</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">finalise</span>
+<a id="ln-61" name="ln-61" href="#ln-61"></a><span class="w">    </span><span class="c">! Generic interfaces for session usage</span>
+<a id="ln-62" name="ln-62" href="#ln-62"></a><span class="w">    </span><span class="k">generic</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">read_data</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="n">read_data_i8</span><span class="p">,</span><span class="w"> </span><span class="n">read_data_integer</span><span class="p">,</span><span class="w"> </span><span class="n">read_data_real</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-63" name="ln-63" href="#ln-63"></a><span class="w">      </span><span class="n">read_data_array_3d</span>
+<a id="ln-64" name="ln-64" href="#ln-64"></a><span class="w">    </span><span class="k">procedure</span><span class="p">(</span><span class="n">read_data_i8</span><span class="p">),</span><span class="w"> </span><span class="k">deferred</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">read_data_i8</span>
+<a id="ln-65" name="ln-65" href="#ln-65"></a><span class="w">    </span><span class="k">procedure</span><span class="p">(</span><span class="n">read_data_integer</span><span class="p">),</span><span class="w"> </span><span class="k">deferred</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">read_data_integer</span>
+<a id="ln-66" name="ln-66" href="#ln-66"></a><span class="w">    </span><span class="k">procedure</span><span class="p">(</span><span class="n">read_data_real</span><span class="p">),</span><span class="w"> </span><span class="k">deferred</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">read_data_real</span>
+<a id="ln-67" name="ln-67" href="#ln-67"></a><span class="w">    </span><span class="k">procedure</span><span class="p">(</span><span class="n">read_data_array_3d</span><span class="p">),</span><span class="w"> </span><span class="k">deferred</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">read_data_array_3d</span>
+<a id="ln-68" name="ln-68" href="#ln-68"></a><span class="w">    </span><span class="k">procedure</span><span class="p">(</span><span class="n">read_shape_3d</span><span class="p">),</span><span class="w"> </span><span class="k">deferred</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">read_shape_3d</span>
+<a id="ln-69" name="ln-69" href="#ln-69"></a><span class="w">  </span><span class="k">end type </span><span class="n">io_reader_t</span>
+<a id="ln-70" name="ln-70" href="#ln-70"></a>
+<a id="ln-71" name="ln-71" href="#ln-71"></a><span class="w">  </span><span class="c">!&gt; Base I/O writer type for polymorphic usage</span>
+<a id="ln-72" name="ln-72" href="#ln-72"></a><span class="w">  </span><span class="k">type</span><span class="p">,</span><span class="w"> </span><span class="k">abstract</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">io_writer_t</span>
+<a id="ln-73" name="ln-73" href="#ln-73"></a><span class="w">  </span><span class="k">contains</span>
+<a id="ln-74" name="ln-74" href="#ln-74"></a><span class="k">    procedure</span><span class="p">(</span><span class="n">writer_init</span><span class="p">),</span><span class="w"> </span><span class="k">deferred</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">init</span>
+<a id="ln-75" name="ln-75" href="#ln-75"></a><span class="w">    </span><span class="k">procedure</span><span class="p">(</span><span class="n">writer_open</span><span class="p">),</span><span class="w"> </span><span class="k">deferred</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="k">open</span>
+<a id="ln-76" name="ln-76" href="#ln-76"></a><span class="k">    procedure</span><span class="p">(</span><span class="n">writer_finalise</span><span class="p">),</span><span class="w"> </span><span class="k">deferred</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">finalise</span>
+<a id="ln-77" name="ln-77" href="#ln-77"></a><span class="w">    </span><span class="k">procedure</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">supports_device_field_write</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-78" name="ln-78" href="#ln-78"></a><span class="w">      </span><span class="n">base_supports_device_field_write</span>
+<a id="ln-79" name="ln-79" href="#ln-79"></a><span class="w">    </span><span class="k">generic</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">write_data</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="n">write_data_i8</span><span class="p">,</span><span class="w"> </span><span class="n">write_data_integer</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-80" name="ln-80" href="#ln-80"></a><span class="w">      </span><span class="n">write_data_real</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-81" name="ln-81" href="#ln-81"></a><span class="w">      </span><span class="n">write_data_array_3d</span>
+<a id="ln-82" name="ln-82" href="#ln-82"></a><span class="w">    </span><span class="k">procedure</span><span class="p">(</span><span class="n">write_data_i8</span><span class="p">),</span><span class="w"> </span><span class="k">deferred</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">write_data_i8</span>
+<a id="ln-83" name="ln-83" href="#ln-83"></a><span class="w">    </span><span class="k">procedure</span><span class="p">(</span><span class="n">write_data_integer</span><span class="p">),</span><span class="w"> </span><span class="k">deferred</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">write_data_integer</span>
+<a id="ln-84" name="ln-84" href="#ln-84"></a><span class="w">    </span><span class="k">procedure</span><span class="p">(</span><span class="n">write_data_real</span><span class="p">),</span><span class="w"> </span><span class="k">deferred</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">write_data_real</span>
+<a id="ln-85" name="ln-85" href="#ln-85"></a><span class="w">    </span><span class="k">procedure</span><span class="p">(</span><span class="n">write_data_array_3d</span><span class="p">),</span><span class="w"> </span><span class="k">deferred</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">write_data_array_3d</span>
+<a id="ln-86" name="ln-86" href="#ln-86"></a><span class="w">    </span><span class="k">procedure</span><span class="p">(</span><span class="n">write_field_from_solver</span><span class="p">),</span><span class="w"> </span><span class="k">deferred</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">write_field_from_solver</span>
+<a id="ln-87" name="ln-87" href="#ln-87"></a><span class="w">    </span><span class="k">generic</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">write_attribute</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="n">write_attribute_string</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-88" name="ln-88" href="#ln-88"></a><span class="w">      </span><span class="n">write_attribute_array_1d_real</span>
+<a id="ln-89" name="ln-89" href="#ln-89"></a><span class="w">    </span><span class="k">procedure</span><span class="p">(</span><span class="n">write_attribute_string</span><span class="p">),</span><span class="w"> </span><span class="k">deferred</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">write_attribute_string</span>
+<a id="ln-90" name="ln-90" href="#ln-90"></a><span class="w">    </span><span class="k">procedure</span><span class="p">(</span><span class="n">write_attribute_array_1d_real</span><span class="p">),</span><span class="w"> </span><span class="k">deferred</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-91" name="ln-91" href="#ln-91"></a><span class="w">      </span><span class="n">write_attribute_array_1d_real</span>
+<a id="ln-92" name="ln-92" href="#ln-92"></a><span class="w">  </span><span class="k">end type </span><span class="n">io_writer_t</span>
+<a id="ln-93" name="ln-93" href="#ln-93"></a>
+<a id="ln-94" name="ln-94" href="#ln-94"></a><span class="w">  </span><span class="k">abstract interface</span>
+<a id="ln-95" name="ln-95" href="#ln-95"></a><span class="k">    subroutine </span><span class="n">file_op</span><span class="p">(</span><span class="n">self</span><span class="p">)</span>
+<a id="ln-96" name="ln-96" href="#ln-96"></a><span class="w">      </span><span class="k">import</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">io_file_t</span>
+<a id="ln-97" name="ln-97" href="#ln-97"></a><span class="w">      </span><span class="k">class</span><span class="p">(</span><span class="n">io_file_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">self</span>
+<a id="ln-98" name="ln-98" href="#ln-98"></a><span class="w">    </span><span class="k">end subroutine </span><span class="n">file_op</span>
+<a id="ln-99" name="ln-99" href="#ln-99"></a>
+<a id="ln-100" name="ln-100" href="#ln-100"></a><span class="w">    </span><span class="k">subroutine </span><span class="n">reader_init</span><span class="p">(</span><span class="n">self</span><span class="p">,</span><span class="w"> </span><span class="n">comm</span><span class="p">,</span><span class="w"> </span><span class="n">name</span><span class="p">)</span>
+<a id="ln-101" name="ln-101" href="#ln-101"></a><span class="w">      </span><span class="k">import</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">io_reader_t</span>
+<a id="ln-102" name="ln-102" href="#ln-102"></a><span class="w">      </span><span class="k">class</span><span class="p">(</span><span class="n">io_reader_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">self</span>
+<a id="ln-103" name="ln-103" href="#ln-103"></a><span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">comm</span>
+<a id="ln-104" name="ln-104" href="#ln-104"></a><span class="w">      </span><span class="kt">character</span><span class="p">(</span><span class="nb">len</span><span class="o">=*</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">name</span>
+<a id="ln-105" name="ln-105" href="#ln-105"></a><span class="w">    </span><span class="k">end subroutine </span><span class="n">reader_init</span>
+<a id="ln-106" name="ln-106" href="#ln-106"></a>
+<a id="ln-107" name="ln-107" href="#ln-107"></a><span class="w">    </span><span class="k">function </span><span class="n">reader_open</span><span class="p">(</span><span class="n">self</span><span class="p">,</span><span class="w"> </span><span class="n">filename</span><span class="p">,</span><span class="w"> </span><span class="n">mode</span><span class="p">,</span><span class="w"> </span><span class="n">comm</span><span class="p">)</span><span class="w"> </span><span class="k">result</span><span class="p">(</span><span class="n">file_handle</span><span class="p">)</span>
+<a id="ln-108" name="ln-108" href="#ln-108"></a><span class="w">      </span><span class="k">import</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">io_reader_t</span><span class="p">,</span><span class="w"> </span><span class="n">io_file_t</span>
+<a id="ln-109" name="ln-109" href="#ln-109"></a><span class="w">      </span><span class="k">class</span><span class="p">(</span><span class="n">io_reader_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">self</span>
+<a id="ln-110" name="ln-110" href="#ln-110"></a><span class="w">      </span><span class="kt">character</span><span class="p">(</span><span class="nb">len</span><span class="o">=*</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">filename</span>
+<a id="ln-111" name="ln-111" href="#ln-111"></a><span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">mode</span>
+<a id="ln-112" name="ln-112" href="#ln-112"></a><span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">comm</span>
+<a id="ln-113" name="ln-113" href="#ln-113"></a><span class="w">      </span><span class="k">class</span><span class="p">(</span><span class="n">io_file_t</span><span class="p">),</span><span class="w"> </span><span class="k">allocatable</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">file_handle</span>
+<a id="ln-114" name="ln-114" href="#ln-114"></a><span class="w">    </span><span class="k">end function </span><span class="n">reader_open</span>
+<a id="ln-115" name="ln-115" href="#ln-115"></a>
+<a id="ln-116" name="ln-116" href="#ln-116"></a><span class="w">    </span><span class="k">subroutine </span><span class="n">reader_finalise</span><span class="p">(</span><span class="n">self</span><span class="p">)</span>
+<a id="ln-117" name="ln-117" href="#ln-117"></a><span class="w">      </span><span class="k">import</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">io_reader_t</span>
+<a id="ln-118" name="ln-118" href="#ln-118"></a><span class="w">      </span><span class="k">class</span><span class="p">(</span><span class="n">io_reader_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">self</span>
+<a id="ln-119" name="ln-119" href="#ln-119"></a><span class="w">    </span><span class="k">end subroutine </span><span class="n">reader_finalise</span>
+<a id="ln-120" name="ln-120" href="#ln-120"></a>
+<a id="ln-121" name="ln-121" href="#ln-121"></a><span class="w">    </span><span class="k">subroutine </span><span class="n">read_data_i8</span><span class="p">(</span><span class="n">self</span><span class="p">,</span><span class="w"> </span><span class="n">variable_name</span><span class="p">,</span><span class="w"> </span><span class="k">value</span><span class="p">,</span><span class="w"> </span><span class="n">file_handle</span><span class="p">)</span>
+<a id="ln-122" name="ln-122" href="#ln-122"></a><span class="w">      </span><span class="k">import</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">io_reader_t</span><span class="p">,</span><span class="w"> </span><span class="n">io_file_t</span><span class="p">,</span><span class="w"> </span><span class="n">i8</span>
+<a id="ln-123" name="ln-123" href="#ln-123"></a><span class="w">      </span><span class="k">class</span><span class="p">(</span><span class="n">io_reader_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">self</span>
+<a id="ln-124" name="ln-124" href="#ln-124"></a><span class="w">      </span><span class="kt">character</span><span class="p">(</span><span class="nb">len</span><span class="o">=*</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">variable_name</span>
+<a id="ln-125" name="ln-125" href="#ln-125"></a><span class="w">      </span><span class="kt">integer</span><span class="p">(</span><span class="n">i8</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">out</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="k">value</span>
+<a id="ln-126" name="ln-126" href="#ln-126"></a><span class="k">      class</span><span class="p">(</span><span class="n">io_file_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">file_handle</span>
+<a id="ln-127" name="ln-127" href="#ln-127"></a><span class="w">    </span><span class="k">end subroutine </span><span class="n">read_data_i8</span>
+<a id="ln-128" name="ln-128" href="#ln-128"></a>
+<a id="ln-129" name="ln-129" href="#ln-129"></a><span class="w">    </span><span class="k">subroutine </span><span class="n">read_data_integer</span><span class="p">(</span><span class="n">self</span><span class="p">,</span><span class="w"> </span><span class="n">variable_name</span><span class="p">,</span><span class="w"> </span><span class="k">value</span><span class="p">,</span><span class="w"> </span><span class="n">file_handle</span><span class="p">)</span>
+<a id="ln-130" name="ln-130" href="#ln-130"></a><span class="w">      </span><span class="k">import</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">io_reader_t</span><span class="p">,</span><span class="w"> </span><span class="n">io_file_t</span>
+<a id="ln-131" name="ln-131" href="#ln-131"></a><span class="w">      </span><span class="k">class</span><span class="p">(</span><span class="n">io_reader_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">self</span>
+<a id="ln-132" name="ln-132" href="#ln-132"></a><span class="w">      </span><span class="kt">character</span><span class="p">(</span><span class="nb">len</span><span class="o">=*</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">variable_name</span>
+<a id="ln-133" name="ln-133" href="#ln-133"></a><span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">out</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="k">value</span>
+<a id="ln-134" name="ln-134" href="#ln-134"></a><span class="k">      class</span><span class="p">(</span><span class="n">io_file_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">file_handle</span>
+<a id="ln-135" name="ln-135" href="#ln-135"></a><span class="w">    </span><span class="k">end subroutine </span><span class="n">read_data_integer</span>
+<a id="ln-136" name="ln-136" href="#ln-136"></a>
+<a id="ln-137" name="ln-137" href="#ln-137"></a><span class="w">    </span><span class="k">subroutine </span><span class="n">read_data_real</span><span class="p">(</span><span class="n">self</span><span class="p">,</span><span class="w"> </span><span class="n">variable_name</span><span class="p">,</span><span class="w"> </span><span class="k">value</span><span class="p">,</span><span class="w"> </span><span class="n">file_handle</span><span class="p">)</span>
+<a id="ln-138" name="ln-138" href="#ln-138"></a><span class="w">      </span><span class="k">import</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">io_reader_t</span><span class="p">,</span><span class="w"> </span><span class="n">io_file_t</span><span class="p">,</span><span class="w"> </span><span class="n">dp</span>
+<a id="ln-139" name="ln-139" href="#ln-139"></a><span class="w">      </span><span class="k">class</span><span class="p">(</span><span class="n">io_reader_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">self</span>
+<a id="ln-140" name="ln-140" href="#ln-140"></a><span class="w">      </span><span class="kt">character</span><span class="p">(</span><span class="nb">len</span><span class="o">=*</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">variable_name</span>
+<a id="ln-141" name="ln-141" href="#ln-141"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">dp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">out</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="k">value</span>
+<a id="ln-142" name="ln-142" href="#ln-142"></a><span class="k">      class</span><span class="p">(</span><span class="n">io_file_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">file_handle</span>
+<a id="ln-143" name="ln-143" href="#ln-143"></a><span class="w">    </span><span class="k">end subroutine </span><span class="n">read_data_real</span>
+<a id="ln-144" name="ln-144" href="#ln-144"></a>
+<a id="ln-145" name="ln-145" href="#ln-145"></a><span class="w">    </span><span class="k">subroutine </span><span class="n">read_data_array_3d</span><span class="p">(</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-146" name="ln-146" href="#ln-146"></a><span class="w">      </span><span class="n">self</span><span class="p">,</span><span class="w"> </span><span class="n">variable_name</span><span class="p">,</span><span class="w"> </span><span class="k">array</span><span class="p">,</span><span class="w"> </span><span class="n">file_handle</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-147" name="ln-147" href="#ln-147"></a><span class="w">      </span><span class="n">shape_dims</span><span class="p">,</span><span class="w"> </span><span class="n">start_dims</span><span class="p">,</span><span class="w"> </span><span class="n">count_dims</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-148" name="ln-148" href="#ln-148"></a><span class="w">      </span><span class="p">)</span>
+<a id="ln-149" name="ln-149" href="#ln-149"></a><span class="w">      </span><span class="k">import</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">io_reader_t</span><span class="p">,</span><span class="w"> </span><span class="n">io_file_t</span><span class="p">,</span><span class="w"> </span><span class="n">dp</span><span class="p">,</span><span class="w"> </span><span class="n">i8</span>
+<a id="ln-150" name="ln-150" href="#ln-150"></a><span class="w">      </span><span class="k">class</span><span class="p">(</span><span class="n">io_reader_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">self</span>
+<a id="ln-151" name="ln-151" href="#ln-151"></a><span class="w">      </span><span class="kt">character</span><span class="p">(</span><span class="nb">len</span><span class="o">=*</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">variable_name</span>
+<a id="ln-152" name="ln-152" href="#ln-152"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">dp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="k">array</span><span class="p">(:,</span><span class="w"> </span><span class="p">:,</span><span class="w"> </span><span class="p">:)</span>
+<a id="ln-153" name="ln-153" href="#ln-153"></a><span class="w">      </span><span class="k">class</span><span class="p">(</span><span class="n">io_file_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">file_handle</span>
+<a id="ln-154" name="ln-154" href="#ln-154"></a><span class="w">      </span><span class="kt">integer</span><span class="p">(</span><span class="n">i8</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">),</span><span class="w"> </span><span class="k">optional</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">shape_dims</span><span class="p">(</span><span class="mi">3</span><span class="p">)</span>
+<a id="ln-155" name="ln-155" href="#ln-155"></a><span class="w">      </span><span class="kt">integer</span><span class="p">(</span><span class="n">i8</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">),</span><span class="w"> </span><span class="k">optional</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">start_dims</span><span class="p">(</span><span class="mi">3</span><span class="p">)</span>
+<a id="ln-156" name="ln-156" href="#ln-156"></a><span class="w">      </span><span class="kt">integer</span><span class="p">(</span><span class="n">i8</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">),</span><span class="w"> </span><span class="k">optional</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">count_dims</span><span class="p">(</span><span class="mi">3</span><span class="p">)</span>
+<a id="ln-157" name="ln-157" href="#ln-157"></a><span class="w">    </span><span class="k">end subroutine </span><span class="n">read_data_array_3d</span>
+<a id="ln-158" name="ln-158" href="#ln-158"></a>
+<a id="ln-159" name="ln-159" href="#ln-159"></a><span class="w">    </span><span class="k">subroutine </span><span class="n">read_shape_3d</span><span class="p">(</span><span class="n">self</span><span class="p">,</span><span class="w"> </span><span class="n">variable_name</span><span class="p">,</span><span class="w"> </span><span class="n">shape_dims</span><span class="p">,</span><span class="w"> </span><span class="n">file_handle</span><span class="p">)</span>
+<a id="ln-160" name="ln-160" href="#ln-160"></a><span class="w">      </span><span class="k">import</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">io_reader_t</span><span class="p">,</span><span class="w"> </span><span class="n">io_file_t</span><span class="p">,</span><span class="w"> </span><span class="n">i8</span>
+<a id="ln-161" name="ln-161" href="#ln-161"></a><span class="w">      </span><span class="k">class</span><span class="p">(</span><span class="n">io_reader_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">self</span>
+<a id="ln-162" name="ln-162" href="#ln-162"></a><span class="w">      </span><span class="kt">character</span><span class="p">(</span><span class="nb">len</span><span class="o">=*</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">variable_name</span>
+<a id="ln-163" name="ln-163" href="#ln-163"></a><span class="w">      </span><span class="kt">integer</span><span class="p">(</span><span class="n">i8</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">out</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">shape_dims</span><span class="p">(</span><span class="mi">3</span><span class="p">)</span>
+<a id="ln-164" name="ln-164" href="#ln-164"></a><span class="w">      </span><span class="k">class</span><span class="p">(</span><span class="n">io_file_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">file_handle</span>
+<a id="ln-165" name="ln-165" href="#ln-165"></a><span class="w">    </span><span class="k">end subroutine </span><span class="n">read_shape_3d</span>
+<a id="ln-166" name="ln-166" href="#ln-166"></a>
+<a id="ln-167" name="ln-167" href="#ln-167"></a><span class="w">    </span><span class="k">subroutine </span><span class="n">writer_init</span><span class="p">(</span><span class="n">self</span><span class="p">,</span><span class="w"> </span><span class="n">comm</span><span class="p">,</span><span class="w"> </span><span class="n">name</span><span class="p">)</span>
+<a id="ln-168" name="ln-168" href="#ln-168"></a><span class="w">      </span><span class="k">import</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">io_writer_t</span>
+<a id="ln-169" name="ln-169" href="#ln-169"></a><span class="w">      </span><span class="k">class</span><span class="p">(</span><span class="n">io_writer_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">self</span>
+<a id="ln-170" name="ln-170" href="#ln-170"></a><span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">comm</span>
+<a id="ln-171" name="ln-171" href="#ln-171"></a><span class="w">      </span><span class="kt">character</span><span class="p">(</span><span class="nb">len</span><span class="o">=*</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">name</span>
+<a id="ln-172" name="ln-172" href="#ln-172"></a><span class="w">    </span><span class="k">end subroutine </span><span class="n">writer_init</span>
+<a id="ln-173" name="ln-173" href="#ln-173"></a>
+<a id="ln-174" name="ln-174" href="#ln-174"></a><span class="w">    </span><span class="k">function </span><span class="n">writer_open</span><span class="p">(</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-175" name="ln-175" href="#ln-175"></a><span class="w">      </span><span class="n">self</span><span class="p">,</span><span class="w"> </span><span class="n">filename</span><span class="p">,</span><span class="w"> </span><span class="n">mode</span><span class="p">,</span><span class="w"> </span><span class="n">comm</span><span class="p">,</span><span class="w"> </span><span class="n">append_after_steps</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-176" name="ln-176" href="#ln-176"></a><span class="w">      </span><span class="p">)</span><span class="w"> </span><span class="k">result</span><span class="p">(</span><span class="n">file_handle</span><span class="p">)</span>
+<a id="ln-177" name="ln-177" href="#ln-177"></a><span class="w">      </span><span class="k">import</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">io_writer_t</span><span class="p">,</span><span class="w"> </span><span class="n">io_file_t</span>
+<a id="ln-178" name="ln-178" href="#ln-178"></a><span class="w">      </span><span class="k">class</span><span class="p">(</span><span class="n">io_writer_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">self</span>
+<a id="ln-179" name="ln-179" href="#ln-179"></a><span class="w">      </span><span class="kt">character</span><span class="p">(</span><span class="nb">len</span><span class="o">=*</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">filename</span>
+<a id="ln-180" name="ln-180" href="#ln-180"></a><span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">mode</span>
+<a id="ln-181" name="ln-181" href="#ln-181"></a><span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">comm</span>
+<a id="ln-182" name="ln-182" href="#ln-182"></a><span class="w">      </span><span class="c">!! In io_mode_append, keep this many existing steps and drop the rest</span>
+<a id="ln-183" name="ln-183" href="#ln-183"></a><span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">),</span><span class="w"> </span><span class="k">optional</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">append_after_steps</span>
+<a id="ln-184" name="ln-184" href="#ln-184"></a><span class="w">      </span><span class="k">class</span><span class="p">(</span><span class="n">io_file_t</span><span class="p">),</span><span class="w"> </span><span class="k">allocatable</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">file_handle</span>
+<a id="ln-185" name="ln-185" href="#ln-185"></a><span class="w">    </span><span class="k">end function </span><span class="n">writer_open</span>
+<a id="ln-186" name="ln-186" href="#ln-186"></a>
+<a id="ln-187" name="ln-187" href="#ln-187"></a><span class="w">    </span><span class="k">subroutine </span><span class="n">writer_finalise</span><span class="p">(</span><span class="n">self</span><span class="p">)</span>
+<a id="ln-188" name="ln-188" href="#ln-188"></a><span class="w">      </span><span class="k">import</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">io_writer_t</span>
+<a id="ln-189" name="ln-189" href="#ln-189"></a><span class="w">      </span><span class="k">class</span><span class="p">(</span><span class="n">io_writer_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">self</span>
+<a id="ln-190" name="ln-190" href="#ln-190"></a><span class="w">    </span><span class="k">end subroutine </span><span class="n">writer_finalise</span>
+<a id="ln-191" name="ln-191" href="#ln-191"></a>
+<a id="ln-192" name="ln-192" href="#ln-192"></a><span class="w">    </span><span class="k">subroutine </span><span class="n">write_data_i8</span><span class="p">(</span><span class="n">self</span><span class="p">,</span><span class="w"> </span><span class="n">variable_name</span><span class="p">,</span><span class="w"> </span><span class="k">value</span><span class="p">,</span><span class="w"> </span><span class="n">file_handle</span><span class="p">)</span>
+<a id="ln-193" name="ln-193" href="#ln-193"></a><span class="w">      </span><span class="k">import</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">io_writer_t</span><span class="p">,</span><span class="w"> </span><span class="n">io_file_t</span><span class="p">,</span><span class="w"> </span><span class="n">i8</span>
+<a id="ln-194" name="ln-194" href="#ln-194"></a><span class="w">      </span><span class="k">class</span><span class="p">(</span><span class="n">io_writer_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">self</span>
+<a id="ln-195" name="ln-195" href="#ln-195"></a><span class="w">      </span><span class="kt">character</span><span class="p">(</span><span class="nb">len</span><span class="o">=*</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">variable_name</span>
+<a id="ln-196" name="ln-196" href="#ln-196"></a><span class="w">      </span><span class="kt">integer</span><span class="p">(</span><span class="n">i8</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="k">value</span>
+<a id="ln-197" name="ln-197" href="#ln-197"></a><span class="k">      class</span><span class="p">(</span><span class="n">io_file_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">file_handle</span>
+<a id="ln-198" name="ln-198" href="#ln-198"></a><span class="w">    </span><span class="k">end subroutine </span><span class="n">write_data_i8</span>
+<a id="ln-199" name="ln-199" href="#ln-199"></a>
+<a id="ln-200" name="ln-200" href="#ln-200"></a><span class="w">    </span><span class="k">subroutine </span><span class="n">write_data_integer</span><span class="p">(</span><span class="n">self</span><span class="p">,</span><span class="w"> </span><span class="n">variable_name</span><span class="p">,</span><span class="w"> </span><span class="k">value</span><span class="p">,</span><span class="w"> </span><span class="n">file_handle</span><span class="p">)</span>
+<a id="ln-201" name="ln-201" href="#ln-201"></a><span class="w">      </span><span class="k">import</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">io_writer_t</span><span class="p">,</span><span class="w"> </span><span class="n">io_file_t</span>
+<a id="ln-202" name="ln-202" href="#ln-202"></a><span class="w">      </span><span class="k">class</span><span class="p">(</span><span class="n">io_writer_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">self</span>
+<a id="ln-203" name="ln-203" href="#ln-203"></a><span class="w">      </span><span class="kt">character</span><span class="p">(</span><span class="nb">len</span><span class="o">=*</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">variable_name</span>
+<a id="ln-204" name="ln-204" href="#ln-204"></a><span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="k">value</span>
+<a id="ln-205" name="ln-205" href="#ln-205"></a><span class="k">      class</span><span class="p">(</span><span class="n">io_file_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">file_handle</span>
+<a id="ln-206" name="ln-206" href="#ln-206"></a><span class="w">    </span><span class="k">end subroutine </span><span class="n">write_data_integer</span>
+<a id="ln-207" name="ln-207" href="#ln-207"></a>
+<a id="ln-208" name="ln-208" href="#ln-208"></a><span class="w">    </span><span class="k">subroutine </span><span class="n">write_data_real</span><span class="p">(</span><span class="n">self</span><span class="p">,</span><span class="w"> </span><span class="n">variable_name</span><span class="p">,</span><span class="w"> </span><span class="k">value</span><span class="p">,</span><span class="w"> </span><span class="n">file_handle</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-209" name="ln-209" href="#ln-209"></a><span class="w">                               </span><span class="n">use_sp</span><span class="p">)</span>
+<a id="ln-210" name="ln-210" href="#ln-210"></a><span class="w">      </span><span class="k">import</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">io_writer_t</span><span class="p">,</span><span class="w"> </span><span class="n">io_file_t</span><span class="p">,</span><span class="w"> </span><span class="n">dp</span>
+<a id="ln-211" name="ln-211" href="#ln-211"></a><span class="w">      </span><span class="k">class</span><span class="p">(</span><span class="n">io_writer_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">self</span>
+<a id="ln-212" name="ln-212" href="#ln-212"></a><span class="w">      </span><span class="kt">character</span><span class="p">(</span><span class="nb">len</span><span class="o">=*</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">variable_name</span>
+<a id="ln-213" name="ln-213" href="#ln-213"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">dp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="k">value</span>
+<a id="ln-214" name="ln-214" href="#ln-214"></a><span class="k">      class</span><span class="p">(</span><span class="n">io_file_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">file_handle</span>
+<a id="ln-215" name="ln-215" href="#ln-215"></a><span class="w">      </span><span class="kt">logical</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">),</span><span class="w"> </span><span class="k">optional</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">use_sp</span>
+<a id="ln-216" name="ln-216" href="#ln-216"></a><span class="w">    </span><span class="k">end subroutine </span><span class="n">write_data_real</span>
+<a id="ln-217" name="ln-217" href="#ln-217"></a>
+<a id="ln-218" name="ln-218" href="#ln-218"></a><span class="w">    </span><span class="k">subroutine </span><span class="n">write_data_array_3d</span><span class="p">(</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-219" name="ln-219" href="#ln-219"></a><span class="w">      </span><span class="n">self</span><span class="p">,</span><span class="w"> </span><span class="n">variable_name</span><span class="p">,</span><span class="w"> </span><span class="k">array</span><span class="p">,</span><span class="w"> </span><span class="n">file_handle</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-220" name="ln-220" href="#ln-220"></a><span class="w">      </span><span class="n">shape_dims</span><span class="p">,</span><span class="w"> </span><span class="n">start_dims</span><span class="p">,</span><span class="w"> </span><span class="n">count_dims</span><span class="p">,</span><span class="w"> </span><span class="n">use_sp</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-221" name="ln-221" href="#ln-221"></a><span class="w">      </span><span class="p">)</span>
+<a id="ln-222" name="ln-222" href="#ln-222"></a><span class="w">      </span><span class="k">import</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">io_writer_t</span><span class="p">,</span><span class="w"> </span><span class="n">io_file_t</span><span class="p">,</span><span class="w"> </span><span class="n">dp</span><span class="p">,</span><span class="w"> </span><span class="n">i8</span>
+<a id="ln-223" name="ln-223" href="#ln-223"></a><span class="w">      </span><span class="k">class</span><span class="p">(</span><span class="n">io_writer_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">self</span>
+<a id="ln-224" name="ln-224" href="#ln-224"></a><span class="w">      </span><span class="kt">character</span><span class="p">(</span><span class="nb">len</span><span class="o">=*</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">variable_name</span>
+<a id="ln-225" name="ln-225" href="#ln-225"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">dp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="k">array</span><span class="p">(:,</span><span class="w"> </span><span class="p">:,</span><span class="w"> </span><span class="p">:)</span>
+<a id="ln-226" name="ln-226" href="#ln-226"></a><span class="w">      </span><span class="k">class</span><span class="p">(</span><span class="n">io_file_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">file_handle</span>
+<a id="ln-227" name="ln-227" href="#ln-227"></a><span class="w">      </span><span class="kt">integer</span><span class="p">(</span><span class="n">i8</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">shape_dims</span><span class="p">(</span><span class="mi">3</span><span class="p">)</span>
+<a id="ln-228" name="ln-228" href="#ln-228"></a><span class="w">      </span><span class="kt">integer</span><span class="p">(</span><span class="n">i8</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">start_dims</span><span class="p">(</span><span class="mi">3</span><span class="p">)</span>
+<a id="ln-229" name="ln-229" href="#ln-229"></a><span class="w">      </span><span class="kt">integer</span><span class="p">(</span><span class="n">i8</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">count_dims</span><span class="p">(</span><span class="mi">3</span><span class="p">)</span>
+<a id="ln-230" name="ln-230" href="#ln-230"></a><span class="w">      </span><span class="kt">logical</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">),</span><span class="w"> </span><span class="k">optional</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">use_sp</span>
+<a id="ln-231" name="ln-231" href="#ln-231"></a><span class="w">    </span><span class="k">end subroutine </span><span class="n">write_data_array_3d</span>
+<a id="ln-232" name="ln-232" href="#ln-232"></a>
+<a id="ln-233" name="ln-233" href="#ln-233"></a><span class="w">    </span><span class="k">subroutine </span><span class="n">write_field_from_solver</span><span class="p">(</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-234" name="ln-234" href="#ln-234"></a><span class="w">      </span><span class="n">self</span><span class="p">,</span><span class="w"> </span><span class="n">variable_name</span><span class="p">,</span><span class="w"> </span><span class="n">field</span><span class="p">,</span><span class="w"> </span><span class="n">file_handle</span><span class="p">,</span><span class="w"> </span><span class="n">backend</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-235" name="ln-235" href="#ln-235"></a><span class="w">      </span><span class="n">shape_dims</span><span class="p">,</span><span class="w"> </span><span class="n">start_dims</span><span class="p">,</span><span class="w"> </span><span class="n">count_dims</span><span class="p">,</span><span class="w"> </span><span class="n">use_sp</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-236" name="ln-236" href="#ln-236"></a><span class="w">      </span><span class="p">)</span>
+<a id="ln-237" name="ln-237" href="#ln-237"></a><span class="w">      </span><span class="c">!! Write the first count_dims points of a solver field. Backends</span>
+<a id="ln-238" name="ln-238" href="#ln-238"></a><span class="w">      </span><span class="c">!! may write device-resident fields without staging through host</span>
+<a id="ln-239" name="ln-239" href="#ln-239"></a><span class="w">      </span><span class="c">!! memory; `backend` provides the layout-aware packing for that.</span>
+<a id="ln-240" name="ln-240" href="#ln-240"></a><span class="w">      </span><span class="k">import</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">io_writer_t</span><span class="p">,</span><span class="w"> </span><span class="n">io_file_t</span><span class="p">,</span><span class="w"> </span><span class="n">field_t</span><span class="p">,</span><span class="w"> </span><span class="n">base_backend_t</span><span class="p">,</span><span class="w"> </span><span class="n">i8</span>
+<a id="ln-241" name="ln-241" href="#ln-241"></a><span class="w">      </span><span class="k">class</span><span class="p">(</span><span class="n">io_writer_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">self</span>
+<a id="ln-242" name="ln-242" href="#ln-242"></a><span class="w">      </span><span class="kt">character</span><span class="p">(</span><span class="nb">len</span><span class="o">=*</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">variable_name</span>
+<a id="ln-243" name="ln-243" href="#ln-243"></a><span class="w">      </span><span class="k">class</span><span class="p">(</span><span class="n">field_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">field</span>
+<a id="ln-244" name="ln-244" href="#ln-244"></a><span class="w">      </span><span class="k">class</span><span class="p">(</span><span class="n">io_file_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">file_handle</span>
+<a id="ln-245" name="ln-245" href="#ln-245"></a><span class="w">      </span><span class="k">class</span><span class="p">(</span><span class="n">base_backend_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">backend</span>
+<a id="ln-246" name="ln-246" href="#ln-246"></a><span class="w">      </span><span class="kt">integer</span><span class="p">(</span><span class="n">i8</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">shape_dims</span><span class="p">(</span><span class="mi">3</span><span class="p">)</span>
+<a id="ln-247" name="ln-247" href="#ln-247"></a><span class="w">      </span><span class="kt">integer</span><span class="p">(</span><span class="n">i8</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">start_dims</span><span class="p">(</span><span class="mi">3</span><span class="p">)</span>
+<a id="ln-248" name="ln-248" href="#ln-248"></a><span class="w">      </span><span class="kt">integer</span><span class="p">(</span><span class="n">i8</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">count_dims</span><span class="p">(</span><span class="mi">3</span><span class="p">)</span>
+<a id="ln-249" name="ln-249" href="#ln-249"></a><span class="w">      </span><span class="kt">logical</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">),</span><span class="w"> </span><span class="k">optional</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">use_sp</span>
+<a id="ln-250" name="ln-250" href="#ln-250"></a><span class="w">    </span><span class="k">end subroutine </span><span class="n">write_field_from_solver</span>
+<a id="ln-251" name="ln-251" href="#ln-251"></a>
+<a id="ln-252" name="ln-252" href="#ln-252"></a><span class="w">    </span><span class="k">subroutine </span><span class="n">write_attribute_string</span><span class="p">(</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-253" name="ln-253" href="#ln-253"></a><span class="w">      </span><span class="n">self</span><span class="p">,</span><span class="w"> </span><span class="n">attribute_name</span><span class="p">,</span><span class="w"> </span><span class="k">value</span><span class="p">,</span><span class="w"> </span><span class="n">file_handle</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-254" name="ln-254" href="#ln-254"></a><span class="w">      </span><span class="p">)</span>
+<a id="ln-255" name="ln-255" href="#ln-255"></a><span class="w">      </span><span class="k">import</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">io_writer_t</span><span class="p">,</span><span class="w"> </span><span class="n">io_file_t</span>
+<a id="ln-256" name="ln-256" href="#ln-256"></a><span class="w">      </span><span class="k">class</span><span class="p">(</span><span class="n">io_writer_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">self</span>
+<a id="ln-257" name="ln-257" href="#ln-257"></a><span class="w">      </span><span class="kt">character</span><span class="p">(</span><span class="nb">len</span><span class="o">=*</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">attribute_name</span>
+<a id="ln-258" name="ln-258" href="#ln-258"></a><span class="w">      </span><span class="kt">character</span><span class="p">(</span><span class="nb">len</span><span class="o">=*</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="k">value</span>
+<a id="ln-259" name="ln-259" href="#ln-259"></a><span class="k">      class</span><span class="p">(</span><span class="n">io_file_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">file_handle</span>
+<a id="ln-260" name="ln-260" href="#ln-260"></a><span class="w">    </span><span class="k">end subroutine </span><span class="n">write_attribute_string</span>
+<a id="ln-261" name="ln-261" href="#ln-261"></a>
+<a id="ln-262" name="ln-262" href="#ln-262"></a><span class="w">    </span><span class="k">subroutine </span><span class="n">write_attribute_array_1d_real</span><span class="p">(</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-263" name="ln-263" href="#ln-263"></a><span class="w">      </span><span class="n">self</span><span class="p">,</span><span class="w"> </span><span class="n">attribute_name</span><span class="p">,</span><span class="w"> </span><span class="n">values</span><span class="p">,</span><span class="w"> </span><span class="n">file_handle</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-264" name="ln-264" href="#ln-264"></a><span class="w">      </span><span class="p">)</span>
+<a id="ln-265" name="ln-265" href="#ln-265"></a><span class="w">      </span><span class="k">import</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">io_writer_t</span><span class="p">,</span><span class="w"> </span><span class="n">io_file_t</span><span class="p">,</span><span class="w"> </span><span class="n">dp</span>
+<a id="ln-266" name="ln-266" href="#ln-266"></a><span class="w">      </span><span class="k">class</span><span class="p">(</span><span class="n">io_writer_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">self</span>
+<a id="ln-267" name="ln-267" href="#ln-267"></a><span class="w">      </span><span class="kt">character</span><span class="p">(</span><span class="nb">len</span><span class="o">=*</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">attribute_name</span>
+<a id="ln-268" name="ln-268" href="#ln-268"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">dp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">values</span><span class="p">(:)</span>
+<a id="ln-269" name="ln-269" href="#ln-269"></a><span class="w">      </span><span class="k">class</span><span class="p">(</span><span class="n">io_file_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">file_handle</span>
+<a id="ln-270" name="ln-270" href="#ln-270"></a><span class="w">    </span><span class="k">end subroutine </span><span class="n">write_attribute_array_1d_real</span>
+<a id="ln-271" name="ln-271" href="#ln-271"></a><span class="w">  </span><span class="k">end interface</span>
+<a id="ln-272" name="ln-272" href="#ln-272"></a>
+<a id="ln-273" name="ln-273" href="#ln-273"></a><span class="k">contains</span>
+<a id="ln-274" name="ln-274" href="#ln-274"></a>
+<a id="ln-275" name="ln-275" href="#ln-275"></a><span class="k">  </span><span class="kt">logical </span><span class="k">function </span><span class="n">base_supports_device_field_write</span><span class="p">(</span><span class="n">self</span><span class="p">,</span><span class="w"> </span><span class="n">field</span><span class="p">,</span><span class="w"> </span><span class="n">backend</span><span class="p">)</span>
+<a id="ln-276" name="ln-276" href="#ln-276"></a><span class="w">    </span><span class="c">!! Default capability: fields are always staged through host memory.</span>
+<a id="ln-277" name="ln-277" href="#ln-277"></a><span class="w">    </span><span class="k">class</span><span class="p">(</span><span class="n">io_writer_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">self</span>
+<a id="ln-278" name="ln-278" href="#ln-278"></a><span class="w">    </span><span class="k">class</span><span class="p">(</span><span class="n">field_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">field</span>
+<a id="ln-279" name="ln-279" href="#ln-279"></a><span class="w">    </span><span class="k">class</span><span class="p">(</span><span class="n">base_backend_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">backend</span>
+<a id="ln-280" name="ln-280" href="#ln-280"></a><span class="w">    </span><span class="n">base_supports_device_field_write</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">.</span><span class="n">false</span><span class="p">.</span>
+<a id="ln-281" name="ln-281" href="#ln-281"></a><span class="w">  </span><span class="k">end function </span><span class="n">base_supports_device_field_write</span>
+<a id="ln-282" name="ln-282" href="#ln-282"></a>
+<a id="ln-283" name="ln-283" href="#ln-283"></a><span class="w">  </span><span class="k">function </span><span class="n">base_is_file_functional</span><span class="p">(</span><span class="n">self</span><span class="p">)</span><span class="w"> </span><span class="k">result</span><span class="p">(</span><span class="n">is_functional</span><span class="p">)</span>
+<a id="ln-284" name="ln-284" href="#ln-284"></a><span class="w">    </span><span class="k">class</span><span class="p">(</span><span class="n">io_file_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">self</span>
+<a id="ln-285" name="ln-285" href="#ln-285"></a><span class="w">    </span><span class="kt">logical</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">is_functional</span>
+<a id="ln-286" name="ln-286" href="#ln-286"></a><span class="w">    </span><span class="n">is_functional</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">.</span><span class="n">true</span><span class="p">.</span>
+<a id="ln-287" name="ln-287" href="#ln-287"></a><span class="w">  </span><span class="k">end function </span><span class="n">base_is_file_functional</span>
+<a id="ln-288" name="ln-288" href="#ln-288"></a>
+<a id="ln-289" name="ln-289" href="#ln-289"></a><span class="k">end module </span><span class="n">m_io_base</span>
+</pre></div>
+
+      </section>
+    </div>
+  </div>
+
+      <hr>
+    </div> <!-- /container -->
+    <footer>
+      <div class="container">
+        <div class="row justify-content-between">
+          <div class="col">
+            <p>
+              x3d2
+ was developed by Xcompact3d Team<br>              &copy; 2026 
+</p>
+          </div>
+          <div class="col">
+            <p class="text-end">
+              Documentation generated by
+              <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
+            </p>
+          </div>
+        </div>
+        <br>
+      </div> <!-- /container -->
+    </footer>
+  </body>
+</html>

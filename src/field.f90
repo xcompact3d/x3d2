@@ -1,0 +1,119 @@
+module m_field
+
+  use iso_c_binding, only: c_ptr, c_null_ptr
+
+  use m_common, only: dp, DIR_X, DIR_Y, DIR_Z, DIR_C
+
+  type :: field_t
+     !! Memory block type holding both a data field and a pointer
+     !! to the next block.  The `field_t` type also holds an integer
+     !! `refcount` that counts the number of references to this
+     !! field.  User code is currently responsible for incrementing
+     !! the reference count.
+    class(field_t), pointer :: next
+    real(dp), pointer, private :: p_data(:) => null()
+    real(dp), pointer, contiguous :: data(:, :, :)
+    integer :: dir
+    integer :: data_loc
+    integer :: refcount = 0
+    integer :: id !! An integer identifying the memory block.
+  contains
+    procedure :: fill
+    procedure :: get_shape
+    procedure :: set_shape
+    procedure :: set_data_loc
+    procedure :: get_dev_ptr
+    procedure :: free_data
+  end type field_t
+
+  interface field_t
+    module procedure field_init
+  end interface field_t
+
+  type :: flist_t
+    !! Use for creating a list of field pointers
+    class(field_t), pointer :: ptr
+  end type flist_t
+
+contains
+
+  function field_init(ngrid, next, id) result(f)
+    integer, intent(in) :: ngrid, id
+    !! `next` matches the polymorphic `next` component it is assigned to, so
+    !! the caller hands over the list head as-is (see omptgt_field_init).
+    class(field_t), pointer, intent(in) :: next
+    type(field_t) :: f
+
+    allocate (f%p_data(ngrid))
+    f%refcount = 0
+    f%next => next
+    f%id = id
+  end function field_init
+
+  subroutine fill(self, c)
+    implicit none
+
+    class(field_t) :: self
+    real(dp), intent(in) :: c
+
+    self%p_data(:) = c
+
+  end subroutine fill
+
+  subroutine set_data_loc(self, data_loc)
+    class(field_t) :: self
+    integer, intent(in) :: data_loc
+
+    self%data_loc = data_loc
+
+  end subroutine
+
+  type(c_ptr) function get_dev_ptr(self) result(ptr)
+    !! Address of the block's storage in a separate device allocation, null
+    !! for a host block. A device field type that keeps its storage behind a
+    !! raw device pointer overrides this, letting its backend reach the
+    !! storage by dynamic dispatch rather than by a type query.
+    implicit none
+
+    class(field_t) :: self
+
+    ptr = c_null_ptr
+
+  end function get_dev_ptr
+
+  subroutine free_data(self)
+    !! Free the host storage of the block and nullify the `data` view of it.
+    !! A block that never allocated host storage, as on a device backend, is
+    !! left as it is.  There is no `final` procedure for this, because the
+    !! constructor result is copied by intrinsic assignment and a finaliser
+    !! on the temporary would free the storage the copy still uses.
+    implicit none
+
+    class(field_t) :: self
+
+    if (associated(self%p_data)) deallocate (self%p_data)
+    nullify (self%data)
+
+  end subroutine free_data
+
+  function get_shape(self) result(dims)
+    implicit none
+
+    class(field_t) :: self
+    integer :: dims(3)
+
+    dims = shape(self%data)
+
+  end function get_shape
+
+  subroutine set_shape(self, dims)
+    implicit none
+
+    class(field_t) :: self
+    integer, intent(in) :: dims(3)
+
+    self%data(1:dims(1), 1:dims(2), 1:dims(3)) => self%p_data
+
+  end subroutine set_shape
+
+end module m_field

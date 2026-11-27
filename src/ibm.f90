@@ -1,0 +1,175 @@
+module m_ibm
+!! This module implements the IBM capabilities.
+!!
+!! When iibm = 0, the IBM object is never used.
+!!
+!! When iibm = 1, the basic IBM capability is used.
+!! It only requires ep1, a 3D field, as input.
+!! This field should be one (zero) in the fluid (solid)
+!! domain.
+  use m_mpi, only: MPI_COMM_WORLD, MPI_LOGICAL, MPI_Bcast
+
+  use m_io_session, only: reader_session_t
+  use m_allocator, only: allocator_t, field_t
+  use m_base_backend, only: base_backend_t
+  use m_common, only: dp, i8, pi, DIR_X, DIR_C, VERT
+  use m_field, only: field_t
+  use m_logger, only: log_info, abort_run, check_mpi, str
+  use m_mesh, only: mesh_t
+
+  implicit none
+
+  private
+  public :: ibm_t, iibm_basic
+
+  integer, parameter :: iibm_basic = 1
+
+  type :: ibm_t
+    class(base_backend_t), pointer :: backend => null()
+    class(mesh_t), pointer :: mesh => null()
+    type(allocator_t), pointer :: host_allocator => null()
+    integer :: iibm = 0
+    class(field_t), pointer :: ep1 => null()
+  contains
+    procedure :: body
+  end type ibm_t
+
+  interface ibm_t
+    module procedure init
+  end interface ibm_t
+
+contains
+
+  function init(backend, mesh, host_allocator, ibm_file) result(ibm)
+    implicit none
+
+    class(base_backend_t), target, intent(inout) :: backend
+    type(mesh_t), target, intent(inout) :: mesh
+    type(allocator_t), target, intent(inout) :: host_allocator
+    character(len=*), intent(in) :: ibm_file
+    type(ibm_t) :: ibm
+
+    logical :: file_exists
+    integer :: ierr, dims(3), global_dims(3)
+    real(dp), allocatable :: field_data(:, :, :)
+    class(field_t), pointer :: ep1
+    type(reader_session_t) :: reader_session
+    integer(i8) :: start_dims(3), count_dims(3), file_dims(3), iibm_i8
+
+    ibm%backend => backend
+    ibm%mesh => mesh
+    ibm%host_allocator => host_allocator
+
+    ! Print which file is being read
+    call log_info('IBM: reading '//trim(ibm_file))
+
+    ! Stop if the file is missing
+    if (mesh%par%is_root()) inquire (file=trim(ibm_file), exist=file_exists)
+    call MPI_Bcast(file_exists, 1, MPI_LOGICAL, 0, MPI_COMM_WORLD, ierr)
+    call check_mpi(ierr, 'MPI_Bcast of the IBM file check')
+    if (.not. file_exists) then
+      call abort_run('IBM file not found: '//trim(ibm_file), &
+                     collective=.true.)
+    end if
+
+    ! Open a session to read the IBM configuration file
+    call reader_session%open(ibm_file, MPI_COMM_WORLD)
+
+    ! Read the iibm parameter
+    call reader_session%read_data("iibm", iibm_i8)
+    ibm%iibm = int(iibm_i8, kind=4)
+
+    ! Basic IBM only needs ep1 on the vertices
+    if (ibm%iibm == iibm_basic) then
+
+      ! The mask must be sampled on this mesh's vertices, so a mask made
+      ! for another grid is rejected here rather than read partially
+      global_dims = mesh%get_global_dims(VERT)
+      call reader_session%read_shape("ep1", file_dims)
+      if (any(file_dims /= int(global_dims, i8))) then
+        call abort_run('IBM mask in '//trim(ibm_file)//' is ' &
+                       //dims_str(int(file_dims))//' but the mesh has ' &
+                       //dims_str(global_dims)//' vertices. Regenerate &
+                       &the mask for this grid.', &
+                       collective=.true.)
+      end if
+
+      ! Read the local block of the vertex mask ep1
+      !
+      ! A mask written in C order (from Python, say) has the shape
+      ! [nz, ny, nx] in the file. ADIOS2 reverses the shape and selection
+      ! for a Fortran reader, so start_dims and count_dims are in x, y, z
+      ! order here whichever language wrote the file
+      dims = mesh%get_dims(VERT)
+      start_dims = int(ibm%mesh%par%n_offset, i8)
+      count_dims = int(dims, i8)
+
+      ! Allocate field_data
+      allocate (field_data(count_dims(1), count_dims(2), count_dims(3)))
+
+      ! Read the vertex mask
+      call reader_session%read_data("ep1", field_data, start_dims, count_dims)
+
+      ! Get and fill a block on the host
+      ep1 => ibm%host_allocator%get_block(DIR_C)
+      call ep1%fill(1.0_dp)
+      ! The allocator pads the block up to a multiple of SZ in x and y, so
+      ! ep1%data is bigger than the vertex sized field read from the file.
+      ! Assigning (:, :, :) to (:, :, :) is therefore non conforming and
+      ! reads past the end of field_data, so the copy is restricted to the
+      ! unpadded extents
+      ep1%data(1:dims(1), 1:dims(2), 1:dims(3)) = field_data(:, :, :)
+
+      ! Get a block on the device and move the data
+      ibm%ep1 => ibm%backend%allocator%get_block(DIR_X)
+      call ibm%backend%set_field_data(ibm%ep1, ep1%data)
+
+      ! Free memory
+      call ibm%host_allocator%release_block(ep1)
+      deallocate (field_data)
+
+    else
+      ! IBM disabled or unsupported type
+      ibm%ep1 => null()
+    end if
+
+    ! Closing the session handles all file and reader finalisation
+    call reader_session%close()
+
+  end function init
+
+  subroutine body(self, u, v, w)
+    !! Apply basic IBM before the pressure solver
+    implicit none
+
+    class(ibm_t) :: self
+    class(field_t), intent(inout) :: u, v, w
+
+    if (self%iibm == iibm_basic) then
+
+      ! vel = vel * ep1
+      !
+      ! FIXME : currently velocity is zero in the solid.
+      !         It should be dt * grad(p^n).
+      !         After reconstruction, it should be
+      !   dt * grad(p^n) - dt * grad(p^n+1)
+      !         Currently grad(p^n) is not available
+      call self%backend%vecmult(u, self%ep1)
+      call self%backend%vecmult(v, self%ep1)
+      call self%backend%vecmult(w, self%ep1)
+
+    end if
+
+  end subroutine body
+
+  function dims_str(dims) result(s)
+    !! Formats 3D dimensions as "nx x ny x nz"
+    implicit none
+
+    integer, intent(in) :: dims(3)
+    character(len=:), allocatable :: s
+
+    s = str(dims(1))//' x '//str(dims(2))//' x '//str(dims(3))
+  end function dims_str
+
+end module m_ibm
