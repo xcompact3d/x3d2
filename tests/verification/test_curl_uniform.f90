@@ -42,7 +42,8 @@ program test_curl_uniform
 
   implicit none
 
-  real(dp), parameter :: TOLERANCE = 1.0e-12_dp
+  ! Round-off of the working precision, so it holds in single precision
+  real(dp), parameter :: TOLERANCE = 100._dp*epsilon(1._dp)
 
   character(len=9), parameter :: PERIODIC(2) = ['periodic ', 'periodic ']
   character(len=9), parameter :: DIRICHLET(2) = ['dirichlet', 'dirichlet']
