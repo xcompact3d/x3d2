@@ -44,6 +44,8 @@ module m_omptgt_backend
   use m_omptgt_exec_thom, only: exec_thom_tds_compact
   use m_omptgt_sendrecv, only: sendrecv_fields, sendrecv_3fields
   use m_omptgt_tdsops, only: omptgt_tdsops_t, omptgt_tdsops_init
+  use m_omptgt_kernels_fieldops, only: &
+    vector_norm_squared_plane_partial_sums
   use m_omptgt_kernels_fieldops, only: copy, axpby, pwmul, field_scale, &
                                        field_shift, buffer_copy, &
                                        vorticity_from_gradients, &
@@ -120,6 +122,8 @@ module m_omptgt_backend
     procedure :: field_set_face => field_set_face_omptgt
     procedure :: field_set_y_plane => field_set_y_plane_omptgt
     procedure :: field_plane_sums => field_plane_sums_omptgt
+    procedure :: vector_norm_squared_plane_sums => &
+      vector_norm_squared_plane_sums_omptgt
     procedure :: field_set_abl_wall_stress => field_set_abl_wall_stress_omptgt
     procedure :: field_shift_blend_x_band => field_shift_blend_x_band_omptgt
     procedure :: field_set_face_from_field => field_set_face_from_field_omptgt
@@ -1298,33 +1302,62 @@ contains
     class(field_t), intent(in) :: f
 
     real(dp), pointer, contiguous, dimension(:, :, :) :: f_d
-    real(dp), pointer, contiguous :: partial_d(:, :), sums_d(:)
+    real(dp), pointer, contiguous :: partial_d(:, :)
     integer :: dims(3)
 
-    if (f%dir /= DIR_X) &
-      call abort_run('field_plane_sums is only supported for DIR_X fields.')
-    if (f%data_loc == NULL_LOC) &
-      call abort_run('field_plane_sums requires a valid data_loc.')
-
-    dims = self%mesh%get_dims(f%data_loc)
-    if (size(sums) < dims(2)) &
-      call abort_run('field_plane_sums: sums is smaller than the y extent.')
-
+    dims = self%plane_sums_dims('field_plane_sums', sums, f)
     call resolve_field_t(f_d, f)
     call dev_alloc(partial_d, dims(2), dims(3))
-    call dev_alloc(sums_d, dims(2))
 
-    ! Sum along x for every (y, z) line, then over z for every y, each in a
-    ! fixed order so the result is reproducible.
     call field_plane_partial_sums(partial_d, f_d, size(f_d, 2), dims(1), &
                                   dims(2), dims(3), n_yb_pad(self))
-    call field_plane_sums_reduce(sums_d, partial_d, dims(2), dims(3))
+    call reduce_plane_partials(sums, partial_d, dims)
 
+  end subroutine field_plane_sums_omptgt
+
+  subroutine vector_norm_squared_plane_sums_omptgt(self, sums, a, b, c)
+    !! [[m_base_backend(module):vector_norm_squared_plane_sums(subroutine)]]
+    implicit none
+
+    class(omptgt_backend_t) :: self
+    real(dp), intent(out) :: sums(:)
+    class(field_t), intent(in) :: a, b, c
+
+    real(dp), pointer, contiguous, dimension(:, :, :) :: a_d, b_d, c_d
+    real(dp), pointer, contiguous :: partial_d(:, :)
+    integer :: dims(3)
+
+    dims = self%plane_sums_dims('vector_norm_squared_plane_sums', &
+                                sums, a, b, c)
+    call resolve_field_t(a_d, a)
+    call resolve_field_t(b_d, b)
+    call resolve_field_t(c_d, c)
+    call dev_alloc(partial_d, dims(2), dims(3))
+
+    call vector_norm_squared_plane_partial_sums( &
+      partial_d, a_d, b_d, c_d, size(a_d, 2), dims(1), dims(2), dims(3), &
+      n_yb_pad(self))
+    call reduce_plane_partials(sums, partial_d, dims)
+
+  end subroutine vector_norm_squared_plane_sums_omptgt
+
+  subroutine reduce_plane_partials(sums, partial_d, dims)
+    !! Second pass of a y-plane sum: sums over z of the per-(y, z) partial
+    !! sums, in a fixed order so the result is reproducible, then copies the
+    !! plane sums to the host. Frees partial_d.
+    real(dp), intent(out) :: sums(:)
+    real(dp), pointer, contiguous :: partial_d(:, :)
+    integer, intent(in) :: dims(3)
+
+    real(dp), pointer, contiguous :: sums_d(:)
+
+    call dev_alloc(sums_d, dims(2))
+    call field_plane_sums_reduce(sums_d, partial_d, dims(2), dims(3))
     call dev_download(sums(1:dims(2)), sums_d)
     call dev_free(partial_d)
     call dev_free(sums_d)
 
-  end subroutine field_plane_sums_omptgt
+  end subroutine reduce_plane_partials
 
   ! --------------------------------------------------------------------------
   ! Faces and planes

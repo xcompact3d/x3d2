@@ -33,7 +33,8 @@ module m_omptgt_kernels_fieldops
             field_add_x_face_from_field, &
             field_add_y_face_from_field, &
             field_set_x_face_from_plane, field_set_y_face_from_plane
-  public :: field_plane_partial_sums, field_plane_sums_reduce
+  public :: field_plane_partial_sums, field_plane_sums_reduce, &
+            vector_norm_squared_plane_partial_sums
   public :: reorder, sum_intox
 
 contains
@@ -977,6 +978,36 @@ contains
     !$omp end target teams distribute parallel do
 
   end subroutine field_plane_partial_sums
+
+  subroutine vector_norm_squared_plane_partial_sums( &
+    partial, a, b, c, n_f, nx, ny, nz, n_yb_pad)
+    !! First pass of vector_norm_squared_plane_sums: partial(j, z) is the sum
+    !! over x of a**2 + b**2 + c**2 at y index j and z, summed in a fixed
+    !! order.
+    integer, intent(in) :: n_f, nx, ny, nz, n_yb_pad
+    real(dp), intent(inout) :: partial(ny, nz)
+    real(dp), intent(in), dimension(SZ, n_f, n_yb_pad*nz) :: a, b, c
+
+    integer :: i, j, z, k, g
+    real(dp) :: line_sum
+
+    !$omp target teams distribute parallel do collapse(2) &
+    !$omp private(i, g, line_sum) OMP_DEVICE_ADDR(partial, a, b, c)
+    do z = 1, nz
+      do j = 1, ny
+        i = mod(j - 1, SZ) + 1
+        g = (j - 1)/SZ + 1 + (z - 1)*n_yb_pad
+        line_sum = 0._dp
+        do k = 1, nx
+          line_sum = line_sum + a(i, k, g)**2 + b(i, k, g)**2 &
+                     + c(i, k, g)**2
+        end do
+        partial(j, z) = line_sum
+      end do
+    end do
+    !$omp end target teams distribute parallel do
+
+  end subroutine vector_norm_squared_plane_partial_sums
 
   subroutine field_plane_sums_reduce(sums, partial, ny, nz)
     !! Second pass of field_plane_sums: sums(j) is the sum over z of

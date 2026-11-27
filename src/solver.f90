@@ -51,7 +51,6 @@ module m_solver
     real(dp), dimension(:), allocatable :: nu_species
     integer :: n_iters, n_output
     integer :: current_iter = 0
-    integer :: ngrid
     integer :: nvars = 3
     integer :: nspecies = 0
 
@@ -183,7 +182,6 @@ contains
     solver%nu = 1._dp/solver_cfg%Re
     solver%n_iters = solver_cfg%n_iters
     solver%n_output = solver_cfg%n_output
-    solver%ngrid = product(solver%mesh%get_global_dims(VERT))
 
     ! Allocate and set the tdsops. The filter operators are only built when
     ! the case asks for them, so cases that do not filter carry no extra state:

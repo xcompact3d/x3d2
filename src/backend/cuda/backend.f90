@@ -44,6 +44,7 @@ module m_cuda_backend
                                      field_add_x_face_from_field, &
                                      field_plane_partial_sums, &
                                      field_plane_sums_reduce, &
+                                     vector_norm_squared_plane_partial_sums, &
                                      field_add_y_face_from_field, &
                                      field_set_x_face_from_plane, &
                                      field_set_y_face_from_plane, &
@@ -105,6 +106,8 @@ module m_cuda_backend
     procedure :: field_set_face => field_set_face_cuda
     procedure :: field_set_y_plane => field_set_y_plane_cuda
     procedure :: field_plane_sums => field_plane_sums_cuda
+    procedure :: vector_norm_squared_plane_sums => &
+      vector_norm_squared_plane_sums_cuda
     procedure :: field_set_abl_wall_stress => field_set_abl_wall_stress_cuda
     procedure :: field_shift_blend_x_band => field_shift_blend_x_band_cuda
     procedure :: field_set_face_from_field => field_set_face_from_field_cuda
@@ -1771,37 +1774,71 @@ contains
     class(field_t), intent(in) :: f
 
     real(dp), device, pointer, dimension(:, :, :) :: f_d
-    real(dp), device, allocatable :: partial_d(:, :), sums_d(:)
-    type(dim3) :: blocks, threads
+    real(dp), device, allocatable :: partial_d(:, :)
     integer :: dims(3)
 
-    if (f%dir /= DIR_X) &
-      call abort_run('field_plane_sums is only supported for DIR_X fields.')
-    if (f%data_loc == NULL_LOC) &
-      call abort_run('field_plane_sums requires a valid data_loc.')
-
-    dims = self%mesh%get_dims(f%data_loc)
-    if (size(sums) < dims(2)) &
-      call abort_run('field_plane_sums: sums is smaller than the y extent.')
-
+    dims = self%plane_sums_dims('field_plane_sums', sums, f)
     call resolve_field_t(f_d, f)
-    allocate (partial_d(dims(2), dims(3)), sums_d(dims(2)))
+    allocate (partial_d(dims(2), dims(3)))
 
-    ! Sum along x for every (y, z) line, then over z for every y, each in a
-    ! fixed order so the result is reproducible.
-    blocks = dim3((dims(2) - 1)/SZ + 1, dims(3), 1)
-    threads = dim3(SZ, 1, 1)
-    call field_plane_partial_sums<<<blocks, threads>>>( &          !&
+    call field_plane_partial_sums<<<plane_partial_blocks(dims), SZ>>>( & !&
       partial_d, f_d, dims(1), dims(2), dims(3))
-    blocks = dim3((dims(2) - 1)/64 + 1, 1, 1)
-    threads = dim3(64, 1, 1)
-    call field_plane_sums_reduce<<<blocks, threads>>>( &           !&
-      sums_d, partial_d, dims(2), dims(3))
+    call reduce_plane_partials(sums, partial_d, dims)
 
+  end subroutine field_plane_sums_cuda
+
+  subroutine vector_norm_squared_plane_sums_cuda(self, sums, a, b, c)
+    !! [[m_base_backend(module):vector_norm_squared_plane_sums(subroutine)]]
+    implicit none
+
+    class(cuda_backend_t) :: self
+    real(dp), intent(out) :: sums(:)
+    class(field_t), intent(in) :: a, b, c
+
+    real(dp), device, pointer, dimension(:, :, :) :: a_d, b_d, c_d
+    real(dp), device, allocatable :: partial_d(:, :)
+    integer :: dims(3)
+
+    dims = self%plane_sums_dims('vector_norm_squared_plane_sums', &
+                                sums, a, b, c)
+    call resolve_field_t(a_d, a)
+    call resolve_field_t(b_d, b)
+    call resolve_field_t(c_d, c)
+    allocate (partial_d(dims(2), dims(3)))
+
+    call vector_norm_squared_plane_partial_sums &
+      <<<plane_partial_blocks(dims), SZ>>>( &                       !&
+      partial_d, a_d, b_d, c_d, dims(1), dims(2), dims(3))
+    call reduce_plane_partials(sums, partial_d, dims)
+
+  end subroutine vector_norm_squared_plane_sums_cuda
+
+  function plane_partial_blocks(dims) result(blocks)
+    !! Grid of the first pass of a y-plane sum: one SZ-thread block per
+    !! y-block and z.
+    integer, intent(in) :: dims(3)
+    type(dim3) :: blocks
+
+    blocks = dim3((dims(2) - 1)/SZ + 1, dims(3), 1)
+  end function plane_partial_blocks
+
+  subroutine reduce_plane_partials(sums, partial_d, dims)
+    !! Second pass of a y-plane sum: sums over z of the per-(y, z) partial
+    !! sums, in a fixed order so the result is reproducible, then copies the
+    !! plane sums to the host. Deallocates partial_d.
+    real(dp), intent(out) :: sums(:)
+    real(dp), device, allocatable, intent(inout) :: partial_d(:, :)
+    integer, intent(in) :: dims(3)
+
+    real(dp), device, allocatable :: sums_d(:)
+
+    allocate (sums_d(dims(2)))
+    call field_plane_sums_reduce<<<(dims(2) - 1)/64 + 1, 64>>>( &   !&
+      sums_d, partial_d, dims(2), dims(3))
     sums(1:dims(2)) = sums_d
     deallocate (partial_d, sums_d)
 
-  end subroutine field_plane_sums_cuda
+  end subroutine reduce_plane_partials
 
   subroutine field_set_abl_wall_stress_cuda( &
     self, stress, u, w, sample_plane, sample_weight, stress_plane, &
