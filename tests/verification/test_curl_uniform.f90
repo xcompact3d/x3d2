@@ -1,9 +1,10 @@
 program test_curl_uniform
   !! The curl of a uniform flow must be zero at free-slip walls
   !!
-  !! Sets u = 1 and v = w = 0 on a small mesh, calls solver_t%curl, the
-  !! routine behind the enstrophy in the monitoring output, and checks that
-  !! max|omega| is zero to round-off.
+  !! Sets u = 1, v = 0.5 and w = 0.25 on a small mesh, calls solver_t%curl,
+  !! the routine behind the enstrophy in the monitoring output, and checks
+  !! that max|omega| is zero to round-off. All three components are non-zero,
+  !! so every curl derivative acts on a non-zero field.
   !!
   !! A uniform field has no vorticity, whatever the boundary conditions. The
   !! curl differentiates tangential components, which are even across a
@@ -115,8 +116,8 @@ contains
     o_j => solver%backend%allocator%get_block(DIR_X, VERT)
     o_k => solver%backend%allocator%get_block(DIR_X, VERT)
     call u%fill(1.0_dp)
-    call v%fill(0.0_dp)
-    call w%fill(0.0_dp)
+    call v%fill(0.5_dp)
+    call w%fill(0.25_dp)
 
     call solver%curl(o_i, o_j, o_k, u, v, w)
 
