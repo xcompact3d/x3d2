@@ -2,12 +2,11 @@ module m_omptgt_exec_dist
   !! Drivers of the distributed compact solves for the OpenMP target backend,
   !! following cuda/exec_dist.f90. Fields are (SZ, n, n_groups) device arrays
   !! and only the first n_groups groups are processed.
-  use iso_c_binding, only: c_loc
   use m_logger, only: abort_run
   use m_common, only: dp
-  use m_dist_reduced, only: solve_reduced_exact
   use m_mesh_content, only: par_t
-  use m_omptgt_common, only: SZ, device_sync, memcpy_d2h, memcpy_h2d
+  use m_omptgt_common, only: SZ
+  use m_omptgt_dist_reduced, only: solve_reduced_exact_omptgt
   use m_omptgt_kernels_dist, only: der_univ_dist, der_univ_subs, &
                                    der_univ_subs_exact, &
                                    der_penta_full, der_penta_periodic, &
@@ -25,9 +24,8 @@ contains
     )
     !! Distributed compact solve along dir. The reduced system that couples
     !! the ranks is solved with the neighbour-only 2x2 approximation, or
-    !! exactly where tdsops%dist_exact asks for it (see m_dist_reduced). The
-    !! exact solve's right-hand sides, two planes per field, go through the
-    !! host.
+    !! exactly on the device where tdsops%dist_exact asks for it (see
+    !! m_dist_reduced and m_omptgt_dist_reduced).
     implicit none
 
     ! du = d(u)
@@ -40,10 +38,8 @@ contains
     type(par_t), intent(in) :: par
     integer, intent(in) :: dir, n_groups
 
-    real(dp), allocatable, target :: d_s(:), d_e(:), x_s(:), x_e(:)
-    integer :: n, n_data
+    integer :: n_data
 
-    n = tdsops%n_tds
     n_data = SZ*n_groups
 
     call der_univ_dist( &
@@ -55,16 +51,8 @@ contains
       )
 
     if (tdsops%dist_exact .and. par%nproc_dir(dir) > 1) then
-      ! The kernel must be complete before its results are copied back
-      call device_sync()
-      allocate (d_s(n_data), d_e(n_data), x_s(n_data), x_e(n_data))
-      call memcpy_d2h(c_loc(d_s), c_loc(du_send_s), n_data)
-      call memcpy_d2h(c_loc(d_e), c_loc(du_send_e), n_data)
-      call solve_reduced_exact( &
-        x_s, x_e, d_s, d_e, tdsops%dist_sa(1), tdsops%dist_sc(1), &
-        tdsops%dist_sa(n), tdsops%dist_sc(n), par, dir)
-      call memcpy_h2d(c_loc(du_recv_s), c_loc(x_s), n_data)
-      call memcpy_h2d(c_loc(du_recv_e), c_loc(x_e), n_data)
+      call solve_reduced_exact_omptgt(du_recv_s, du_recv_e, du_send_s, &
+                                      du_send_e, tdsops, par, dir, n_groups)
 
       call der_univ_subs_exact( &
         du, du_recv_s, du_recv_e, tdsops%n_tds, &

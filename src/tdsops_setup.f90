@@ -113,8 +113,8 @@ contains
         dirps%lowpass%prefer_thomas = .true.
         dirps%lowpass_sym%prefer_thomas = .true.
       else
-        dirps%lowpass%dist_exact = .true.
-        dirps%lowpass_sym%dist_exact = .true.
+        call dirps%lowpass%set_dist_exact(mesh%par, dir)
+        call dirps%lowpass_sym%set_dist_exact(mesh%par, dir)
       end if
     end if
 

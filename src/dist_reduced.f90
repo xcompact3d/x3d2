@@ -27,6 +27,12 @@ module m_dist_reduced
   !! Here every rank gathers the reduced rows of its lines and solves the
   !! 2*nproc system exactly, keeping its own x_s and x_e. The system is small,
   !! so solving it on every rank costs less than more rounds of messages.
+  !! factorise_reduced gathers the coefficients and factorises the system
+  !! once per operator, when it is set up; solve_reduced_exact gathers the
+  !! rows and solves them on the host. The GPU backends solve on the device
+  !! with the same factorisation (m_cuda_dist_reduced and
+  !! m_omptgt_dist_reduced), gathering the rows in the same layout: rank p's
+  !! nl first values, then its nl last values, at 2*nl*p.
   use m_common, only: dp, MPI_X3D2_DP
   use m_logger, only: abort_run
   use m_mesh_content, only: par_t
@@ -36,7 +42,25 @@ module m_dist_reduced
   implicit none
 
   private
-  public :: solve_reduced_exact
+  public :: reduced_lu_t, factorise_reduced, solve_reduced_exact, &
+            direction_comm
+
+  type :: reduced_lu_t
+    !! Factorisation of one operator's reduced system along a decomposed
+    !! direction. It depends only on the coefficients of the ranks along the
+    !! direction, so it is made once and shared by every line and every call.
+    !!
+    !! The cyclic system is solved by Sherman-Morrison: with the corners
+    !! folded into the first and last diagonal entries it is tridiagonal,
+    !! with sub-diagonal lo and Thomas factors den and cp, and its solution y
+    !! of a right-hand side is corrected along z:
+    !!
+    !!   x = y - (y(1) + corner_g*y(m))/zfac*z
+    integer :: m = 0 !! Size of the system, 2*nproc along the direction
+    integer :: me = -1 !! This rank's position along the direction
+    real(dp), allocatable :: lo(:), cp(:), den(:), z(:)
+    real(dp) :: corner_g = 0._dp, zfac = 1._dp
+  end type reduced_lu_t
 
   !> Communicator along each direction, made on first use
   integer, save :: dir_comm(3) = MPI_COMM_NULL
@@ -45,106 +69,128 @@ module m_dist_reduced
 
 contains
 
-  subroutine solve_reduced_exact(x_s, x_e, d_s, d_e, sa_1, sc_1, sa_n, &
-                                 sc_n, par, dir)
-    !! Solve the reduced system of every line exactly. Line l of d_s and d_e
-    !! must be the same physical line on every rank along dir, as it is for
-    !! the neighbour exchange of the default second phase.
-    real(dp), intent(out) :: x_s(:), x_e(:)
-    real(dp), intent(in) :: d_s(:), d_e(:)
+  subroutine factorise_reduced(lu, sa_1, sc_1, sa_n, sc_n, par, dir)
+    !! Gather the coefficients of every rank along dir and factorise the
+    !! reduced system. Collective over the ranks along dir.
+    type(reduced_lu_t), intent(out) :: lu
     !> This rank's dist_sa(1), dist_sc(1), dist_sa(n) and dist_sc(n)
     real(dp), intent(in) :: sa_1, sc_1, sa_n, sc_n
     type(par_t), intent(in) :: par
     integer, intent(in) :: dir
 
-    real(dp), allocatable :: coeffs(:), rows(:), all_rows(:)
-    real(dp), allocatable :: lo(:), up(:), cp(:), den(:), z(:), y(:)
-    real(dp) :: corner_tr, corner_bl, gamma, fact, zfac
-    integer :: np, me, nl, m, l, i, p, comm, ierr
+    !> The unit diagonal makes gamma = -1 safe
+    real(dp), parameter :: gamma = -1._dp
+    real(dp), allocatable :: coeffs(:), up(:)
+    real(dp) :: corner_tr, corner_bl
+    integer :: np, m, i, p, ierr
 
     np = par%nproc_dir(dir)
-    me = par%nrank_dir(dir)
-    nl = size(d_s)
     m = 2*np
     if (np < 2) &
-      call abort_run('solve_reduced_exact needs a decomposed direction.')
-
-    comm = direction_comm(par, dir)
+      call abort_run('factorise_reduced needs a decomposed direction.')
 
     ! The coefficients can differ between ranks (boundary closures), so
-    ! every rank's are gathered, then the rows of every line.
-    allocate (coeffs(4*np), rows(2*nl), all_rows(2*nl*np))
+    ! every rank's are gathered.
+    allocate (coeffs(4*np))
     call MPI_Allgather([sa_1, sc_1, sa_n, sc_n], 4, MPI_X3D2_DP, &
-                       coeffs, 4, MPI_X3D2_DP, comm, ierr)
-    rows(1:nl) = d_s
-    rows(nl + 1:2*nl) = d_e
-    call MPI_Allgather(rows, 2*nl, MPI_X3D2_DP, all_rows, 2*nl, &
-                       MPI_X3D2_DP, comm, ierr)
+                       coeffs, 4, MPI_X3D2_DP, direction_comm(par, dir), &
+                       ierr)
 
     ! Row i: lo(i)*x(i-1) + x(i) + up(i)*x(i+1), with x(0) = x(m) and
     ! x(m+1) = x(1) closing the cycle
-    allocate (lo(m), up(m))
+    lu%m = m
+    lu%me = par%nrank_dir(dir)
+    allocate (lu%lo(m), up(m))
     do p = 0, np - 1
-      lo(2*p + 1) = coeffs(4*p + 1)
+      lu%lo(2*p + 1) = coeffs(4*p + 1)
       up(2*p + 1) = coeffs(4*p + 2)
-      lo(2*p + 2) = coeffs(4*p + 3)
+      lu%lo(2*p + 2) = coeffs(4*p + 3)
       up(2*p + 2) = coeffs(4*p + 4)
     end do
-    corner_tr = lo(1)
+    corner_tr = lu%lo(1)
     corner_bl = up(m)
 
-    ! Cyclic tridiagonal by Sherman-Morrison: solve the system with the
-    ! corners folded into the first and last diagonal entries, then correct
-    ! along the solution z for u = (gamma, 0, ..., 0, corner_bl). The unit
-    ! diagonal makes gamma = -1 safe. The factorisation is shared by every
-    ! line.
-    gamma = -1._dp
-    allocate (cp(m), den(m), z(m), y(m))
-    den(1) = 1._dp - gamma
-    cp(1) = up(1)/den(1)
+    ! Sherman-Morrison with u = (gamma, 0, ..., 0, corner_bl): fold the
+    ! corners into the first and last diagonal entries, then z solves the
+    ! folded system for u.
+    allocate (lu%cp(m), lu%den(m), lu%z(m))
+    lu%den(1) = 1._dp - gamma
+    lu%cp(1) = up(1)/lu%den(1)
     ! The corner correction of the last entry stays out of the loop: with it
     ! inside, nvfortran 25.3 at -O2 breaks the recurrence through cp(i - 1),
     ! and double precision builds solved a different system.
     do i = 2, m
-      den(i) = 1._dp - lo(i)*cp(i - 1)
-      cp(i) = up(i)/den(i)
+      lu%den(i) = 1._dp - lu%lo(i)*lu%cp(i - 1)
+      lu%cp(i) = up(i)/lu%den(i)
     end do
-    den(m) = den(m) - corner_bl*corner_tr/gamma
-    cp(m) = up(m)/den(m)
-    z = 0._dp
-    z(1) = gamma
-    z(m) = corner_bl
-    call thomas(z)
-    zfac = 1._dp + z(1) + corner_tr*z(m)/gamma
+    lu%den(m) = lu%den(m) - corner_bl*corner_tr/gamma
+    lu%cp(m) = up(m)/lu%den(m)
+    lu%z = 0._dp
+    lu%z(1) = gamma
+    lu%z(m) = corner_bl
+    call thomas_lu(lu, lu%z)
+    lu%corner_g = corner_tr/gamma
+    lu%zfac = 1._dp + lu%z(1) + lu%corner_g*lu%z(m)
 
+  end subroutine factorise_reduced
+
+  subroutine solve_reduced_exact(x_s, x_e, d_s, d_e, lu, par, dir)
+    !! Solve the reduced system of every line exactly on the host. Line l of
+    !! d_s and d_e must be the same physical line on every rank along dir, as
+    !! it is for the neighbour exchange of the default second phase.
+    real(dp), intent(out) :: x_s(:), x_e(:)
+    real(dp), intent(in) :: d_s(:), d_e(:)
+    !> The factorisation from factorise_reduced for this operator
+    type(reduced_lu_t), intent(in) :: lu
+    type(par_t), intent(in) :: par
+    integer, intent(in) :: dir
+
+    real(dp), allocatable :: rows(:), all_rows(:), y(:)
+    real(dp) :: fact
+    integer :: np, me, nl, m, l, p, ierr
+
+    np = par%nproc_dir(dir)
+    me = lu%me
+    m = lu%m
+    nl = size(d_s)
+    if (m /= 2*np .or. me /= par%nrank_dir(dir)) &
+      call abort_run('solve_reduced_exact: the reduced system was not '// &
+                     'factorised for this rank layout.')
+
+    allocate (rows(2*nl), all_rows(2*nl*np))
+    rows(1:nl) = d_s
+    rows(nl + 1:2*nl) = d_e
+    call MPI_Allgather(rows, 2*nl, MPI_X3D2_DP, all_rows, 2*nl, &
+                       MPI_X3D2_DP, direction_comm(par, dir), ierr)
+
+    allocate (y(m))
     do l = 1, nl
       do p = 0, np - 1
         y(2*p + 1) = all_rows(2*nl*p + l)
         y(2*p + 2) = all_rows(2*nl*p + nl + l)
       end do
-      call thomas(y)
-      fact = (y(1) + corner_tr*y(m)/gamma)/zfac
-      x_s(l) = y(2*me + 1) - fact*z(2*me + 1)
-      x_e(l) = y(2*me + 2) - fact*z(2*me + 2)
+      call thomas_lu(lu, y)
+      fact = (y(1) + lu%corner_g*y(m))/lu%zfac
+      x_s(l) = y(2*me + 1) - fact*lu%z(2*me + 1)
+      x_e(l) = y(2*me + 2) - fact*lu%z(2*me + 2)
     end do
 
-  contains
-
-    subroutine thomas(r)
-      !! In place solve with the shared factorisation
-      real(dp), intent(inout) :: r(:)
-      integer :: k
-
-      r(1) = r(1)/den(1)
-      do k = 2, m
-        r(k) = (r(k) - lo(k)*r(k - 1))/den(k)
-      end do
-      do k = m - 1, 1, -1
-        r(k) = r(k) - cp(k)*r(k + 1)
-      end do
-    end subroutine thomas
-
   end subroutine solve_reduced_exact
+
+  subroutine thomas_lu(lu, r)
+    !! In place solve of the folded tridiagonal system
+    type(reduced_lu_t), intent(in) :: lu
+    real(dp), intent(inout) :: r(:)
+    integer :: k
+
+    r(1) = r(1)/lu%den(1)
+    do k = 2, lu%m
+      r(k) = (r(k) - lu%lo(k)*r(k - 1))/lu%den(k)
+    end do
+    do k = lu%m - 1, 1, -1
+      r(k) = r(k) - lu%cp(k)*r(k + 1)
+    end do
+  end subroutine thomas_lu
 
   integer function direction_comm(par, dir) result(comm)
     !! The ranks sharing this rank's position in the other two directions,

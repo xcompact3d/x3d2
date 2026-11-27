@@ -1,6 +1,7 @@
 module m_cuda_tdsops
 
   use m_common, only: dp
+  use m_mesh_content, only: par_t
   use m_tdsops, only: tdsops_t, tdsops_init
 
   implicit none
@@ -18,7 +19,12 @@ module m_cuda_tdsops
     real(dp), device, allocatable :: stretch_dev(:), stretch_correct_dev(:)
     real(dp), device, allocatable :: coeffs_dev(:), &
                                      coeffs_s_dev(:, :), coeffs_e_dev(:, :)
+    !> Factorisation of the reduced system (see reduced_lu_t), for the
+    !! device solve of m_cuda_dist_reduced
+    real(dp), device, allocatable :: reduced_lo_dev(:), reduced_cp_dev(:), &
+                                     reduced_den_dev(:), reduced_z_dev(:)
   contains
+    procedure :: set_dist_exact => set_dist_exact_cuda
   end type cuda_tdsops_t
 
   interface cuda_tdsops_t
@@ -89,6 +95,24 @@ contains
     tdsops%coeffs_e_dev(:, :) = tdsops%coeffs_e(:, :)
 
   end function cuda_tdsops_init
+
+  subroutine set_dist_exact_cuda(self, par, dir)
+    !! Factorise the reduced system as the base class does, and copy the
+    !! factorisation to the device.
+    implicit none
+
+    class(cuda_tdsops_t), intent(inout) :: self
+    type(par_t), intent(in) :: par
+    integer, intent(in) :: dir
+
+    call self%tdsops_t%set_dist_exact(par, dir)
+
+    self%reduced_lo_dev = self%reduced%lo
+    self%reduced_cp_dev = self%reduced%cp
+    self%reduced_den_dev = self%reduced%den
+    self%reduced_z_dev = self%reduced%z
+
+  end subroutine set_dist_exact_cuda
 
 end module m_cuda_tdsops
 

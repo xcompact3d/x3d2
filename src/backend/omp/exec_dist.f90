@@ -61,9 +61,8 @@ contains
       allocate (x_s(n_data), x_e(n_data))
       call solve_reduced_exact( &
         x_s, x_e, reshape(du_send_s(:, 1, 1:n_groups), [n_data]), &
-        reshape(du_send_e(:, 1, 1:n_groups), [n_data]), &
-        tdsops%dist_sa(1), tdsops%dist_sc(1), tdsops%dist_sa(n), &
-        tdsops%dist_sc(n), par, dir)
+        reshape(du_send_e(:, 1, 1:n_groups), [n_data]), tdsops%reduced, &
+        par, dir)
       du_recv_s(:, 1, 1:n_groups) = reshape(x_s, [SZ, n_groups])
       du_recv_e(:, 1, 1:n_groups) = reshape(x_e, [SZ, n_groups])
 

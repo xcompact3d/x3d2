@@ -66,6 +66,7 @@ if (${ENABLE_BACKEND} STREQUAL "CUDA")
   list(APPEND POISSONSRC
     backend/cuda/allocator.f90
     backend/cuda/common.f90
+    backend/cuda/dist_reduced.f90
     backend/cuda/errors.f90
     backend/cuda/exec_dist.f90
     backend/cuda/exec_thom.f90
@@ -86,6 +87,7 @@ elseif (${ENABLE_BACKEND} STREQUAL "OMP_TGT")
     backend/omptgt/common.f90
     backend/omptgt/allocator.f90
     backend/omptgt/device_info.f90
+    backend/omptgt/dist_reduced.f90
     backend/omptgt/exec_dist.f90
     backend/omptgt/exec_thom.f90
     backend/omptgt/kernels/distributed.f90
