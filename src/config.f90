@@ -122,6 +122,10 @@ module m_config
     !> Blend the outlet towards a spanwise-shifted copy of the flow
     !> (Incompact3d ishiftedper); periodic x only
     logical :: shifted_periodic = .false.
+    !> Precursor region x < precursor_length with the outlet blended back
+    !> into it (Incompact3d iconcprec); periodic x and mass_conserve only
+    logical :: concurrent_precursor = .false.
+    real(dp) :: precursor_length = 0._dp !! Incompact3d pdl
   contains
     procedure :: read => read_abl_nml
   end type abl_config_t
@@ -528,17 +532,18 @@ contains
 
     integer :: unit
 
-    real(dp) :: z0, u_star, delta, kappa, dsampling
+    real(dp) :: z0, u_star, delta, kappa, dsampling, precursor_length
     real(dp) :: u_geo(3), coriolis_freq, init_noise(3), u_bulk
     integer :: profile_start_iter, seed
     character(len=256) :: profile_file
     logical :: pressure_gradient, coriolis, mass_conserve, damping
-    logical :: shifted_periodic
+    logical :: shifted_periodic, concurrent_precursor
 
     namelist /abl_nml/ z0, u_star, delta, kappa, dsampling, &
       u_geo, coriolis_freq, &
       init_noise, seed, u_bulk, profile_start_iter, profile_file, &
-      pressure_gradient, coriolis, mass_conserve, damping, shifted_periodic
+      pressure_gradient, coriolis, mass_conserve, damping, shifted_periodic, &
+      concurrent_precursor, precursor_length
 
     ! Defaults
     z0 = 0.1_dp
@@ -558,6 +563,8 @@ contains
     mass_conserve = .false.
     damping = .false.
     shifted_periodic = .false.
+    concurrent_precursor = .false.
+    precursor_length = 0._dp
 
     if (present(nml_file) .and. present(nml_string)) then
       call abort_run('Reading ABL config failed! Provide only a file name or &
@@ -590,6 +597,8 @@ contains
     self%mass_conserve = mass_conserve
     self%damping = damping
     self%shifted_periodic = shifted_periodic
+    self%concurrent_precursor = concurrent_precursor
+    self%precursor_length = precursor_length
 
     call validate_abl_config(self)
 
@@ -612,6 +621,18 @@ contains
                      collective=.true.)
     if (config%seed < 0) &
       call abort_run('ABL config error: seed must not be negative.', &
+                     collective=.true.)
+
+    ! The upper bound, the domain length, is checked by configure_fringe
+    if (config%concurrent_precursor .and. config%precursor_length <= 0._dp) &
+      call abort_run('ABL config error: concurrent_precursor needs a &
+                     &positive precursor_length.', collective=.true.)
+    ! The flow rate through every x plane is the same, so under a fixed
+    ! force drag in the successor region would slow the precursor too
+    if (config%concurrent_precursor .and. .not. config%mass_conserve) &
+      call abort_run('ABL config error: concurrent_precursor requires &
+                     &mass_conserve, which keeps the precursor flow rate &
+                     &independent of the successor region.', &
                      collective=.true.)
 
     if (config%profile_start_iter < -1) &
