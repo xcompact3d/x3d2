@@ -3,15 +3,14 @@ module m_case_channel
   use iso_fortran_env, only: int64
   use m_allocator, only: allocator_t
   use m_base_backend, only: base_backend_t
-  use m_base_case, only: base_case_t
+  use m_base_case, only: base_case_t, y_weighted_mean
   use m_common, only: dp, get_argument, DIR_C, DIR_X, &
-                      VERT, CELL, Y_FACE, BC_DIRICHLET, MPI_X3D2_DP
+                      VERT, CELL, Y_FACE, BC_DIRICHLET
   use m_config, only: channel_config_t
   use m_field, only: field_t
   use m_mesh, only: mesh_t
   use m_solver, only: init
   use m_logger, only: log_info, str
-  use m_mpi, only: MPI_COMM_WORLD, MPI_IN_PLACE, MPI_SUM, MPI_Allreduce
 
   implicit none
 
@@ -61,26 +60,20 @@ contains
     class(field_t), intent(in) :: u
     real(dp) :: ub
 
-    real(dp), allocatable :: sums(:)
-    integer :: j, dims(3), global_dims(3), ierr
+    real(dp), allocatable :: w(:)
+    integer :: j, dims(3)
 
     if (mesh%geo%stretched(2)) then
       ! Each y plane mean has the weight dy/(ppy*L(2)), with dy = d(2). The
       ! weight is not a cell width. ppy = vert_ds is the analytic derivative
       ! of the y stretching function, as in Incompact3d. The local planes
-      ! carry their own vert_ds, so the code reduces only the sum.
+      ! carry their own vert_ds, so the weights follow the local planes.
       dims = mesh%get_dims(VERT)
-      global_dims = mesh%get_global_dims(VERT)
-      allocate (sums(dims(2)))
-      call backend%field_plane_sums(sums, u)
-      ub = 0._dp
+      allocate (w(dims(2)))
       do j = 1, dims(2)
-        ub = ub + sums(j)/mesh%geo%vert_ds(j, 2)
+        w(j) = mesh%geo%d(2)/(mesh%geo%L(2)*mesh%geo%vert_ds(j, 2))
       end do
-      ub = ub*mesh%geo%d(2)/mesh%geo%L(2) &
-           /real(global_dims(1)*global_dims(3), dp)
-      call MPI_Allreduce(MPI_IN_PLACE, ub, 1, MPI_X3D2_DP, &
-                         MPI_SUM, MPI_COMM_WORLD, ierr)
+      ub = y_weighted_mean(backend, mesh, u, w)
     else
       ! field_volume_integral is already reduced over all ranks.
       ub = backend%field_volume_integral(u)

@@ -112,6 +112,35 @@ module m_base_case
 
 contains
 
+  function y_weighted_mean(backend, mesh, f, weights) result(mean)
+    !! Sum over j of weights(j) times the x-z mean of plane j, reduced over
+    !! all ranks. The size and indexing of weights follow the local y planes
+    !! of the rank, so each rank passes the weights of its own planes.
+    implicit none
+
+    class(base_backend_t), intent(inout) :: backend
+    type(mesh_t), intent(in) :: mesh
+    class(field_t), intent(in) :: f
+    real(dp), intent(in) :: weights(:)
+    real(dp) :: mean
+
+    real(dp), allocatable :: sums(:)
+    integer :: j, dims(3), global_dims(3), ierr
+
+    dims = mesh%get_dims(VERT)
+    global_dims = mesh%get_global_dims(VERT)
+    allocate (sums(dims(2)))
+    call backend%field_plane_sums(sums, f)
+    sums = sums/real(global_dims(1)*global_dims(3), dp)
+    mean = 0._dp
+    do j = 1, dims(2)
+      mean = mean + weights(j)*sums(j)
+    end do
+    call MPI_Allreduce(MPI_IN_PLACE, mean, 1, MPI_X3D2_DP, MPI_SUM, &
+                       MPI_COMM_WORLD, ierr)
+
+  end function y_weighted_mean
+
   subroutine case_init(self, backend, mesh, host_allocator)
     implicit none
 
