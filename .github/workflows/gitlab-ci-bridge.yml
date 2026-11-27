@@ -18,6 +18,17 @@ name: GitLab CI
 # checkout is only a source of git objects to push. The code does run on the
 # GitLab runners, so pull requests from forks are gated behind the `ci:gpu`
 # label, which a maintainer applies after reading the diff.
+#
+# The GPU pipeline is also gated behind the CPU build: the `build-and-test`
+# job below waits for build_and_test.yml to finish on the pull request head
+# and starts the GitLab pipeline only if it succeeded. It reads the *run*
+# conclusion rather than any individual job, so the gate holds if any job in
+# that workflow fails, including jobs added to it later.
+#
+# Chaining the two workflows with `workflow_run` instead is deliberately
+# avoided: a `workflow_run` job does not appear in the pull request's check
+# list, and it would never fire for the `labeled` and `closed` actions this
+# workflow also handles.
 
 on:
   pull_request_target:
@@ -25,6 +36,9 @@ on:
 
 permissions:
   contents: read
+  # Read the conclusion of build_and_test.yml for this pull request head.
+  actions: read
+  checks: read
 
 env:
   GITLAB_HOST: ${{ vars.GITLAB_HOST }}
@@ -32,8 +46,11 @@ env:
   GITLAB_BRANCH: github-pr-${{ github.event.pull_request.number }}
 
 jobs:
-  pipeline:
-    name: pipeline
+  # Wait for the CPU build before spending time on a GPU runner. The whole
+  # event-level gating lives on this job: `pipeline` needs it, and a skipped
+  # dependency skips the dependent job, so the condition is not repeated below.
+  build-and-test:
+    name: wait for build_and_test
     if: >-
       github.event.action != 'closed'
       && github.event.pull_request.draft == false
@@ -42,6 +59,96 @@ jobs:
            github.event.pull_request.head.repo.full_name == github.repository
            || contains(github.event.pull_request.labels.*.name, 'ci:gpu')
          )
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    concurrency:
+      # A force-push supersedes a gate still waiting on the previous head.
+      # This is a separate group from the one `pipeline` uses; sharing a group
+      # between two jobs of the same run would have them cancel each other.
+      group: gitlab-ci-gate-${{ github.event.pull_request.number }}
+      cancel-in-progress: true
+    outputs:
+      proceed: ${{ steps.wait.outputs.proceed }}
+    steps:
+      - name: Wait for build_and_test.yml on the pull request head
+        id: wait
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          WORKFLOW_FILE: build_and_test.yml
+          # Only used for the sanity check below, never for gating: the gate
+          # itself reads the run conclusion, which covers every job.
+          SENTINEL_JOB: unit-tests
+          # build_and_test.yml carries a `paths:` filter, so for a pull
+          # request that touches none of those paths no run is ever created.
+          # That is indistinguishable from "has not been queued yet", so give
+          # it a grace period and then proceed.
+          APPEAR_GRACE_SECONDS: 300
+        run: |
+          set -euo pipefail
+          api="repos/${GITHUB_REPOSITORY}/actions/workflows/${WORKFLOW_FILE}/runs"
+          api="${api}?event=pull_request&head_sha=${HEAD_SHA}"
+          appear_deadline=$(( $(date +%s) + APPEAR_GRACE_SECONDS ))
+          previous=""
+          while true; do
+            # The run conclusion aggregates every job in the workflow: it is
+            # `failure` if any one of them failed, so this needs no list of
+            # job names to keep in step with build_and_test.yml.
+            state=$(gh api "$api" --jq \
+              '.workflow_runs | sort_by(.created_at) | last // {}
+               | "\(.status // "none"):\(.conclusion // "none")"')
+            if [ "$state" != "$previous" ]; then
+              echo "${WORKFLOW_FILE} on ${HEAD_SHA}: ${state}"
+              previous="$state"
+            fi
+            case "$state" in
+              none:*)
+                # No run at all yet.
+                if [ "$(date +%s)" -ge "$appear_deadline" ]; then
+                  # Before concluding "paths filtered it out", sanity-check
+                  # against a check run we know build_and_test.yml produces.
+                  # If that check run exists on this SHA but the query above
+                  # found no run, then the query is wrong (the API is not
+                  # keying runs off the pull request head SHA as assumed) and
+                  # proceeding would silently defeat the whole gate. Fail
+                  # closed instead of starting a GPU pipeline unguarded.
+                  n=$(gh api \
+                    "repos/${GITHUB_REPOSITORY}/commits/${HEAD_SHA}/check-runs?check_name=${SENTINEL_JOB}" \
+                    --jq '.total_count')
+                  if [ "${n:-0}" -gt 0 ]; then
+                    echo "::error::Found ${n} '${SENTINEL_JOB}' check run(s)" \
+                         "on ${HEAD_SHA} but no ${WORKFLOW_FILE} run matched" \
+                         "the head_sha query; refusing to start the pipeline"
+                    echo "proceed=false" >> "$GITHUB_OUTPUT"
+                    exit 0
+                  fi
+                  echo "::notice::No ${WORKFLOW_FILE} run for ${HEAD_SHA};" \
+                       "assuming it was filtered out by paths"
+                  echo "proceed=true" >> "$GITHUB_OUTPUT"
+                  exit 0
+                fi
+                ;;
+              completed:success|completed:skipped|completed:neutral)
+                echo "proceed=true" >> "$GITHUB_OUTPUT"
+                exit 0 ;;
+              completed:*)
+                # failure, cancelled, timed_out, action_required, stale,
+                # startup_failure -- none of them is a green CPU build.
+                echo "::warning::${WORKFLOW_FILE} ${state#completed:}; not" \
+                     "starting the GitLab pipeline for ${HEAD_SHA}"
+                echo "proceed=false" >> "$GITHUB_OUTPUT"
+                exit 0 ;;
+              *)
+                # queued, requested, waiting, pending, in_progress.
+                ;;
+            esac
+            sleep 20
+          done
+
+  pipeline:
+    name: pipeline
+    needs: build-and-test
+    if: needs.build-and-test.outputs.proceed == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 180
     concurrency:
